@@ -39,11 +39,16 @@ export const FichajesView: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<{ text: string; isSuccess: boolean } | null>(null);
 
   useEffect(() => {
-    const teamList = gasEngine.getTeamNames();
-    const maxJ = gasEngine.getMaxJornada();
-    setTeams(teamList);
-    setSelectedJornada(maxJ || 5);
-    setTransferHistory(gasEngine.getTransferHistory());
+    const refreshData = () => {
+      const teamList = gasEngine.getTeamNames();
+      const maxJ = gasEngine.getMaxJornada();
+      setTeams(teamList);
+      setSelectedJornada(prev => prev || maxJ || 5);
+      setTransferHistory(gasEngine.getTransferHistory());
+    };
+    refreshData();
+    const unsub = gasEngine.subscribe(refreshData);
+    return () => unsub();
   }, []);
 
   useEffect(() => {

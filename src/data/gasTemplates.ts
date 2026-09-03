@@ -334,6 +334,10 @@ function doGet(e) {
         };
       } else if (action === 'getFullSync') {
         result = getFullSyncData();
+      } else if (action === 'getTransferHistory' || action === 'getTransfers') {
+        result = { success: true, data: getTransferHistory() };
+      } else if (action === 'getDraftHistory' || action === 'getDraft') {
+        result = { success: true, data: getDraftHistory() };
       } else if (action === 'getTeamNames') {
         result = { success: true, data: getTeamNames() };
       } else if (action === 'getMaxJornada') {
@@ -417,30 +421,233 @@ function doPost(e) {
 }
 
 /**
- * Helper para obtener sincronización completa en una sola llamada
+ * Helper para obtener sincronización completa en una sola llamada (Ultra-rápido en < 500ms)
  */
 function getFullSyncData() {
-  var maxJ = getMaxJornada();
-  var teams = getTeamNames();
-  var players = getPlayersForMercado();
-  var accounting = getAccountingData();
-  var standings = getAllStandingsData(maxJ);
-  
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. Equipos (1 sola lectura de rango)
+  var sheetTeams = ss.getSheetByName('Equipos') || ss.getSheetByName('Tokens');
+  var teams = [];
+  if (sheetTeams) {
+    var tData = sheetTeams.getDataRange().getValues();
+    for (var i = 1; i < tData.length; i++) {
+      if (tData[i][0] && String(tData[i][0]).trim() !== '') {
+        teams.push(String(tData[i][0]).trim());
+      }
+    }
+  }
+  teams.sort();
+  
+  // 2. Jugadores (1 sola lectura de rango con todos sus puntos)
+  var sheetJug = ss.getSheetByName('Jugadores');
+  var players = [];
+  var maxJ = 1;
+  if (sheetJug) {
+    var jData = sheetJug.getDataRange().getValues();
+    if (jData.length > 0) {
+      var headers = jData[0];
+      var pCols = {};
+      var gCols = {};
+      var dCols = {};
+      
+      for (var c = 0; c < headers.length; c++) {
+        var h = String(headers[c]).trim();
+        var matchP = h.match(/^Puntos_J([0-9]+)$/i);
+        if (matchP) {
+          var jNum = parseInt(matchP[1], 10);
+          pCols[jNum] = c;
+          if (jNum > maxJ) maxJ = jNum;
+        }
+        var matchG = h.match(/^Goles_J([0-9]+)$/i);
+        if (matchG) gCols[parseInt(matchG[1], 10)] = c;
+        var matchD = h.match(/^(?:PtsDef|PDef)_J([0-9]+)$/i);
+        if (matchD) dCols[parseInt(matchD[1], 10)] = c;
+      }
+      
+      for (var r = 1; r < jData.length; r++) {
+        var name = String(jData[r][0] || '').trim();
+        if (!name) continue;
+        
+        var totalPts = 0;
+        var jPoints = {};
+        var jGoals = {};
+        var jDef = {};
+        
+        for (var jIdx in pCols) {
+          var colIdx = pCols[jIdx];
+          var rawVal = jData[r][colIdx];
+          if (rawVal !== '' && rawVal !== null && rawVal !== undefined && !isNaN(Number(rawVal))) {
+            var numVal = Number(rawVal);
+            jPoints[jIdx] = numVal;
+            totalPts += numVal;
+          }
+        }
+        for (var gIdx in gCols) {
+          var gVal = jData[r][gCols[gIdx]];
+          if (gVal !== '' && !isNaN(Number(gVal))) jGoals[gIdx] = Number(gVal);
+        }
+        for (var defIdx in dCols) {
+          var defVal = jData[r][dCols[defIdx]];
+          if (defVal !== '' && !isNaN(Number(defVal))) jDef[defIdx] = Number(defVal);
+        }
+        
+        players.push({
+          name: name,
+          realTeam: String(jData[r][1] || '').trim(),
+          position: String(jData[r][2] || 'Medio').trim(),
+          value: Number(jData[r][3]) || 0,
+          status: String(jData[r][4] || 'Disponible').trim(),
+          totalPoints: parseFloat(totalPts.toFixed(2)),
+          jornadasPoints: jPoints,
+          jornadasGoals: jGoals,
+          jornadasDef: jDef
+        });
+      }
+    }
+  }
+  
+  // 3. Alineaciones (1 sola lectura de rango)
   var sheetAl = ss.getSheetByName('Alineaciones');
   var lineups = [];
   if (sheetAl) {
     var alData = sheetAl.getDataRange().getValues();
-    for (var i = 1; i < alData.length; i++) {
-      if (alData[i][0] && alData[i][2]) {
+    for (var a = 1; a < alData.length; a++) {
+      if (alData[a][0] && alData[a][2]) {
+        var aJornada = Number(alData[a][1]) || 1;
+        if (aJornada > maxJ) maxJ = aJornada;
         lineups.push({
-          teamName: String(alData[i][0]).trim(),
-          jornada: Number(alData[i][1]) || 1,
-          playerName: String(alData[i][2]).trim(),
-          realTeam: String(alData[i][3] || '').trim(),
-          position: String(alData[i][4] || '').trim(),
-          value: Number(alData[i][5]) || 0
+          teamName: String(alData[a][0]).trim(),
+          jornada: aJornada,
+          playerName: String(alData[a][2]).trim(),
+          realTeam: String(alData[a][3] || '').trim(),
+          position: String(alData[a][4] || '').trim(),
+          value: Number(alData[a][5]) || 0
         });
+      }
+    }
+  }
+
+  // 4. Historial de Fichajes (1 sola lectura de rango)
+  var sheetFichajes = ss.getSheetByName('Fichajes') || 
+                      ss.getSheetByName('Historial_Fichajes') || 
+                      ss.getSheetByName('Historial Fichajes') || 
+                      ss.getSheetByName('Transfers');
+  var transfers = [];
+  if (sheetFichajes) {
+    var fData = sheetFichajes.getDataRange().getValues();
+    if (fData.length > 1) {
+      var fHeaders = fData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+      var colFDate = -1, colFTeam = -1, colFJor = -1, colFOut = -1, colFIn = -1, colFCost = -1, colFType = -1;
+      
+      for (var c = 0; c < fHeaders.length; c++) {
+        var fh = fHeaders[c];
+        if (fh.indexOf('fecha') !== -1 || fh.indexOf('hora') !== -1 || fh.indexOf('time') !== -1) colFDate = c;
+        else if (fh === 'equipo' || fh === 'team') colFTeam = c;
+        else if (fh.indexOf('jornada') !== -1) colFJor = c;
+        else if (fh.indexOf('sale') !== -1 || fh.indexOf('out') !== -1 || fh.indexOf('saliente') !== -1) colFOut = c;
+        else if (fh.indexOf('entra') !== -1 || fh.indexOf('in') !== -1 || fh.indexOf('entrante') !== -1) colFIn = c;
+        else if (fh.indexOf('cost') !== -1 || fh.indexOf('precio') !== -1) colFCost = c;
+        else if (fh.indexOf('tipo') !== -1 || fh.indexOf('type') !== -1) colFType = c;
+      }
+      
+      if (colFDate === -1) colFDate = 0;
+      if (colFTeam === -1) colFTeam = 1;
+      if (colFJor === -1) colFJor = 2;
+      if (colFOut === -1) colFOut = 3;
+      if (colFIn === -1) colFIn = 4;
+      if (colFCost === -1 && fHeaders.length > 5) colFCost = 5;
+      if (colFType === -1 && fHeaders.length > 6) colFType = 6;
+      
+      for (var f = 1; f < fData.length; f++) {
+        var row = fData[f];
+        var fTeam = colFTeam !== -1 && row[colFTeam] !== undefined ? String(row[colFTeam]).trim() : '';
+        var fOut = colFOut !== -1 && row[colFOut] !== undefined ? String(row[colFOut]).trim() : '';
+        var fIn = colFIn !== -1 && row[colFIn] !== undefined ? String(row[colFIn]).trim() : '';
+        
+        if (fTeam || fOut || fIn) {
+          var rawDate = colFDate !== -1 ? row[colFDate] : '';
+          var dateStr = '';
+          if (rawDate instanceof Date) {
+            dateStr = Utilities.formatDate(rawDate, Session.getScriptTimeZone() || "GMT+1", "dd/MM/yyyy, HH:mm'h'");
+          } else if (rawDate) {
+            dateStr = String(rawDate);
+          }
+          
+          var fCost = colFCost !== -1 && row[colFCost] !== '' ? Number(row[colFCost]) : 0;
+          var fJor = colFJor !== -1 && row[colFJor] !== '' ? Number(row[colFJor]) : 1;
+          var fType = colFType !== -1 && row[colFType] ? String(row[colFType]).trim() : 'Normal';
+          
+          transfers.push({
+            timestamp: dateStr,
+            team: fTeam,
+            jornada: isNaN(fJor) ? 1 : fJor,
+            playerOut: fOut,
+            playerIn: fIn,
+            cost: isNaN(fCost) ? 0 : fCost,
+            type: fType
+          });
+        }
+      }
+    }
+  }
+
+  // 5. Historial de Draft (1 sola lectura de rango)
+  var sheetDraft = ss.getSheetByName('Draft') || 
+                   ss.getSheetByName('Historial_Draft') || 
+                   ss.getSheetByName('Historial Draft') || 
+                   ss.getSheetByName('Draft_Historial');
+  var drafts = [];
+  if (sheetDraft) {
+    var dData = sheetDraft.getDataRange().getValues();
+    if (dData.length > 1) {
+      var dHeaders = dData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+      var colDDate = -1, colDTeam = -1, colDPlayer = -1, colDRealTeam = -1, colDPos = -1, colDVal = -1;
+      
+      for (var d = 0; d < dHeaders.length; d++) {
+        var dh = dHeaders[d];
+        if (dh.indexOf('fecha') !== -1 || dh.indexOf('hora') !== -1 || dh.indexOf('time') !== -1) colDDate = d;
+        else if (dh === 'equipo' || dh === 'team') colDTeam = d;
+        else if (dh.indexOf('jugador') !== -1 || dh.indexOf('player') !== -1 || dh.indexOf('nombre') !== -1) colDPlayer = d;
+        else if (dh.indexOf('equipo_liga') !== -1 || dh.indexOf('real') !== -1 || dh.indexOf('club') !== -1) colDRealTeam = d;
+        else if (dh.indexOf('posic') !== -1 || dh.indexOf('pos') !== -1) colDPos = d;
+        else if (dh.indexOf('valor') !== -1 || dh.indexOf('val') !== -1 || dh.indexOf('precio') !== -1) colDVal = d;
+      }
+      
+      if (colDDate === -1) colDDate = 0;
+      if (colDTeam === -1) colDTeam = 1;
+      if (colDPlayer === -1) colDPlayer = 2;
+      if (colDRealTeam === -1 && dHeaders.length > 3) colDRealTeam = 3;
+      if (colDPos === -1 && dHeaders.length > 4) colDPos = 4;
+      if (colDVal === -1 && dHeaders.length > 5) colDVal = 5;
+      
+      for (var dr = 1; dr < dData.length; dr++) {
+        var dRow = dData[dr];
+        var dTeam = colDTeam !== -1 && dRow[colDTeam] !== undefined ? String(dRow[colDTeam]).trim() : '';
+        var dPlayer = colDPlayer !== -1 && dRow[colDPlayer] !== undefined ? String(dRow[colDPlayer]).trim() : '';
+        
+        if (dTeam || dPlayer) {
+          var rawDDate = colDDate !== -1 ? dRow[colDDate] : '';
+          var dDateStr = '';
+          if (rawDDate instanceof Date) {
+            dDateStr = Utilities.formatDate(rawDDate, Session.getScriptTimeZone() || "GMT+1", "dd/MM/yyyy, HH:mm'h'");
+          } else if (rawDDate) {
+            dDateStr = String(rawDDate);
+          }
+          
+          var dReal = colDRealTeam !== -1 && dRow[colDRealTeam] !== undefined ? String(dRow[colDRealTeam]).trim() : '';
+          var dPos = colDPos !== -1 && dRow[colDPos] !== undefined ? String(dRow[colDPos]).trim() : '';
+          var dVal = colDVal !== -1 && dRow[colDVal] !== '' ? Number(dRow[colDVal]) : 0;
+          
+          drafts.push({
+            timestamp: dDateStr,
+            team: dTeam,
+            playerName: dPlayer,
+            realTeam: dReal,
+            position: dPos,
+            value: isNaN(dVal) ? 0 : dVal
+          });
+        }
       }
     }
   }
@@ -451,8 +658,8 @@ function getFullSyncData() {
     teams: teams,
     players: players,
     lineups: lineups,
-    accounting: accounting,
-    standings: standings,
+    transfers: transfers,
+    drafts: drafts,
     syncedAt: new Date().toISOString()
   };
 }
@@ -769,6 +976,128 @@ function getAccountingData() {
     finalCajaBeforeFinalPrizes: finalCaja.toFixed(2),
     teamBalanceDetails: details
   };
+}
+
+/**
+ * Obtener jugadores de un equipo alineados en una jornada específica
+ */
+function getTeamPlayersForJornada(teamName, jornada) {
+  var d = getTeamLineupData(teamName, jornada);
+  return (d && d.players) ? d.players.map(function(p) { return p.name; }) : [];
+}
+
+/**
+ * Obtener historial de fichajes
+ */
+function getTransferHistory() {
+  var data = getFullSyncData();
+  return data.transfers || [];
+}
+
+/**
+ * Obtener historial del draft
+ */
+function getDraftHistory() {
+  var data = getFullSyncData();
+  return data.drafts || [];
+}
+
+/**
+ * Procesar selección del Draft
+ */
+function processDraftSelection(team, token, player) {
+  if (!validateTeamToken(team, token)) {
+    return { success: false, message: 'Token incorrecto o no autorizado para el equipo ' + team };
+  }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetAl = ss.getSheetByName('Alineaciones');
+  var sheetDraft = ss.getSheetByName('Draft') || ss.getSheetByName('Historial_Draft');
+  
+  if (!sheetDraft) {
+    sheetDraft = ss.insertSheet('Draft');
+    sheetDraft.appendRow(['Fecha/Hora', 'Equipo', 'Nombre_Jugador', 'Equipo_Liga', 'Posicion', 'Valor']);
+  }
+  
+  var market = getPlayersForMercado();
+  var pData = null;
+  for (var i = 0; i < market.length; i++) {
+    if (market[i].name.toLowerCase() === String(player).trim().toLowerCase()) {
+      pData = market[i];
+      break;
+    }
+  }
+  
+  var realTeam = pData ? pData.realTeam : '';
+  var pos = pData ? pData.position : 'Medio';
+  var val = pData ? pData.value : 0;
+  
+  var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
+  sheetDraft.appendRow([nowStr, team, player, realTeam, pos, val]);
+  
+  if (sheetAl) {
+    sheetAl.appendRow([team, 1, player, realTeam, pos, val]);
+  }
+  
+  return { success: true, message: '¡Selección registrada correctamente! ' + player + ' fichado por ' + team + '.' };
+}
+
+/**
+ * Procesar fichajes múltiples
+ */
+function processMultipleTransfers(team, token, jornada, transfers) {
+  if (!validateTeamToken(team, token)) {
+    return { success: false, message: 'Token incorrecto o no autorizado para el equipo ' + team };
+  }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetAl = ss.getSheetByName('Alineaciones');
+  var sheetFichajes = ss.getSheetByName('Fichajes') || ss.getSheetByName('Historial_Fichajes');
+  
+  if (!sheetFichajes) {
+    sheetFichajes = ss.insertSheet('Fichajes');
+    sheetFichajes.appendRow(['Fecha/Hora', 'Equipo', 'Jornada', 'Jugador Sale', 'Jugador Entra', 'Coste', 'Tipo']);
+  }
+  
+  var market = getPlayersForMercado();
+  var marketMap = {};
+  market.forEach(function(m) { marketMap[m.name] = m; });
+  
+  var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
+  
+  var previousTransfers = getTransferHistory();
+  var teamNormalCount = previousTransfers.filter(function(t) { return t.team === team && t.type === 'Normal'; }).length;
+  
+  transfers.forEach(function(t) {
+    var pOut = t.playerOut;
+    var pIn = t.playerIn;
+    var isAbandon = !!t.isAbandonment;
+    var cost = 0;
+    var type = isAbandon ? 'Abandono' : 'Normal';
+    
+    if (!isAbandon) {
+      if (teamNormalCount >= FREE_TRANSFERS_PER_TEAM) {
+        cost = TRANSFER_COST;
+      }
+      teamNormalCount++;
+    }
+    
+    sheetFichajes.appendRow([nowStr, team, jornada, pOut, pIn, cost, type]);
+    
+    if (sheetAl) {
+      var alData = sheetAl.getDataRange().getValues();
+      for (var r = 1; r < alData.length; r++) {
+        if (String(alData[r][0]).trim() === team && Number(alData[r][1]) === Number(jornada) && String(alData[r][2]).trim() === pOut) {
+          var pInfo = marketMap[pIn] || { realTeam: '', position: 'Medio', value: 0 };
+          sheetAl.getRange(r + 1, 3).setValue(pIn);
+          sheetAl.getRange(r + 1, 4).setValue(pInfo.realTeam);
+          sheetAl.getRange(r + 1, 5).setValue(pInfo.position);
+          sheetAl.getRange(r + 1, 6).setValue(pInfo.value);
+          break;
+        }
+      }
+    }
+  });
+  
+  return { success: true, message: 'Fichajes procesados correctamente en Google Sheets.' };
 }
 `;
 

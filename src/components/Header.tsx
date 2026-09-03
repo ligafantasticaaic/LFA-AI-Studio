@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
   Trophy, 
   Users, 
@@ -6,14 +6,9 @@ import {
   Store, 
   Coins, 
   LineChart, 
-  ShieldCheck, 
   LayoutDashboard,
   Sparkles,
-  Code2,
-  Lock,
-  Link2,
-  RefreshCw,
-  CheckCircle2
+  Lock
 } from 'lucide-react';
 import { gasEngine } from '../services/gasEngine';
 
@@ -33,17 +28,8 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   onTabChange,
   maxJornada,
-  totalCaja,
-  onOpenExportModal,
-  onOpenExport,
-  onOpenConnectionModal
+  totalCaja
 }) => {
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-
-  const isConnected = gasEngine.isRemoteConnected();
-  const lastSyncTime = gasEngine.getLastSyncTime();
-
   // Determine stats if not passed
   const displayJornada = maxJornada ?? gasEngine.getMaxJornada();
   const displayCaja = totalCaja ?? (gasEngine.getAccountingData()?.finalCajaBeforeFinalPrizes || '0.00');
@@ -53,31 +39,6 @@ export const Header: React.FC<HeaderProps> = ({
       setActiveTab(tabId);
     } else if (typeof onTabChange === 'function') {
       onTabChange(tabId);
-    }
-  };
-
-  const handleOpenExport = () => {
-    if (typeof onOpenExportModal === 'function') {
-      onOpenExportModal();
-    } else if (typeof onOpenExport === 'function') {
-      onOpenExport();
-    }
-  };
-
-  const handleQuickSync = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isConnected) {
-      if (onOpenConnectionModal) onOpenConnectionModal();
-      return;
-    }
-
-    setIsSyncing(true);
-    setSyncFeedback(null);
-    const res = await gasEngine.syncFromRemote();
-    setIsSyncing(false);
-    if (res.success) {
-      setSyncFeedback('¡Sincronizado!');
-      setTimeout(() => setSyncFeedback(null), 3000);
     }
   };
 
@@ -128,56 +89,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-[11px] text-slate-400 uppercase font-semibold">Bote Caja:</span>
             <span className="text-xs font-bold text-amber-400 font-mono">{displayCaja} €</span>
           </div>
-
-          {/* Google Sheets Connection Pill */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={onOpenConnectionModal}
-              className={`border text-xs font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm ${
-                isConnected
-                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/40'
-                  : 'bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/40'
-              }`}
-              title={isConnected ? 'Enlazado con Google Sheets - Clic para opciones' : 'Clic para conectar con tu Google Sheets'}
-            >
-              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <Link2 className="w-3.5 h-3.5 shrink-0" />
-              <span className="font-bold">
-                {isConnected ? 'Sheets Enlazado' : 'Conectar Sheets'}
-              </span>
-              {isConnected && lastSyncTime && (
-                <span className="text-[10px] text-emerald-400/80 font-mono hidden md:inline">
-                  ({lastSyncTime})
-                </span>
-              )}
-            </button>
-
-            {isConnected && (
-              <button
-                onClick={handleQuickSync}
-                disabled={isSyncing}
-                className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 p-2 rounded-xl text-xs transition cursor-pointer"
-                title="Sincronizar datos ahora con Google Sheets"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-400' : 'text-slate-300'}`} />
-              </button>
-            )}
-
-            {syncFeedback && (
-              <span className="text-[11px] font-bold text-emerald-400 animate-in fade-in">
-                {syncFeedback}
-              </span>
-            )}
-          </div>
-
-          <button
-            onClick={handleOpenExport}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-            title="Ver / Exportar archivos para Google Apps Script"
-          >
-            <Code2 className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Código Apps Script</span>
-          </button>
         </div>
       </div>
 

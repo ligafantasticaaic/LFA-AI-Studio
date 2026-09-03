@@ -14,17 +14,37 @@ import {
   Download, 
   RefreshCw, 
   ShieldAlert, 
-  CheckCircle2,
-  AlertTriangle,
-  RotateCcw
+  CheckCircle2, 
+  AlertTriangle, 
+  RotateCcw,
+  Link2,
+  Database,
+  Code
 } from 'lucide-react';
+import { GAS_TEMPLATES } from '../data/gasTemplates';
 
-export const AdminView: React.FC = () => {
+export interface AdminViewProps {
+  onOpenConnectionModal?: () => void;
+  onOpenExportModal?: () => void;
+}
+
+export const AdminView: React.FC<AdminViewProps> = ({
+  onOpenConnectionModal,
+  onOpenExportModal
+}) => {
   const [adminPass, setAdminPass] = useState<string>('');
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
   const [tokens, setTokens] = useState<TeamToken[]>([]);
   const [realTeams, setRealTeams] = useState<string[]>([]);
   const [adminTeamsList, setAdminTeamsList] = useState<string[]>([]);
+
+  // Google Sheets Remote Connection State
+  const [gasUrlInput, setGasUrlInput] = useState<string>(gasEngine.getGasUrl());
+  const [isTestingGas, setIsTestingGas] = useState<boolean>(false);
+  const [isSyncingGas, setIsSyncingGas] = useState<boolean>(false);
+  const [gasFeedback, setGasFeedback] = useState<{ isSuccess: boolean; message: string; stats?: any; latency?: number } | null>(null);
+  const [copiedGasCode, setCopiedGasCode] = useState<boolean>(false);
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
 
   // Add team form
   const [newTeamName, setNewTeamName] = useState<string>('');
@@ -207,11 +227,60 @@ export const AdminView: React.FC = () => {
   };
 
   const handleResetData = () => {
-    if (!window.confirm('¿Deseas restablecer todos los datos a la configuración inicial de demostración?')) return;
     gasEngine.resetToDefaults();
     loadAdminData();
+    setShowResetConfirm(false);
     showAlert('Datos restablecidos a la configuración inicial de la liga.', true);
   };
+
+  const handleTestGasConnection = async () => {
+    if (!gasUrlInput.trim()) {
+      setGasFeedback({ isSuccess: false, message: 'Introduce la URL de la Web App de Google Apps Script (/exec).' });
+      return;
+    }
+    setIsTestingGas(true);
+    setGasFeedback(null);
+    const res = await gasEngine.testConnection(gasUrlInput.trim());
+    setIsTestingGas(false);
+    setGasFeedback({
+      isSuccess: !!res.success,
+      message: res.message || (res.success ? 'Conexión verificada con éxito' : 'Error al conectar'),
+      latency: res.latencyMs
+    });
+    if (res.success) {
+      gasEngine.setGasUrl(gasUrlInput.trim());
+    }
+  };
+
+  const handleSyncGasNow = async () => {
+    if (!gasUrlInput.trim()) {
+      setGasFeedback({ isSuccess: false, message: 'Introduce la URL de la Web App de Google Apps Script (/exec).' });
+      return;
+    }
+    gasEngine.setGasUrl(gasUrlInput.trim());
+    setIsSyncingGas(true);
+    setGasFeedback(null);
+    const res = await gasEngine.syncFromRemote(gasUrlInput.trim());
+    setIsSyncingGas(false);
+    setGasFeedback({
+      isSuccess: !!res.success,
+      message: res.message,
+      stats: res.stats
+    });
+    if (res.success) {
+      loadAdminData();
+    }
+  };
+
+  const handleCopyGasCode = () => {
+    const code = GAS_TEMPLATES['Código.gs'] || '';
+    navigator.clipboard.writeText(code);
+    setCopiedGasCode(true);
+    setTimeout(() => setCopiedGasCode(false), 2000);
+  };
+
+  const isGasConnected = gasEngine.isRemoteConnected();
+  const lastSyncTime = gasEngine.getLastSyncTime();
 
   return (
     <div className="space-y-6">
@@ -232,14 +301,34 @@ export const AdminView: React.FC = () => {
         </div>
 
         {isUnlocked && (
-          <button
-            onClick={handleResetData}
-            className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
-            title="Restablecer datos de prueba a valores iniciales"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-            <span>Restablecer Datos Demo</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {showResetConfirm ? (
+              <div className="flex items-center gap-2 bg-rose-950/60 border border-rose-500/50 p-1.5 rounded-xl text-xs">
+                <span className="text-rose-200 font-bold px-1">¿Restablecer?</span>
+                <button
+                  onClick={handleResetData}
+                  className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-2 py-1 rounded-lg text-[11px] transition cursor-pointer"
+                >
+                  Sí, borrar
+                </button>
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg text-[11px] transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowResetConfirm(true)}
+                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+                title="Restablecer datos de prueba a valores iniciales"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                <span>Restablecer Datos Demo</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -281,6 +370,163 @@ export const AdminView: React.FC = () => {
               <span>{alertInfo.msg}</span>
             </div>
           )}
+
+          {/* Section 0: Enlace & Sincronización con Google Sheets (Apps Script) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Enlace & Sincronización con Google Sheets</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Configuración privada de la Web App de Apps Script para sincronizar equipos, jugadores, fichajes y draft
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Badge */}
+              <div className="flex items-center gap-2">
+                <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                  isGasConnected 
+                    ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300' 
+                    : 'bg-amber-950/50 border-amber-500/40 text-amber-300'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${isGasConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  <span>{isGasConnected ? 'Google Sheets Conectado' : 'Sin Enlazar (Modo Local)'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sync Live Stats Counter */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-center">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-extrabold block">Equipos</span>
+                <span className="text-sm font-black text-white font-mono">{gasEngine.getTeamNames().length}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-extrabold block">Jugadores</span>
+                <span className="text-sm font-black text-white font-mono">{gasEngine.getPlayers().length}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-extrabold block">Fichajes</span>
+                <span className="text-sm font-black text-amber-400 font-mono">{gasEngine.getTransferHistory().length}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-extrabold block">Draft</span>
+                <span className="text-sm font-black text-emerald-400 font-mono">{gasEngine.getDraftHistory().length}</span>
+              </div>
+            </div>
+
+            {/* URL Input & Direct Actions */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                  URL de la Aplicación Web de Google Apps Script:
+                </label>
+                {lastSyncTime && (
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Última sincronización: <strong className="text-emerald-400">{lastSyncTime}</strong>
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={gasUrlInput}
+                  onChange={(e) => setGasUrlInput(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                  className="flex-1 bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleTestGasConnection}
+                    disabled={isTestingGas || isSyncingGas}
+                    className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs py-2.5 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isTestingGas ? 'animate-spin text-amber-400' : ''}`} />
+                    <span>{isTestingGas ? 'Probando...' : 'Probar Conexión'}</span>
+                  </button>
+                  <button
+                    onClick={handleSyncGasNow}
+                    disabled={isTestingGas || isSyncingGas}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGas ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingGas ? 'Sincronizando...' : 'Guardar & Sincronizar'}</span>
+                  </button>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                * Debe terminar en <span className="font-mono text-amber-400">/exec</span> (no /dev) y haber sido implementada con acceso para <strong className="text-slate-300">"Cualquiera" (Anyone)</strong>.
+              </p>
+            </div>
+
+            {/* Feedback alert if any */}
+            {gasFeedback && (
+              <div className={`p-3.5 rounded-xl text-xs font-semibold border flex items-center justify-between gap-2 ${
+                gasFeedback.isSuccess 
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' 
+                  : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {gasFeedback.isSuccess ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                  <span>{gasFeedback.message}</span>
+                </div>
+                {gasFeedback.latency !== undefined && (
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-md border border-emerald-800">
+                    {gasFeedback.latency} ms
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Quick Action Tools */}
+            <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-3">
+              {onOpenConnectionModal && (
+                <button
+                  onClick={onOpenConnectionModal}
+                  className="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Link2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Abrir Asistente de Conexión y Diagnóstico</span>
+                </button>
+              )}
+
+              {onOpenExportModal && (
+                <button
+                  onClick={onOpenExportModal}
+                  className="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Code className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Ver Archivos y Código Apps Script</span>
+                </button>
+              )}
+
+              <button
+                onClick={handleCopyGasCode}
+                className="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                {copiedGasCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                <span>{copiedGasCode ? '¡Código.gs Copiado!' : 'Copiar Código.gs Actualizado'}</span>
+              </button>
+            </div>
+
+            {/* Google Sheets Tabs Info Card */}
+            <div className="bg-slate-950/60 border border-slate-800/60 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
+              <span className="font-bold text-slate-300 block">Estructura sincronizada con Google Sheets:</span>
+              <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                <li><strong className="text-slate-300">Equipos / Tokens:</strong> Lista de equipos participantes y sus tokens de acceso.</li>
+                <li><strong className="text-slate-300">Jugadores:</strong> Plantilla completa con valor, posición y puntos por jornada.</li>
+                <li><strong className="text-slate-300">Alineaciones:</strong> Los 11 futbolistas alineados por equipo y jornada.</li>
+                <li><strong className="text-slate-300">Fichajes:</strong> Historial de sustituciones y coste de mercado (se actualiza automáticamente).</li>
+                <li><strong className="text-slate-300">Draft:</strong> Historial de jugadores seleccionados durante el draft inicial.</li>
+              </ul>
+            </div>
+          </div>
 
           {/* Section 1: Tokens de Equipos */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">

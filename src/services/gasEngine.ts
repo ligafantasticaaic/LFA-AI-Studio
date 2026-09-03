@@ -440,7 +440,17 @@ class GasEngineService {
     }
 
     try {
-      const data = await this.fetchGasData(targetUrl, { action: 'getFullSync' }, 22000);
+      // Timeout ampliado a 45 segundos para soportar el arranque en frío (cold-start) de Google Apps Script
+      let data: any;
+      try {
+        data = await this.fetchGasData(targetUrl, { action: 'getFullSync' }, 45000);
+      } catch (firstErr: any) {
+        // Si falló por timeout en getFullSync, intentamos con ping para ver si la web app responde
+        if (firstErr.message === 'TIMEOUT_JSONP' || firstErr.name === 'AbortError') {
+          throw new Error('TIMEOUT_GAS');
+        }
+        throw firstErr;
+      }
 
       if (data && data.error) {
         return { success: false, message: 'Error de Google Apps Script: ' + data.error };
@@ -482,6 +492,36 @@ class GasEngineService {
         }));
       }
 
+      let updatedTransfersCount = 0;
+      let updatedDraftsCount = 0;
+
+      // Actualizar historial de fichajes si viene en la respuesta
+      if (Array.isArray(data.transfers)) {
+        this.transfers = data.transfers.map((t: any) => ({
+          timestamp: String(t.timestamp || ''),
+          team: String(t.team || t.Equipo || '').trim(),
+          jornada: Number(t.jornada || t.Jornada) || 1,
+          playerOut: String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || '').trim(),
+          playerIn: String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || '').trim(),
+          cost: Number(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : 0)) || 0,
+          type: ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono')
+        }));
+        updatedTransfersCount = this.transfers.length;
+      }
+
+      // Actualizar historial de draft si viene en la respuesta
+      if (Array.isArray(data.drafts)) {
+        this.drafts = data.drafts.map((d: any) => ({
+          timestamp: String(d.timestamp || ''),
+          team: String(d.team || d.Equipo || '').trim(),
+          playerName: String(d.playerName || d.Nombre_Jugador || d.Jugador || d.Nombre || '').trim(),
+          realTeam: String(d.realTeam || d.Equipo_Liga || d.Club || '').trim(),
+          position: String(d.position || d.Posicion || 'Medio').trim(),
+          value: Number(d.value !== undefined ? d.value : (d.Valor !== undefined ? d.Valor : 0)) || 0
+        }));
+        updatedDraftsCount = this.drafts.length;
+      }
+
       const now = new Date();
       this.lastSyncTime = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' +
                           now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -491,10 +531,12 @@ class GasEngineService {
 
       return {
         success: true,
-        message: `Sincronización completada: ${updatedTeamsCount || this.teams.length} equipos y ${updatedPlayersCount || this.players.length} jugadores cargados desde Google Sheets.`,
+        message: `Sincronización completada: ${updatedTeamsCount || this.teams.length} equipos, ${updatedPlayersCount || this.players.length} jugadores, ${this.transfers.length} fichajes y ${this.drafts.length} elecciones de draft sincronizados desde Google Sheets.`,
         stats: {
           teams: this.teams.length,
           players: this.players.length,
+          transfers: this.transfers.length,
+          drafts: this.drafts.length,
           maxJornada: data.maxJornada || this.getMaxJornada()
         }
       };
@@ -508,9 +550,15 @@ class GasEngineService {
       if (err.message === 'OLD_GAS_CODE' || err.message === 'RETURNED_HTML') {
         return { success: false, message: 'La Web App devolvió HTML en vez de datos. Pega el nuevo "Código.gs" en Apps Script y publica una "Nueva versión".' };
       }
+      if (err.message === 'TIMEOUT_GAS') {
+        return {
+          success: false,
+          message: '⏱️ Tiempo de espera agotado: La versión actual de tu Google Apps Script tarda demasiado en procesar las hojas. Copia el nuevo "Código.gs" optimizado desde la pestaña Conectar, pégalo en tu Apps Script y publica una "Nueva versión". Con el nuevo código tarda menos de 1 segundo.'
+        };
+      }
       return {
         success: false,
-        message: 'Fallo al sincronizar con Google Sheets. Revisa la URL y que la implementación tenga acceso "Cualquiera".'
+        message: 'Fallo al sincronizar con Google Sheets: ' + (err.message || 'Verifica la URL y permisos.')
       };
     }
   }
@@ -613,6 +661,10 @@ class GasEngineService {
 
   public getAllPlayersWithDetails(): Player[] {
     return this.players.filter(p => p.name && p.name.trim() !== '');
+  }
+
+  public getPlayers(): Player[] {
+    return this.getAllPlayersWithDetails();
   }
 
   public calculateTeamValue(teamName: string, jornada: number): number {

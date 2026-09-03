@@ -10,7 +10,7 @@ import { GraficasView } from './components/GraficasView';
 import { AdminView } from './components/AdminView';
 import { ExportModal } from './components/ExportModal';
 import { ConnectionModal } from './components/ConnectionModal';
-import { Trophy, Code, Link2, ExternalLink } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { gasEngine } from './services/gasEngine';
 
 export default function App() {
@@ -40,9 +40,6 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onTabChange={setActiveTab}
-        onOpenExportModal={() => setIsExportOpen(true)}
-        onOpenExport={() => setIsExportOpen(true)}
-        onOpenConnectionModal={() => setIsConnectionOpen(true)}
       />
 
       {/* Main View Container */}
@@ -59,7 +56,12 @@ export default function App() {
         {activeTab === 'mercado' && <MercadoView />}
         {activeTab === 'premios' && <PremiosView />}
         {activeTab === 'graficas' && <GraficasView />}
-        {activeTab === 'admin' && <AdminView />}
+        {activeTab === 'admin' && (
+          <AdminView 
+            onOpenConnectionModal={() => setIsConnectionOpen(true)}
+            onOpenExportModal={() => setIsExportOpen(true)}
+          />
+        )}
       </main>
 
       {/* Modern Compact Footer */}
@@ -68,27 +70,13 @@ export default function App() {
           <div className="flex items-center gap-2">
             <Trophy className="w-4 h-4 text-amber-500" />
             <span className="font-bold text-slate-400">Liga Fantástica de Fútbol (LFA)</span>
-            <span className="text-slate-600 font-mono">• v2.0 Luxury Edition</span>
+            <span className="text-slate-600 font-mono">• Temporada 2026/27</span>
           </div>
 
-          <div className="flex items-center flex-wrap justify-center gap-4 text-[11px]">
-            <button
-              onClick={() => setIsConnectionOpen(true)}
-              className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition cursor-pointer"
-            >
-              <Link2 className="w-3.5 h-3.5" />
-              <span>{gasEngine.isRemoteConnected() ? 'Google Sheets Conectado' : 'Conectar Google Sheets'}</span>
-            </button>
-            <span className="text-slate-700">|</span>
-            <button
-              onClick={() => setIsExportOpen(true)}
-              className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 transition cursor-pointer"
-            >
-              <Code className="w-3.5 h-3.5" />
-              <span>Exportar Código Apps Script</span>
-            </button>
-            <span className="text-slate-700">|</span>
-            <span className="text-slate-500">GitHub Pages & Google Sites Ready</span>
+          <div className="flex items-center flex-wrap justify-center gap-4 text-[11px] text-slate-500">
+            <span>Competición oficial de fútbol fantasy</span>
+            <span className="text-slate-700">•</span>
+            <span>Sistema seguro y centralizado</span>
           </div>
         </div>
       </footer>

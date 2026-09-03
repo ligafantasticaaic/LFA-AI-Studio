@@ -21,6 +21,8 @@ export const DraftView: React.FC = () => {
 
   useEffect(() => {
     refreshDraftData();
+    const unsub = gasEngine.subscribe(refreshDraftData);
+    return () => unsub();
   }, []);
 
   const refreshDraftData = () => {
