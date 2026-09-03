@@ -140,8 +140,8 @@ export const MercadoView: React.FC = () => {
               className="w-full bg-slate-950 border border-slate-700 text-xs sm:text-sm text-white font-semibold py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500 cursor-pointer font-mono"
             >
               <option value="Todos">Todos los Clubes ({allClubs.length})</option>
-              {allClubs.map(c => (
-                <option key={c} value={c}>{c}</option>
+              {allClubs.map((c, idx) => (
+                <option key={`mercado-club-${c}-${idx}`} value={c}>{c}</option>
               ))}
             </select>
           </div>
@@ -185,7 +185,7 @@ export const MercadoView: React.FC = () => {
                   const isFichado = player.status?.toLowerCase() === 'fichado';
 
                   return (
-                    <tr key={idx} className="hover:bg-slate-800/40 transition">
+                    <tr key={`mercado-player-${player.name}-${player.realTeam}-${idx}`} className="hover:bg-slate-800/40 transition">
                       {/* Equipo Liga */}
                       <td className="p-3">
                         <span className={`inline-block px-2.5 py-1 rounded-md text-[11px] shadow-sm font-mono ${clubStyle.bg} ${clubStyle.text} border ${clubStyle.border}`}>

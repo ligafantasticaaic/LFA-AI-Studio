@@ -45,6 +45,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [gasFeedback, setGasFeedback] = useState<{ isSuccess: boolean; message: string; stats?: any; latency?: number } | null>(null);
   const [copiedGasCode, setCopiedGasCode] = useState<boolean>(false);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [, setSyncVersion] = useState<number>(0);
+
+  useEffect(() => {
+    const unsub = gasEngine.subscribe(() => {
+      setSyncVersion(v => v + 1);
+      if (isUnlocked) {
+        loadAdminData();
+      }
+    });
+    return unsub;
+  }, [isUnlocked, adminPass]);
 
   // Add team form
   const [newTeamName, setNewTeamName] = useState<string>('');
@@ -710,8 +721,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   onChange={(e) => setSchedRealTeam(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 text-white py-2 px-3 rounded-lg text-xs focus:outline-none focus:border-amber-500 font-mono"
                 >
-                  {realTeams.map(rt => (
-                    <option key={rt} value={rt}>{rt}</option>
+                  {realTeams.map((rt, idx) => (
+                    <option key={`sched-rt-${rt}-${idx}`} value={rt}>{rt}</option>
                   ))}
                 </select>
               </div>
@@ -752,8 +763,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   onChange={(e) => setReportTeam(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 text-white py-2 px-3 rounded-lg text-xs focus:outline-none focus:border-amber-500"
                 >
-                  {adminTeamsList.map(t => (
-                    <option key={t} value={t}>{t}</option>
+                  {adminTeamsList.map((t, idx) => (
+                    <option key={`rep-team-${t}-${idx}`} value={t}>{t}</option>
                   ))}
                 </select>
               </div>
@@ -828,7 +839,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-800">
                     {reportData.rows?.map((r, rIdx) => (
-                      <tr key={rIdx} className="hover:bg-slate-800/40">
+                      <tr key={`rep-row-${r.name}-${r.realTeam}-${rIdx}`} className="hover:bg-slate-800/40">
                         <td className="p-2 border border-slate-800 font-bold text-white">{r.name}</td>
                         <td className="p-2 border border-slate-800 text-slate-400">{r.position}</td>
                         <td className="p-2 border border-slate-800 text-slate-400 font-mono">{r.realTeam}</td>

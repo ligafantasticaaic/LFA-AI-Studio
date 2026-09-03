@@ -126,8 +126,8 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
               className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 text-white font-bold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer"
             >
               <option value="">-- Selecciona Equipo --</option>
-              {teams.map(t => (
-                <option key={t} value={t}>{t}</option>
+              {teams.map((t, idx) => (
+                <option key={`idx-team-${t}-${idx}`} value={t}>{t}</option>
               ))}
             </select>
           </div>
@@ -143,7 +143,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
             >
               <option value="">-- Selecciona Jornada --</option>
               {Array.from({ length: maxJornada }, (_, i) => i + 1).map(j => (
-                <option key={j} value={j}>Jornada {j}</option>
+                <option key={`idx-jornada-${j}`} value={j}>Jornada {j}</option>
               ))}
             </select>
           </div>
@@ -216,7 +216,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
                   </tr>
                 ) : (
                   lineupData.players.map((p, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/40 transition">
+                    <tr key={`lineup-player-${p.name}-${p.realTeam}-${idx}`} className="hover:bg-slate-800/40 transition">
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${getPosBadgeClass(p.position)}`}>
                           {p.position}
@@ -302,7 +302,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
               </thead>
               <tbody className="divide-y divide-slate-800/80">
                 {weeklyScores.map((s, idx) => (
-                  <tr key={idx} className={`hover:bg-slate-800/40 transition ${s.teamName === selectedTeam ? 'bg-amber-500/10' : ''}`}>
+                  <tr key={`weekly-${s.teamName}-${idx}`} className={`hover:bg-slate-800/40 transition ${s.teamName === selectedTeam ? 'bg-amber-500/10' : ''}`}>
                     <td className="p-2.5">{renderRankMedal(idx)}</td>
                     <td className="p-2.5 font-bold text-white">{s.teamName}</td>
                     <td className="p-2.5 text-right font-mono font-black text-amber-400">{s.score}</td>
@@ -332,7 +332,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
               </thead>
               <tbody className="divide-y divide-slate-800/80">
                 {generalScores.map((s, idx) => (
-                  <tr key={idx} className={`hover:bg-slate-800/40 transition ${s.teamName === selectedTeam ? 'bg-amber-500/10' : ''}`}>
+                  <tr key={`general-${s.teamName}-${idx}`} className={`hover:bg-slate-800/40 transition ${s.teamName === selectedTeam ? 'bg-amber-500/10' : ''}`}>
                     <td className="p-2.5">{renderRankMedal(idx)}</td>
                     <td className="p-2.5 font-bold text-white">{s.teamName}</td>
                     <td className="p-2.5 text-right font-mono font-black text-amber-400 text-sm">{s.score}</td>
@@ -362,7 +362,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
               </thead>
               <tbody className="divide-y divide-slate-800/80">
                 {mostGoalsTeams.map((s, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/40 transition">
+                  <tr key={`goals-${s.teamName}-${idx}`} className="hover:bg-slate-800/40 transition">
                     <td className="p-2.5">{renderRankMedal(idx)}</td>
                     <td className="p-2.5 font-bold text-white">{s.teamName}</td>
                     <td className="p-2.5 text-right font-mono font-black text-rose-400">{s.score} ⚽</td>
@@ -392,7 +392,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
               </thead>
               <tbody className="divide-y divide-slate-800/80">
                 {leastConcededTeams.map((s, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/40 transition">
+                  <tr key={`conceded-${s.teamName}-${idx}`} className="hover:bg-slate-800/40 transition">
                     <td className="p-2.5">{renderRankMedal(idx)}</td>
                     <td className="p-2.5 font-bold text-white">{s.teamName}</td>
                     <td className="p-2.5 text-right font-mono font-black text-cyan-400">{s.score} pts</td>

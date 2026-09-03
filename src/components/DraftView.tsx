@@ -101,8 +101,8 @@ export const DraftView: React.FC = () => {
                   className="w-full bg-slate-950 border border-slate-700 text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer"
                 >
                   <option value="">-- Selecciona Equipo --</option>
-                  {teams.map(t => (
-                    <option key={t} value={t}>{t}</option>
+                  {teams.map((t, idx) => (
+                    <option key={`draft-team-${t}-${idx}`} value={t}>{t}</option>
                   ))}
                 </select>
               </div>
@@ -137,9 +137,9 @@ export const DraftView: React.FC = () => {
                 className="w-full bg-slate-950 border border-slate-700 text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer"
               >
                 <option value="">-- Selecciona Jugador --</option>
-                {availablePlayers.map(p => (
-                  <option key={p.name} value={p.name}>
-                    {p.realTeam} - {p.name} ({p.position}) - Val: {p.value ? `${p.value}M` : '-'}
+                {availablePlayers.map((p, idx) => (
+                  <option key={`draft-opt-${p.name}-${p.realTeam}-${idx}`} value={p.name}>
+                    {p.realTeam ? `${p.realTeam} - ` : ''}{p.name} ({p.position}) - Val: {p.value ? `${p.value}M` : '-'}
                   </option>
                 ))}
               </select>
@@ -178,9 +178,9 @@ export const DraftView: React.FC = () => {
             </div>
 
             <div className="max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pr-1">
-              {filteredPlayers.slice(0, 18).map(p => (
+              {filteredPlayers.slice(0, 18).map((p, idx) => (
                 <button
-                  key={p.name}
+                  key={`draft-btn-${p.name}-${p.realTeam}-${idx}`}
                   type="button"
                   onClick={() => setSelectedPlayer(p.name)}
                   className={`p-2 rounded-lg text-left border transition text-xs flex items-center justify-between cursor-pointer ${
@@ -251,7 +251,7 @@ export const DraftView: React.FC = () => {
                 </tr>
               ) : (
                 draftHistory.map((d, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/40 transition">
+                  <tr key={`draft-hist-${d.id || d.timestamp || ''}-${idx}`} className="hover:bg-slate-800/40 transition">
                     <td className="p-3 text-slate-400 font-mono text-[11px]">{d.timestamp}</td>
                     <td className="p-3 font-bold text-white">{d.team}</td>
                     <td className="p-3 font-semibold text-amber-300">{d.playerName}</td>

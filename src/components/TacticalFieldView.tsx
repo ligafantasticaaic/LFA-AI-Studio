@@ -96,7 +96,7 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
 
     return (
       <div 
-        key={idx} 
+        key={`disc-${p.name}-${p.position}-${idx}`} 
         className="flex flex-col items-center justify-center relative group transition-transform duration-300 hover:scale-110 cursor-pointer z-30"
       >
         {/* Glow halo */}
@@ -138,8 +138,8 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
               onChange={(e) => handleTeamChange(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 text-white font-bold text-xs sm:text-sm py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer"
             >
-              {teams.map(t => (
-                <option key={t} value={t}>{t}</option>
+              {teams.map((t, idx) => (
+                <option key={`tac-team-${t}-${idx}`} value={t}>{t}</option>
               ))}
             </select>
           </div>
@@ -154,7 +154,7 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
               className="w-full bg-slate-950 border border-slate-700 text-white font-bold text-xs sm:text-sm py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer font-mono"
             >
               {Array.from({ length: maxJornada }, (_, i) => i + 1).map(j => (
-                <option key={j} value={j}>Jornada {j}</option>
+                <option key={`tac-jornada-${j}`} value={j}>Jornada {j}</option>
               ))}
             </select>
           </div>

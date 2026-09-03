@@ -9,6 +9,8 @@ import {
   DraftRecord,
   ScheduleRecord,
   AccountingData,
+  FinalPrize,
+  FinalBalanceDetail,
   TeamJornadasReportResponse
 } from '../types/league';
 
@@ -19,6 +21,21 @@ export const WEEKLY_CONTRIBUTION = 1.5;
 export const TRANSFER_COST = 2;
 export const FREE_TRANSFERS_PER_TEAM = 3;
 export const ADMIN_PASSWORD = 'admin';
+
+export function parseCleanNumber(val: any): number {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  const str = String(val).replace(/[^0-9.,-]/g, '').trim();
+  if (!str) return 0;
+  let normalized = str;
+  if (normalized.includes(',') && !normalized.includes('.')) {
+    normalized = normalized.replace(',', '.');
+  } else if (normalized.includes(',') && normalized.includes('.')) {
+    normalized = normalized.replace(/\./g, '').replace(',', '.');
+  }
+  const n = parseFloat(normalized);
+  return isNaN(n) ? 0 : n;
+}
 
 // Initial Starter Dataset
 const INITIAL_TEAMS: string[] = [
@@ -264,9 +281,10 @@ class GasEngineService {
 
   /**
    * Ejecuta peticiones contra la Web App de Google Apps Script.
-   * Emplea Fetch estándar y realiza fallback automático a JSONP para evitar bloqueos de CORS o iframes.
+   * Lanza Fetch estándar y JSONP de forma concurrente para resolver en el mínimo tiempo posible
+   * y superar cualquier bloqueo de CORS o retraso por redirects en iframes.
    */
-  private async fetchGasData(baseUrl: string, params: Record<string, string>, timeoutMs = 15000): Promise<any> {
+  private async fetchGasData(baseUrl: string, params: Record<string, string>, timeoutMs = 25000): Promise<any> {
     const cleanUrl = baseUrl.trim();
     if (!cleanUrl) throw new Error('EMPTY_URL');
 
@@ -279,81 +297,134 @@ class GasEngineService {
     const sep = cleanUrl.includes('?') ? '&' : '?';
     const fullUrl = cleanUrl + sep + queryParts.join('&');
 
-    // Estrategia 1: Fetch estándar sin cabeceras personalizadas (para que el redirect 302 de GAS funcione sin error preflight)
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-      const res = await fetch(fullUrl, {
-        method: 'GET',
-        mode: 'cors',
-        redirect: 'follow',
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-
-      if (res.ok) {
-        const text = await res.text();
-        const trimmed = text.trim();
-
-        if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || text.includes('accounts.google.com')) {
-          if (text.includes('ServiceLogin') || text.includes('accounts.google.com')) {
-            throw new Error('AUTH_REQUIRED');
-          }
-          if (text.includes('Liga Fantástica') || text.includes('Index')) {
-            throw new Error('OLD_GAS_CODE');
-          }
-          throw new Error('RETURNED_HTML');
-        }
-
-        try {
-          const json = JSON.parse(text);
-          return json;
-        } catch {
-          // Si no es JSON válido, continúa a JSONP
-        }
-      }
-    } catch (err: any) {
-      if (['AUTH_REQUIRED', 'OLD_GAS_CODE', 'RETURNED_HTML', 'DEV_URL_ERROR'].includes(err.message)) {
-        throw err;
-      }
-      // Error de red / CORS o timeout en fetch: intentamos JSONP
-    }
-
-    // Estrategia 2: JSONP (Invulnerable a políticas de CORS y restricciones de iframes)
     return new Promise((resolve, reject) => {
-      if (typeof document === 'undefined') {
-        reject(new Error('NO_DOCUMENT'));
-        return;
-      }
+      let isDone = false;
+      let fetchDone = false;
+      let jsonpDone = false;
+      let lastErr: any = null;
 
-      const callbackName = 'lfa_cb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-      const script = document.createElement('script');
-      const jsonpUrl = fullUrl + '&callback=' + callbackName;
-
-      const timer = setTimeout(() => {
-        cleanup();
-        reject(new Error('TIMEOUT_JSONP'));
+      // Timer único para evitar esperas eternas
+      const masterTimer = setTimeout(() => {
+        if (!isDone) {
+          isDone = true;
+          cleanup();
+          reject(new Error('TIMEOUT_GAS'));
+        }
       }, timeoutMs);
 
+      let scriptElement: HTMLScriptElement | null = null;
+      let callbackName = '';
+      let abortController: AbortController | null = null;
+
       function cleanup() {
-        clearTimeout(timer);
-        if (script.parentNode) script.parentNode.removeChild(script);
-        delete (window as any)[callbackName];
+        clearTimeout(masterTimer);
+        if (scriptElement && scriptElement.parentNode) {
+          scriptElement.parentNode.removeChild(scriptElement);
+          scriptElement = null;
+        }
+        if (callbackName && typeof window !== 'undefined') {
+          delete (window as any)[callbackName];
+        }
+        if (abortController) {
+          try {
+            abortController.abort();
+          } catch {
+            // Ignorar
+          }
+        }
       }
 
-      (window as any)[callbackName] = (data: any) => {
+      function onSuccess(data: any) {
+        if (isDone) return;
+        isDone = true;
         cleanup();
         resolve(data);
-      };
+      }
 
-      script.onerror = () => {
-        cleanup();
-        reject(new Error('SCRIPT_LOAD_ERROR'));
-      };
+      function onFail(err: any, source: 'fetch' | 'jsonp') {
+        if (isDone) return;
+        lastErr = err;
+        if (source === 'fetch') fetchDone = true;
+        if (source === 'jsonp') jsonpDone = true;
 
-      script.src = jsonpUrl;
-      document.head.appendChild(script);
+        // Errores deterministas: Google exige autenticación, URL dev o código HTML antiguo
+        if (err && ['AUTH_REQUIRED', 'OLD_GAS_CODE', 'RETURNED_HTML', 'DEV_URL_ERROR'].includes(err.message)) {
+          isDone = true;
+          cleanup();
+          reject(err);
+          return;
+        }
+
+        // Si ambas estrategias han fallado, rechazar
+        if (fetchDone && jsonpDone) {
+          isDone = true;
+          cleanup();
+          reject(lastErr || new Error('NETWORK_ERROR'));
+        }
+      }
+
+      // 1. Iniciar JSONP (inmune a CORS, pasa el redirect 302 sin preflight)
+      if (typeof document !== 'undefined') {
+        callbackName = 'lfa_cb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+        scriptElement = document.createElement('script');
+        const jsonpUrl = fullUrl + '&callback=' + callbackName;
+
+        (window as any)[callbackName] = (data: any) => {
+          onSuccess(data);
+        };
+
+        scriptElement.onerror = () => {
+          onFail(new Error('SCRIPT_LOAD_ERROR'), 'jsonp');
+        };
+
+        scriptElement.src = jsonpUrl;
+        document.head.appendChild(scriptElement);
+      } else {
+        jsonpDone = true;
+      }
+
+      // 2. Iniciar Fetch en paralelo (para soportar respuestas JSON directas si CORS lo permite)
+      try {
+        abortController = new AbortController();
+        fetch(fullUrl, {
+          method: 'GET',
+          mode: 'cors',
+          redirect: 'follow',
+          signal: abortController.signal
+        }).then(async (res) => {
+          if (isDone) return;
+          if (!res.ok) {
+            onFail(new Error('HTTP_' + res.status), 'fetch');
+            return;
+          }
+          const text = await res.text();
+          const trimmed = text.trim();
+
+          if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || text.includes('accounts.google.com')) {
+            if (text.includes('ServiceLogin') || text.includes('accounts.google.com')) {
+              onFail(new Error('AUTH_REQUIRED'), 'fetch');
+              return;
+            }
+            if (text.includes('Liga Fantástica') || text.includes('Index')) {
+              onFail(new Error('OLD_GAS_CODE'), 'fetch');
+              return;
+            }
+            onFail(new Error('RETURNED_HTML'), 'fetch');
+            return;
+          }
+
+          try {
+            const json = JSON.parse(text);
+            onSuccess(json);
+          } catch {
+            onFail(new Error('INVALID_JSON'), 'fetch');
+          }
+        }).catch((fetchErr) => {
+          onFail(fetchErr, 'fetch');
+        });
+      } catch (e) {
+        onFail(e, 'fetch');
+      }
     });
   }
 
@@ -440,13 +511,11 @@ class GasEngineService {
     }
 
     try {
-      // Timeout ampliado a 45 segundos para soportar el arranque en frío (cold-start) de Google Apps Script
       let data: any;
       try {
-        data = await this.fetchGasData(targetUrl, { action: 'getFullSync' }, 45000);
+        data = await this.fetchGasData(targetUrl, { action: 'getFullSync' }, 25000);
       } catch (firstErr: any) {
-        // Si falló por timeout en getFullSync, intentamos con ping para ver si la web app responde
-        if (firstErr.message === 'TIMEOUT_JSONP' || firstErr.name === 'AbortError') {
+        if (firstErr.message === 'TIMEOUT_GAS' || firstErr.message === 'TIMEOUT_JSONP' || firstErr.name === 'AbortError') {
           throw new Error('TIMEOUT_GAS');
         }
         throw firstErr;
@@ -465,18 +534,30 @@ class GasEngineService {
         updatedTeamsCount = data.teams.length;
       }
 
-      // Actualizar jugadores si vienen en la respuesta
+      // Actualizar jugadores si vienen en la respuesta (con deduplicación por nombre)
       if (Array.isArray(data.players) && data.players.length > 0) {
-        this.players = data.players.map((p: any) => ({
-          name: p.name || p.Nombre,
-          realTeam: p.realTeam || p.Equipo_Liga || '',
-          position: p.position || p.Posicion || 'Medio',
-          value: Number(p.value || p.Valor) || 10,
-          status: (p.status || p.Estado || 'Disponible') as any,
-          jornadasPoints: p.jornadasPoints || {},
-          jornadasGoals: p.jornadasGoals || {},
-          jornadasDef: p.jornadasDef || {}
-        }));
+        const seenPlayers = new Set<string>();
+        const uniquePlayers: Player[] = [];
+
+        for (const p of data.players) {
+          const rawName = String(p.name || p.Nombre || '').trim();
+          if (!rawName) continue;
+          const key = rawName.toLowerCase();
+          if (!seenPlayers.has(key)) {
+            seenPlayers.add(key);
+            uniquePlayers.push({
+              name: rawName,
+              realTeam: String(p.realTeam || p.Equipo_Liga || '').trim(),
+              position: p.position || p.Posicion || 'Medio',
+              value: Number(p.value || p.Valor) || 10,
+              status: (p.status || p.Estado || 'Disponible') as any,
+              jornadasPoints: p.jornadasPoints || {},
+              jornadasGoals: p.jornadasGoals || {},
+              jornadasDef: p.jornadasDef || {}
+            });
+          }
+        }
+        this.players = uniquePlayers;
         updatedPlayersCount = this.players.length;
       }
 
@@ -496,30 +577,102 @@ class GasEngineService {
       let updatedDraftsCount = 0;
 
       // Actualizar historial de fichajes si viene en la respuesta
-      if (Array.isArray(data.transfers)) {
-        this.transfers = data.transfers.map((t: any) => ({
-          timestamp: String(t.timestamp || ''),
-          team: String(t.team || t.Equipo || '').trim(),
-          jornada: Number(t.jornada || t.Jornada) || 1,
-          playerOut: String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || '').trim(),
-          playerIn: String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || '').trim(),
-          cost: Number(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : 0)) || 0,
+      const rawTransfers = Array.isArray(data.transfers) ? data.transfers :
+                           (Array.isArray(data.transferHistory) ? data.transferHistory :
+                           (Array.isArray(data.fichajes) ? data.fichajes :
+                           (data.data && Array.isArray(data.data.transfers) ? data.data.transfers :
+                           (data.data && Array.isArray(data.data.fichajes) ? data.data.fichajes : null))));
+
+      if (rawTransfers && rawTransfers.length > 0) {
+        this.transfers = rawTransfers.map((t: any) => ({
+          timestamp: String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || t.Hora || '').trim(),
+          team: String(t.team || t.Equipo || t.Team || t.Club || t['Nombre Equipo'] || '').trim(),
+          jornada: Number(t.jornada || t.Jornada || t.Jor || t.Semana || 1) || 1,
+          playerOut: String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || t['Jugador que sale'] || t.Sale || t.Baja || t['Jugador Baja'] || t.Saliente || '').trim(),
+          playerIn: String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || t['Jugador que entra'] || t.Entra || t.Alta || t['Jugador Alta'] || t.Entrante || t.Fichaje || '').trim(),
+          cost: parseCleanNumber(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : (t.Precio !== undefined ? t.Precio : 0))),
           type: ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono')
-        }));
+        })).filter(t => t.team || t.playerOut || t.playerIn);
         updatedTransfersCount = this.transfers.length;
       }
 
+      // Si no vinieron fichajes en getFullSync, consultar endpoint específico como salvaguarda
+      if (this.transfers.length === 0) {
+        try {
+          const tRes = await this.fetchGasData(targetUrl, { action: 'getTransferHistory' }, 10000);
+          const auxTransfers = Array.isArray(tRes) ? tRes : (tRes?.data || tRes?.transfers);
+          if (Array.isArray(auxTransfers) && auxTransfers.length > 0) {
+            this.transfers = auxTransfers.map((t: any) => ({
+              timestamp: String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || '').trim(),
+              team: String(t.team || t.Equipo || t.Team || t.Club || '').trim(),
+              jornada: Number(t.jornada || t.Jornada || t.Jor || 1) || 1,
+              playerOut: String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || t['Jugador que sale'] || t.Sale || t.Baja || '').trim(),
+              playerIn: String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || t['Jugador que entra'] || t.Entra || t.Alta || t.Fichaje || '').trim(),
+              cost: parseCleanNumber(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : 0)),
+              type: ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono')
+            })).filter(t => t.team || t.playerOut || t.playerIn);
+            updatedTransfersCount = this.transfers.length;
+          }
+        } catch {
+          // No bloqueante
+        }
+      }
+
       // Actualizar historial de draft si viene en la respuesta
-      if (Array.isArray(data.drafts)) {
-        this.drafts = data.drafts.map((d: any) => ({
-          timestamp: String(d.timestamp || ''),
-          team: String(d.team || d.Equipo || '').trim(),
-          playerName: String(d.playerName || d.Nombre_Jugador || d.Jugador || d.Nombre || '').trim(),
-          realTeam: String(d.realTeam || d.Equipo_Liga || d.Club || '').trim(),
-          position: String(d.position || d.Posicion || 'Medio').trim(),
-          value: Number(d.value !== undefined ? d.value : (d.Valor !== undefined ? d.Valor : 0)) || 0
-        }));
+      const rawDrafts = Array.isArray(data.drafts) ? data.drafts :
+                        (Array.isArray(data.draftHistory) ? data.draftHistory :
+                        (Array.isArray(data.draft) ? data.draft :
+                        (data.data && Array.isArray(data.data.drafts) ? data.data.drafts :
+                        (data.data && Array.isArray(data.data.draftHistory) ? data.data.draftHistory : null))));
+
+      if (rawDrafts && rawDrafts.length > 0) {
+        this.drafts = rawDrafts.map((d: any) => {
+          const pName = String(d.playerName || d.Nombre_Jugador || d['Nombre del Jugador'] || d['Nombre Jugador'] || d.Jugador || d.Nombre || d.Futbolista || d.Player || '').trim();
+          let pReal = String(d.realTeam || d.Equipo_Liga || d['Equipo Real'] || d['Equipo_Real'] || d.Club || d['Equipo de la Liga'] || '').trim();
+          let pPos = String(d.position || d.Posicion || d['Posición'] || '').trim();
+          let pVal = parseCleanNumber(d.value !== undefined ? d.value : (d.Valor !== undefined ? d.Valor : (d.Precio !== undefined ? d.Precio : 0)));
+
+          // Si faltan datos en la hoja, autocompletar desde el catálogo maestro de jugadores
+          if ((!pReal || !pPos || pVal === 0) && pName) {
+            const matchPlayer = this.players.find(p => p.name.toLowerCase() === pName.toLowerCase());
+            if (matchPlayer) {
+              if (!pReal) pReal = matchPlayer.realTeam;
+              if (!pPos) pPos = matchPlayer.position;
+              if (pVal === 0 && matchPlayer.value) pVal = matchPlayer.value;
+            }
+          }
+
+          return {
+            timestamp: String(d.timestamp || d.date || d['Marca temporal'] || d.Fecha || d['Fecha/Hora'] || '').trim(),
+            team: String(d.team || d.Equipo || d.Team || d.Club || d['Nombre Equipo'] || '').trim(),
+            playerName: pName,
+            realTeam: pReal,
+            position: pPos || 'Medio',
+            value: pVal
+          };
+        }).filter(d => d.team || d.playerName);
         updatedDraftsCount = this.drafts.length;
+      }
+
+      // Si no vinieron drafts en getFullSync, consultar endpoint específico como salvaguarda
+      if (this.drafts.length === 0) {
+        try {
+          const dRes = await this.fetchGasData(targetUrl, { action: 'getDraftHistory' }, 10000);
+          const auxDrafts = Array.isArray(dRes) ? dRes : (dRes?.data || dRes?.drafts);
+          if (Array.isArray(auxDrafts) && auxDrafts.length > 0) {
+            this.drafts = auxDrafts.map((d: any) => ({
+              timestamp: String(d.timestamp || d.date || d['Marca temporal'] || d.Fecha || d['Fecha/Hora'] || '').trim(),
+              team: String(d.team || d.Equipo || d.Team || d.Club || '').trim(),
+              playerName: String(d.playerName || d.Nombre_Jugador || d['Nombre del Jugador'] || d.Jugador || d.Nombre || '').trim(),
+              realTeam: String(d.realTeam || d.Equipo_Liga || d['Equipo Real'] || d.Club || '').trim(),
+              position: String(d.position || d.Posicion || 'Medio').trim(),
+              value: Number(d.value !== undefined ? d.value : (d.Valor !== undefined ? d.Valor : 0)) || 0
+            })).filter(d => d.team || d.playerName);
+            updatedDraftsCount = this.drafts.length;
+          }
+        } catch {
+          // No bloqueante
+        }
       }
 
       const now = new Date();
@@ -575,7 +728,31 @@ class GasEngineService {
 
       this.teams = savedTeams ? JSON.parse(savedTeams) : [...INITIAL_TEAMS];
       this.tokens = savedTokens ? JSON.parse(savedTokens) : [...INITIAL_TOKENS];
-      this.players = savedPlayers ? JSON.parse(savedPlayers) : [...INITIAL_PLAYERS];
+      if (savedPlayers) {
+        try {
+          const parsed = JSON.parse(savedPlayers);
+          if (Array.isArray(parsed)) {
+            const seen = new Set<string>();
+            const unique: Player[] = [];
+            for (const p of parsed) {
+              const name = String(p.name || '').trim();
+              if (!name) continue;
+              const key = name.toLowerCase();
+              if (!seen.has(key)) {
+                seen.add(key);
+                unique.push(p);
+              }
+            }
+            this.players = unique;
+          } else {
+            this.players = [...INITIAL_PLAYERS];
+          }
+        } catch {
+          this.players = [...INITIAL_PLAYERS];
+        }
+      } else {
+        this.players = [...INITIAL_PLAYERS];
+      }
       this.lineups = savedLineups ? JSON.parse(savedLineups) : [...INITIAL_LINEUPS];
       this.transfers = savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS];
       this.drafts = savedDrafts ? JSON.parse(savedDrafts) : [...INITIAL_DRAFTS];
@@ -848,8 +1025,15 @@ class GasEngineService {
 
   public getPlayersForMercado(): Player[] {
     const positionOrder: Record<string, number> = { 'Portero': 1, 'Defensa': 2, 'Medio': 3, 'Delantero': 4, 'N/A': 99 };
+    const seen = new Set<string>();
     return this.players
-      .filter(p => p.name && p.status !== 'Abandona Liga')
+      .filter(p => {
+        if (!p.name || !p.name.trim() || p.status === 'Abandona Liga') return false;
+        const key = `${p.name.trim().toLowerCase()}_${p.realTeam?.trim().toLowerCase() || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .map(p => {
         let total = 0;
         if (p.jornadasPoints) {
@@ -871,20 +1055,38 @@ class GasEngineService {
 
   public getTeamPlayersForJornada(teamName: string, jornada: number): string[] {
     if (!teamName || isNaN(jornada) || jornada <= 0) return [];
+    const seen = new Set<string>();
     return this.lineups
       .filter(l => l.team.trim() === teamName.trim() && l.jornada === jornada && l.playerName.trim() !== '')
       .map(l => l.playerName.trim())
+      .filter(name => {
+        const key = name.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .sort();
   }
 
   public getAvailablePlayersForJornada(jornada: number): Player[] {
     if (isNaN(jornada) || jornada <= 0) return [];
     const assignedPlayers = new Set(
-      this.lineups.filter(l => l.jornada === jornada && l.playerName).map(l => l.playerName.trim())
+      this.lineups
+        .filter(l => l.jornada === jornada && l.playerName)
+        .map(l => l.playerName.trim().toLowerCase())
     );
 
+    const seen = new Set<string>();
     return this.players
-      .filter(p => !assignedPlayers.has(p.name.trim()) && p.status !== 'Abandona Liga')
+      .filter(p => {
+        if (!p.name || !p.name.trim() || p.status === 'Abandona Liga') return false;
+        const lowerName = p.name.trim().toLowerCase();
+        if (assignedPlayers.has(lowerName)) return false;
+        const key = `${lowerName}_${p.realTeam?.trim().toLowerCase() || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .sort((a, b) => {
         const teamComp = a.realTeam.localeCompare(b.realTeam);
         if (teamComp !== 0) return teamComp;
@@ -1180,11 +1382,56 @@ class GasEngineService {
       teamBalanceMap.set(name, { contributions: 0, transferFees: 0, prizes: 0, balance: 0 });
     });
 
-    // 1. Costes de fichajes
+    const findTeamKey = (name: string): string | null => {
+      if (!name) return null;
+      if (teamBalanceMap.has(name)) return name;
+      const clean = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      for (const t of teamNames) {
+        const cleanT = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        if (cleanT === clean || cleanT.includes(clean) || clean.includes(cleanT)) {
+          return t;
+        }
+      }
+      return null;
+    };
+
+    // 1. Costes de fichajes por equipo
+    const teamTransfers = new Map<string, TransferRecord[]>();
+    teamNames.forEach(t => teamTransfers.set(t, []));
+
     transferHistory.forEach(tr => {
-      totalTransferFees += tr.cost;
-      const b = teamBalanceMap.get(tr.team);
-      if (b) b.transferFees += tr.cost;
+      const matched = findTeamKey(tr.team);
+      if (matched) {
+        teamTransfers.get(matched)?.push(tr);
+      }
+    });
+
+    teamTransfers.forEach((trList, tName) => {
+      const b = teamBalanceMap.get(tName);
+      if (!b) return;
+
+      let teamNormalCount = 0;
+      let teamFees = 0;
+
+      trList.forEach(tr => {
+        const cost = parseCleanNumber(tr.cost);
+        const isAbandon = tr.type === 'Abandono' || (tr as any).motivo === 'Abandono';
+
+        if (cost > 0) {
+          teamFees += cost;
+          if (!isAbandon) teamNormalCount++;
+        } else if (!isAbandon) {
+          // Aplicar regla oficial de la liga: 3 fichajes gratis por equipo, y 2.00€ para posteriores
+          if (teamNormalCount >= FREE_TRANSFERS_PER_TEAM) {
+            teamFees += TRANSFER_COST;
+            tr.cost = TRANSFER_COST;
+          }
+          teamNormalCount++;
+        }
+      });
+
+      b.transferFees = teamFees;
+      totalTransferFees += teamFees;
     });
 
     // 2. Aportes y premios semanales
@@ -1204,8 +1451,11 @@ class GasEngineService {
         totalPrizeMoneyAwarded += totalPrize;
 
         winners.forEach(winner => {
-          const b = teamBalanceMap.get(winner.teamName);
-          if (b) b.prizes += individualPrize;
+          const matched = findTeamKey(winner.teamName);
+          if (matched) {
+            const b = teamBalanceMap.get(matched);
+            if (b) b.prizes += individualPrize;
+          }
         });
       }
     }
@@ -1217,9 +1467,140 @@ class GasEngineService {
     const totalCajaBeforeFinalPrizes = totalContributions + totalTransferFees - totalPrizeMoneyAwarded;
     const finalJornada = 38;
     const isFinalJornada = maxJornada >= finalJornada;
+    const potToDistribute = Math.max(0, totalCajaBeforeFinalPrizes);
 
-    const finalPrizes: Array<{ type: string; team: string; categoryPrize?: string; balanceFinal?: string; totalFinal?: string; prize?: string }> = [];
+    // 3. Reparto de Premios Finales
+    const is6Teams = numTeams === 6;
+    const p1Pct = is6Teams ? 0.335 : 0.30;
+    const p2Pct = is6Teams ? 0.255 : 0.23;
+    const p3Pct = is6Teams ? 0.190 : 0.17;
+    const pPenultPct = is6Teams ? 0.0 : 0.10;
+    const pGoalsPct = is6Teams ? 0.110 : 0.10;
+    const pDefPct = is6Teams ? 0.110 : 0.10;
+
+    const generalScores = this.calculateGeneralScores(maxJornada);
+    const mostGoals = this.calculateMostGoalsTeams(maxJornada);
+    const leastConceded = this.calculateLeastConcededTeams(maxJornada);
+
+    const teamFinalPrizesMap = new Map<string, number>();
+    teamNames.forEach(t => teamFinalPrizesMap.set(t, 0));
+
+    const finalPrizes: FinalPrize[] = [];
     const finalPrizeAmounts: Record<string, string> = {};
+
+    // 1ª Posición General
+    if (generalScores.length > 0) {
+      const t1 = generalScores[0].teamName;
+      const amt1 = potToDistribute * p1Pct;
+      teamFinalPrizesMap.set(t1, (teamFinalPrizesMap.get(t1) || 0) + amt1);
+      finalPrizes.push({
+        type: '1ª Posición General',
+        team: t1,
+        percentage: (p1Pct * 100).toFixed(1) + '%',
+        prize: amt1.toFixed(2),
+        categoryPrize: amt1.toFixed(2)
+      });
+      finalPrizeAmounts['1ª Posición General'] = amt1.toFixed(2);
+    }
+
+    // 2ª Posición General
+    if (generalScores.length > 1) {
+      const t2 = generalScores[1].teamName;
+      const amt2 = potToDistribute * p2Pct;
+      teamFinalPrizesMap.set(t2, (teamFinalPrizesMap.get(t2) || 0) + amt2);
+      finalPrizes.push({
+        type: '2ª Posición General',
+        team: t2,
+        percentage: (p2Pct * 100).toFixed(1) + '%',
+        prize: amt2.toFixed(2),
+        categoryPrize: amt2.toFixed(2)
+      });
+      finalPrizeAmounts['2ª Posición General'] = amt2.toFixed(2);
+    }
+
+    // 3ª Posición General
+    if (generalScores.length > 2) {
+      const t3 = generalScores[2].teamName;
+      const amt3 = potToDistribute * p3Pct;
+      teamFinalPrizesMap.set(t3, (teamFinalPrizesMap.get(t3) || 0) + amt3);
+      finalPrizes.push({
+        type: '3ª Posición General',
+        team: t3,
+        percentage: (p3Pct * 100).toFixed(1) + '%',
+        prize: amt3.toFixed(2),
+        categoryPrize: amt3.toFixed(2)
+      });
+      finalPrizeAmounts['3ª Posición General'] = amt3.toFixed(2);
+    }
+
+    // Penúltima Posición General (si no son 6 equipos)
+    if (!is6Teams && generalScores.length >= 4) {
+      const tPenult = generalScores[generalScores.length - 2].teamName;
+      const amtPenult = potToDistribute * pPenultPct;
+      teamFinalPrizesMap.set(tPenult, (teamFinalPrizesMap.get(tPenult) || 0) + amtPenult);
+      finalPrizes.push({
+        type: 'Penúltima Posición General',
+        team: tPenult,
+        percentage: (pPenultPct * 100).toFixed(1) + '%',
+        prize: amtPenult.toFixed(2),
+        categoryPrize: amtPenult.toFixed(2)
+      });
+      finalPrizeAmounts['Penúltima Posición General'] = amtPenult.toFixed(2);
+    }
+
+    // Equipo Más Goleador
+    if (mostGoals.length > 0) {
+      const topGoals = mostGoals[0].score;
+      const winners = mostGoals.filter(t => t.score === topGoals);
+      const totalGoalsPrize = potToDistribute * pGoalsPct;
+      const indGoalsPrize = totalGoalsPrize / winners.length;
+      winners.forEach(w => {
+        teamFinalPrizesMap.set(w.teamName, (teamFinalPrizesMap.get(w.teamName) || 0) + indGoalsPrize);
+      });
+      finalPrizes.push({
+        type: 'Equipo Más Goleador',
+        team: winners.map(w => w.teamName).join(', '),
+        percentage: (pGoalsPct * 100).toFixed(1) + '%',
+        prize: totalGoalsPrize.toFixed(2),
+        categoryPrize: totalGoalsPrize.toFixed(2)
+      });
+      finalPrizeAmounts['Equipo Más Goleador'] = totalGoalsPrize.toFixed(2);
+    }
+
+    // Equipo Menos Goleado
+    if (leastConceded.length > 0) {
+      const topDef = leastConceded[0].score;
+      const winners = leastConceded.filter(t => t.score === topDef);
+      const totalDefPrize = potToDistribute * pDefPct;
+      const indDefPrize = totalDefPrize / winners.length;
+      winners.forEach(w => {
+        teamFinalPrizesMap.set(w.teamName, (teamFinalPrizesMap.get(w.teamName) || 0) + indDefPrize);
+      });
+      finalPrizes.push({
+        type: 'Equipo Menos Goleado',
+        team: winners.map(w => w.teamName).join(', '),
+        percentage: (pDefPct * 100).toFixed(1) + '%',
+        prize: totalDefPrize.toFixed(2),
+        categoryPrize: totalDefPrize.toFixed(2)
+      });
+      finalPrizeAmounts['Equipo Menos Goleado'] = totalDefPrize.toFixed(2);
+    }
+
+    // 4. Balance Final Definitivo por Equipo (Liquidación)
+    const finalBalanceDetails: FinalBalanceDetail[] = Array.from(teamBalanceMap.entries()).map(([team, details]) => {
+      const balJornadas = details.balance;
+      const pFinal = teamFinalPrizesMap.get(team) || 0;
+      const totalFin = balJornadas + pFinal;
+      return {
+        team,
+        balanceJornadas: balJornadas.toFixed(2),
+        premioFinal: pFinal.toFixed(2),
+        totalFinal: totalFin.toFixed(2)
+      };
+    }).sort((a, b) => parseFloat(b.totalFinal) - parseFloat(a.totalFinal));
+
+    // Tras el reparto final de premios realizado al final de la Jornada 38, la caja acumulada es 0
+    const finalCajaAfterFinalPrizes = "0.00";
 
     return {
       maxJornada,
@@ -1228,6 +1609,7 @@ class GasEngineService {
       totalTransferFees: totalTransferFees.toFixed(2),
       totalPrizeMoneyAwarded: totalPrizeMoneyAwarded.toFixed(2),
       finalCajaBeforeFinalPrizes: totalCajaBeforeFinalPrizes.toFixed(2),
+      finalCajaAfterFinalPrizes,
       teamBalanceDetails: Array.from(teamBalanceMap.entries()).map(([team, details]) => ({
         team,
         contributions: details.contributions.toFixed(2),
@@ -1237,6 +1619,7 @@ class GasEngineService {
       })).sort((a, b) => a.team.localeCompare(b.team)),
       finalPrizes,
       finalPrizeAmounts,
+      finalBalanceDetails,
       isFinalJornada
     };
   }

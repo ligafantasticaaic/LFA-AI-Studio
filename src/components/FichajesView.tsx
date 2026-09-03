@@ -163,8 +163,8 @@ export const FichajesView: React.FC = () => {
                 className="w-full bg-slate-950 border border-slate-700 text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer"
               >
                 <option value="">-- Selecciona Equipo --</option>
-                {teams.map(t => (
-                  <option key={t} value={t}>{t}</option>
+                {teams.map((t, idx) => (
+                  <option key={`fich-team-${t}-${idx}`} value={t}>{t}</option>
                 ))}
               </select>
             </div>
@@ -197,7 +197,7 @@ export const FichajesView: React.FC = () => {
               >
                 <option value="">-- Selecciona Jornada --</option>
                 {Array.from({ length: 38 }, (_, i) => i + 1).map(j => (
-                  <option key={j} value={j}>Jornada {j}</option>
+                  <option key={`fich-jornada-${j}`} value={j}>Jornada {j}</option>
                 ))}
               </select>
             </div>
@@ -214,7 +214,7 @@ export const FichajesView: React.FC = () => {
             <div className="space-y-3">
               {transferRows.map((row, idx) => (
                 <div 
-                  key={row.id} 
+                  key={row.id || `row-${idx}`} 
                   className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3 transition hover:border-slate-700"
                 >
                   <div className="flex items-center justify-between">
@@ -246,8 +246,8 @@ export const FichajesView: React.FC = () => {
                         className="w-full bg-slate-900 border border-slate-700 text-white text-xs sm:text-sm py-2 px-3 rounded-lg focus:outline-none focus:border-amber-500 cursor-pointer"
                       >
                         <option value="">-- Selecciona Jugador --</option>
-                        {playersOutList.map(p => (
-                          <option key={p} value={p}>{p}</option>
+                        {playersOutList.map((p, pIdx) => (
+                          <option key={`fich-out-${p}-${pIdx}`} value={p}>{p}</option>
                         ))}
                       </select>
                     </div>
@@ -264,9 +264,9 @@ export const FichajesView: React.FC = () => {
                         className="w-full bg-slate-900 border border-slate-700 text-white text-xs sm:text-sm py-2 px-3 rounded-lg focus:outline-none focus:border-amber-500 cursor-pointer"
                       >
                         <option value="">-- Selecciona Jugador --</option>
-                        {availablePlayersIn.map(p => (
-                          <option key={p.name} value={p.name}>
-                            {p.realTeam} - {p.name} ({p.position}) - Val: {p.value ? `${p.value}M` : '-'}
+                        {availablePlayersIn.map((p, pIdx) => (
+                          <option key={`fich-in-${p.name}-${p.realTeam}-${pIdx}`} value={p.name}>
+                            {p.realTeam ? `${p.realTeam} - ` : ''}{p.name} ({p.position}) - Val: {p.value ? `${p.value}M` : '-'}
                           </option>
                         ))}
                       </select>
@@ -355,7 +355,7 @@ export const FichajesView: React.FC = () => {
                 </tr>
               ) : (
                 transferHistory.map((tr, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/40 transition">
+                  <tr key={`trans-row-${tr.id || tr.timestamp || ''}-${idx}`} className="hover:bg-slate-800/40 transition">
                     <td className="p-3 text-slate-400 font-mono text-[11px]">{tr.timestamp}</td>
                     <td className="p-3 font-bold text-white">{tr.team}</td>
                     <td className="p-3 text-center font-mono font-bold text-slate-300">J{tr.jornada}</td>

@@ -421,13 +421,50 @@ function doPost(e) {
 }
 
 /**
+ * Helper para localizar hojas por múltiples variantes de nombre (sin importar mayúsculas o acentos)
+ */
+function findSheet(ss, candidates) {
+  if (!ss) return null;
+  // 1. Coincidencia exacta directa
+  for (var i = 0; i < candidates.length; i++) {
+    var direct = ss.getSheetByName(candidates[i]);
+    if (direct) return direct;
+  }
+  var allSheets = ss.getSheets();
+  var cleanCandidates = candidates.map(function(c) {
+    return String(c).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+  });
+  // 2. Coincidencia exacta normalizada
+  for (var s = 0; s < allSheets.length; s++) {
+    var rawName = allSheets[s].getName();
+    var cleanName = rawName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+    for (var k = 0; k < cleanCandidates.length; k++) {
+      if (cleanName === cleanCandidates[k]) {
+        return allSheets[s];
+      }
+    }
+  }
+  // 3. Coincidencia parcial (solo para nombres específicos de más de 5 caracteres para evitar falsos positivos)
+  for (var s2 = 0; s2 < allSheets.length; s2++) {
+    var rawName2 = allSheets[s2].getName();
+    var cleanName2 = rawName2.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+    for (var k2 = 0; k2 < cleanCandidates.length; k2++) {
+      if (cleanCandidates[k2].length >= 6 && (cleanName2.indexOf(cleanCandidates[k2]) !== -1 || cleanCandidates[k2].indexOf(cleanName2) !== -1)) {
+        return allSheets[s2];
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Helper para obtener sincronización completa en una sola llamada (Ultra-rápido en < 500ms)
  */
 function getFullSyncData() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // 1. Equipos (1 sola lectura de rango)
-  var sheetTeams = ss.getSheetByName('Equipos') || ss.getSheetByName('Tokens');
+  var sheetTeams = findSheet(ss, ['Equipos', 'Tokens', 'Teams', 'Clubs', 'Equipos_Tokens']);
   var teams = [];
   if (sheetTeams) {
     var tData = sheetTeams.getDataRange().getValues();
@@ -440,13 +477,22 @@ function getFullSyncData() {
   teams.sort();
   
   // 2. Jugadores (1 sola lectura de rango con todos sus puntos)
-  var sheetJug = ss.getSheetByName('Jugadores');
+  var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
   var players = [];
   var maxJ = 1;
   if (sheetJug) {
     var jData = sheetJug.getDataRange().getValues();
     if (jData.length > 0) {
-      var headers = jData[0];
+      // Localizar fila de cabeceras (por si hay título en fila 0)
+      var headerRowIdx = 0;
+      for (var hr = 0; hr < Math.min(5, jData.length); hr++) {
+        var rowStr = jData[hr].join(' ').toLowerCase();
+        if (rowStr.indexOf('equipo') !== -1 || rowStr.indexOf('posic') !== -1 || rowStr.indexOf('puntos') !== -1) {
+          headerRowIdx = hr;
+          break;
+        }
+      }
+      var headers = jData[headerRowIdx];
       var pCols = {};
       var gCols = {};
       var dCols = {};
@@ -465,7 +511,7 @@ function getFullSyncData() {
         if (matchD) dCols[parseInt(matchD[1], 10)] = c;
       }
       
-      for (var r = 1; r < jData.length; r++) {
+      for (var r = headerRowIdx + 1; r < jData.length; r++) {
         var name = String(jData[r][0] || '').trim();
         if (!name) continue;
         
@@ -508,7 +554,7 @@ function getFullSyncData() {
   }
   
   // 3. Alineaciones (1 sola lectura de rango)
-  var sheetAl = ss.getSheetByName('Alineaciones');
+  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas', 'Alineaciones_Equipos']);
   var lineups = [];
   if (sheetAl) {
     var alData = sheetAl.getDataRange().getValues();
@@ -528,27 +574,53 @@ function getFullSyncData() {
     }
   }
 
-  // 4. Historial de Fichajes (1 sola lectura de rango)
-  var sheetFichajes = ss.getSheetByName('Fichajes') || 
-                      ss.getSheetByName('Historial_Fichajes') || 
-                      ss.getSheetByName('Historial Fichajes') || 
-                      ss.getSheetByName('Transfers');
+  // 4. Historial de Fichajes (1 sola lectura de rango flexible)
+  var sheetFichajes = findSheet(ss, [
+    'Historial_Fichajes',
+    'Historial de Fichajes',
+    'Historial del Fichaje',
+    'Historial Fichajes',
+    'Fichajes',
+    'Transfers',
+    'Fichaje',
+    'Mercado Fichajes'
+  ]);
   var transfers = [];
   if (sheetFichajes) {
     var fData = sheetFichajes.getDataRange().getValues();
     if (fData.length > 1) {
-      var fHeaders = fData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+      // Localizar fila de cabeceras
+      var fHeaderRowIdx = 0;
+      for (var fhr = 0; fhr < Math.min(5, fData.length); fhr++) {
+        var fRowStr = fData[fhr].join(' ').toLowerCase();
+        if (fRowStr.indexOf('equipo') !== -1 || fRowStr.indexOf('sale') !== -1 || fRowStr.indexOf('entra') !== -1 || fRowStr.indexOf('jugador') !== -1) {
+          fHeaderRowIdx = fhr;
+          break;
+        }
+      }
+
+      var fHeaders = fData[fHeaderRowIdx].map(function(h) { 
+        return String(h).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); 
+      });
       var colFDate = -1, colFTeam = -1, colFJor = -1, colFOut = -1, colFIn = -1, colFCost = -1, colFType = -1;
       
       for (var c = 0; c < fHeaders.length; c++) {
         var fh = fHeaders[c];
-        if (fh.indexOf('fecha') !== -1 || fh.indexOf('hora') !== -1 || fh.indexOf('time') !== -1) colFDate = c;
-        else if (fh === 'equipo' || fh === 'team') colFTeam = c;
-        else if (fh.indexOf('jornada') !== -1) colFJor = c;
-        else if (fh.indexOf('sale') !== -1 || fh.indexOf('out') !== -1 || fh.indexOf('saliente') !== -1) colFOut = c;
-        else if (fh.indexOf('entra') !== -1 || fh.indexOf('in') !== -1 || fh.indexOf('entrante') !== -1) colFIn = c;
-        else if (fh.indexOf('cost') !== -1 || fh.indexOf('precio') !== -1) colFCost = c;
-        else if (fh.indexOf('tipo') !== -1 || fh.indexOf('type') !== -1) colFType = c;
+        if (fh.indexOf('fecha') !== -1 || fh.indexOf('hora') !== -1 || fh.indexOf('time') !== -1 || fh.indexOf('marca') !== -1 || fh.indexOf('timestamp') !== -1) {
+          colFDate = c;
+        } else if (fh.indexOf('cost') !== -1 || fh.indexOf('precio') !== -1 || fh.indexOf('fee') !== -1 || fh.indexOf('importe') !== -1 || fh.indexOf('tarifa') !== -1) {
+          colFCost = c;
+        } else if (fh.indexOf('sale') !== -1 || fh.indexOf('out') !== -1 || fh.indexOf('saliente') !== -1 || fh.indexOf('baja') !== -1) {
+          colFOut = c;
+        } else if (fh.indexOf('entra') !== -1 || fh.indexOf('in') !== -1 || fh.indexOf('entrante') !== -1 || fh.indexOf('alta') !== -1 || fh.indexOf('fichaje') !== -1) {
+          colFIn = c;
+        } else if (fh === 'equipo' || fh === 'team' || fh === 'club' || (fh.indexOf('equipo') !== -1 && fh.indexOf('liga') === -1 && fh.indexOf('real') === -1)) {
+          colFTeam = c;
+        } else if (fh.indexOf('jornada') !== -1 || fh.indexOf('jor') !== -1 || fh === 'j') {
+          colFJor = c;
+        } else if (fh.indexOf('tipo') !== -1 || fh.indexOf('type') !== -1 || fh.indexOf('motivo') !== -1) {
+          colFType = c;
+        }
       }
       
       if (colFDate === -1) colFDate = 0;
@@ -559,7 +631,7 @@ function getFullSyncData() {
       if (colFCost === -1 && fHeaders.length > 5) colFCost = 5;
       if (colFType === -1 && fHeaders.length > 6) colFType = 6;
       
-      for (var f = 1; f < fData.length; f++) {
+      for (var f = fHeaderRowIdx + 1; f < fData.length; f++) {
         var row = fData[f];
         var fTeam = colFTeam !== -1 && row[colFTeam] !== undefined ? String(row[colFTeam]).trim() : '';
         var fOut = colFOut !== -1 && row[colFOut] !== undefined ? String(row[colFOut]).trim() : '';
@@ -574,7 +646,8 @@ function getFullSyncData() {
             dateStr = String(rawDate);
           }
           
-          var fCost = colFCost !== -1 && row[colFCost] !== '' ? Number(row[colFCost]) : 0;
+          var rawFCost = colFCost !== -1 && row[colFCost] !== undefined ? String(row[colFCost]).replace(/[^0-9.,-]/g, '').replace(',', '.') : '0';
+          var fCost = parseFloat(rawFCost) || 0;
           var fJor = colFJor !== -1 && row[colFJor] !== '' ? Number(row[colFJor]) : 1;
           var fType = colFType !== -1 && row[colFType] ? String(row[colFType]).trim() : 'Normal';
           
@@ -592,26 +665,51 @@ function getFullSyncData() {
     }
   }
 
-  // 5. Historial de Draft (1 sola lectura de rango)
-  var sheetDraft = ss.getSheetByName('Draft') || 
-                   ss.getSheetByName('Historial_Draft') || 
-                   ss.getSheetByName('Historial Draft') || 
-                   ss.getSheetByName('Draft_Historial');
+  // 5. Historial de Draft (1 sola lectura de rango flexible)
+  var sheetDraft = findSheet(ss, [
+    'Historial_Draft',
+    'Historial del Draft',
+    'Historial de Draft',
+    'Historial Draft',
+    'Draft_Historial',
+    'Elecciones Draft',
+    'Draft',
+    'Draft Inicial'
+  ]);
   var drafts = [];
   if (sheetDraft) {
     var dData = sheetDraft.getDataRange().getValues();
     if (dData.length > 1) {
-      var dHeaders = dData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+      // Localizar fila de cabeceras
+      var dHeaderRowIdx = 0;
+      for (var dhr = 0; dhr < Math.min(5, dData.length); dhr++) {
+        var dRowStr = dData[dhr].join(' ').toLowerCase();
+        if (dRowStr.indexOf('equipo') !== -1 || dRowStr.indexOf('jugador') !== -1 || dRowStr.indexOf('nombre') !== -1) {
+          dHeaderRowIdx = dhr;
+          break;
+        }
+      }
+
+      var dHeaders = dData[dHeaderRowIdx].map(function(h) { 
+        return String(h).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); 
+      });
       var colDDate = -1, colDTeam = -1, colDPlayer = -1, colDRealTeam = -1, colDPos = -1, colDVal = -1;
       
       for (var d = 0; d < dHeaders.length; d++) {
         var dh = dHeaders[d];
-        if (dh.indexOf('fecha') !== -1 || dh.indexOf('hora') !== -1 || dh.indexOf('time') !== -1) colDDate = d;
-        else if (dh === 'equipo' || dh === 'team') colDTeam = d;
-        else if (dh.indexOf('jugador') !== -1 || dh.indexOf('player') !== -1 || dh.indexOf('nombre') !== -1) colDPlayer = d;
-        else if (dh.indexOf('equipo_liga') !== -1 || dh.indexOf('real') !== -1 || dh.indexOf('club') !== -1) colDRealTeam = d;
-        else if (dh.indexOf('posic') !== -1 || dh.indexOf('pos') !== -1) colDPos = d;
-        else if (dh.indexOf('valor') !== -1 || dh.indexOf('val') !== -1 || dh.indexOf('precio') !== -1) colDVal = d;
+        if (dh.indexOf('fecha') !== -1 || dh.indexOf('hora') !== -1 || dh.indexOf('time') !== -1 || dh.indexOf('marca') !== -1 || dh.indexOf('timestamp') !== -1) {
+          colDDate = d;
+        } else if (dh.indexOf('equipo_liga') !== -1 || dh.indexOf('real') !== -1 || dh.indexOf('equiporeal') !== -1 || dh === 'club') {
+          colDRealTeam = d;
+        } else if (dh.indexOf('jugador') !== -1 || dh.indexOf('player') !== -1 || dh.indexOf('nombre') !== -1 || dh.indexOf('futbolista') !== -1 || dh.indexOf('eleccion') !== -1) {
+          colDPlayer = d;
+        } else if (dh === 'equipo' || dh === 'team' || (dh.indexOf('equipo') !== -1 && dh.indexOf('real') === -1 && dh.indexOf('liga') === -1)) {
+          colDTeam = d;
+        } else if (dh.indexOf('posic') !== -1 || dh.indexOf('pos') !== -1 || dh.indexOf('demarcacion') !== -1) {
+          colDPos = d;
+        } else if (dh.indexOf('valor') !== -1 || dh.indexOf('val') !== -1 || dh.indexOf('precio') !== -1 || dh.indexOf('millones') !== -1) {
+          colDVal = d;
+        }
       }
       
       if (colDDate === -1) colDDate = 0;
@@ -621,7 +719,11 @@ function getFullSyncData() {
       if (colDPos === -1 && dHeaders.length > 4) colDPos = 4;
       if (colDVal === -1 && dHeaders.length > 5) colDVal = 5;
       
-      for (var dr = 1; dr < dData.length; dr++) {
+      // Catálogo maestro de jugadores en memoria para autocompletar si la hoja no incluye club/pos/valor
+      var pCatalogMap = {};
+      players.forEach(function(pl) { pCatalogMap[pl.name.toLowerCase()] = pl; });
+
+      for (var dr = dHeaderRowIdx + 1; dr < dData.length; dr++) {
         var dRow = dData[dr];
         var dTeam = colDTeam !== -1 && dRow[colDTeam] !== undefined ? String(dRow[colDTeam]).trim() : '';
         var dPlayer = colDPlayer !== -1 && dRow[colDPlayer] !== undefined ? String(dRow[colDPlayer]).trim() : '';
@@ -637,14 +739,25 @@ function getFullSyncData() {
           
           var dReal = colDRealTeam !== -1 && dRow[colDRealTeam] !== undefined ? String(dRow[colDRealTeam]).trim() : '';
           var dPos = colDPos !== -1 && dRow[colDPos] !== undefined ? String(dRow[colDPos]).trim() : '';
-          var dVal = colDVal !== -1 && dRow[colDVal] !== '' ? Number(dRow[colDVal]) : 0;
+          var rawDVal = colDVal !== -1 && dRow[colDVal] !== undefined ? String(dRow[colDVal]).replace(/[^0-9.,-]/g, '').replace(',', '.') : '0';
+          var dVal = parseFloat(rawDVal) || 0;
           
+          // Autocompletar datos del jugador si están vacíos
+          if ((!dReal || !dPos || dVal === 0) && dPlayer) {
+            var refP = pCatalogMap[dPlayer.toLowerCase()];
+            if (refP) {
+              if (!dReal) dReal = refP.realTeam;
+              if (!dPos) dPos = refP.position;
+              if (dVal === 0) dVal = refP.value;
+            }
+          }
+
           drafts.push({
             timestamp: dDateStr,
             team: dTeam,
             playerName: dPlayer,
             realTeam: dReal,
-            position: dPos,
+            position: dPos || 'Medio',
             value: isNaN(dVal) ? 0 : dVal
           });
         }
@@ -931,6 +1044,51 @@ function getAccountingData() {
   teams.forEach(function(t) {
     teamBalance[t] = { contributions: 0, transferFees: 0, prizes: 0, balance: 0 };
   });
+
+  // Calcular costes de fichajes desde la hoja de fichajes
+  try {
+    var ss = getSpreadsheet();
+    var sheetF = findSheet(ss, ['Historial_Fichajes', 'Historial de Fichajes', 'Fichajes']);
+    if (sheetF) {
+      var fData = sheetF.getDataRange().getValues();
+      var countsByTeam = {};
+      teams.forEach(function(t) { countsByTeam[t.toLowerCase()] = 0; });
+
+      for (var fi = 1; fi < fData.length; fi++) {
+        var rowT = fData[fi];
+        var tName = String(rowT[1] || '').trim();
+        var rawC = rowT[5] !== undefined ? String(rowT[5]).replace(/[^0-9.,-]/g, '').replace(',', '.') : '0';
+        var cost = parseFloat(rawC) || 0;
+        var fType = String(rowT[6] || 'Normal').trim();
+
+        // Buscar equipo
+        var matchedT = null;
+        for (var tk = 0; tk < teams.length; tk++) {
+          if (teams[tk].toLowerCase() === tName.toLowerCase() || tName.toLowerCase().indexOf(teams[tk].toLowerCase()) !== -1) {
+            matchedT = teams[tk];
+            break;
+          }
+        }
+
+        if (matchedT) {
+          var isAbandon = fType.toLowerCase().indexOf('abandono') !== -1;
+          if (cost > 0) {
+            teamBalance[matchedT].transferFees += cost;
+            totalTransferFees += cost;
+            if (!isAbandon) countsByTeam[matchedT.toLowerCase()]++;
+          } else if (!isAbandon) {
+            if (countsByTeam[matchedT.toLowerCase()] >= 3) {
+              teamBalance[matchedT].transferFees += 2;
+              totalTransferFees += 2;
+            }
+            countsByTeam[matchedT.toLowerCase()]++;
+          }
+        }
+      }
+    }
+  } catch(e) {
+    // Salvaguarda
+  }
   
   // Calcular aportes desde J4
   for (var j = 4; j <= maxJ; j++) {
@@ -966,6 +1124,78 @@ function getAccountingData() {
   });
   
   var finalCaja = totalContributions + totalTransferFees - totalPrizeMoneyAwarded;
+  var isFinalJornada = maxJ >= 38;
+  var potToDistribute = Math.max(0, finalCaja);
+
+  var is6Teams = numTeams === 6;
+  var p1Pct = is6Teams ? 0.335 : 0.30;
+  var p2Pct = is6Teams ? 0.255 : 0.23;
+  var p3Pct = is6Teams ? 0.190 : 0.17;
+  var pPenultPct = is6Teams ? 0.0 : 0.10;
+  var pGoalsPct = is6Teams ? 0.110 : 0.10;
+  var pDefPct = is6Teams ? 0.110 : 0.10;
+
+  var standingsGen = getAllStandingsData(maxJ);
+  var generalRanking = standingsGen.general || [];
+  var goalsRanking = standingsGen.mostGoals || [];
+  var defRanking = standingsGen.leastConceded || [];
+
+  var finalPrizes = [];
+  var teamFinalPrizes = {};
+  teams.forEach(function(t) { teamFinalPrizes[t] = 0; });
+
+  if (generalRanking.length > 0) {
+    var t1 = generalRanking[0].teamName;
+    var a1 = potToDistribute * p1Pct;
+    teamFinalPrizes[t1] = (teamFinalPrizes[t1] || 0) + a1;
+    finalPrizes.push({ type: '1ª Posición General', team: t1, percentage: (p1Pct * 100).toFixed(1) + '%', prize: a1.toFixed(2), categoryPrize: a1.toFixed(2) });
+  }
+  if (generalRanking.length > 1) {
+    var t2 = generalRanking[1].teamName;
+    var a2 = potToDistribute * p2Pct;
+    teamFinalPrizes[t2] = (teamFinalPrizes[t2] || 0) + a2;
+    finalPrizes.push({ type: '2ª Posición General', team: t2, percentage: (p2Pct * 100).toFixed(1) + '%', prize: a2.toFixed(2), categoryPrize: a2.toFixed(2) });
+  }
+  if (generalRanking.length > 2) {
+    var t3 = generalRanking[2].teamName;
+    var a3 = potToDistribute * p3Pct;
+    teamFinalPrizes[t3] = (teamFinalPrizes[t3] || 0) + a3;
+    finalPrizes.push({ type: '3ª Posición General', team: t3, percentage: (p3Pct * 100).toFixed(1) + '%', prize: a3.toFixed(2), categoryPrize: a3.toFixed(2) });
+  }
+  if (!is6Teams && generalRanking.length >= 4) {
+    var tPenult = generalRanking[generalRanking.length - 2].teamName;
+    var aPenult = potToDistribute * pPenultPct;
+    teamFinalPrizes[tPenult] = (teamFinalPrizes[tPenult] || 0) + aPenult;
+    finalPrizes.push({ type: 'Penúltima Posición General', team: tPenult, percentage: (pPenultPct * 100).toFixed(1) + '%', prize: aPenult.toFixed(2), categoryPrize: aPenult.toFixed(2) });
+  }
+  if (goalsRanking.length > 0) {
+    var topG = goalsRanking[0].score;
+    var winG = goalsRanking.filter(function(x) { return x.score === topG; });
+    var totG = potToDistribute * pGoalsPct;
+    var indG = totG / winG.length;
+    winG.forEach(function(w) { teamFinalPrizes[w.teamName] = (teamFinalPrizes[w.teamName] || 0) + indG; });
+    finalPrizes.push({ type: 'Equipo Más Goleador', team: winG.map(function(w) { return w.teamName; }).join(', '), percentage: (pGoalsPct * 100).toFixed(1) + '%', prize: totG.toFixed(2), categoryPrize: totG.toFixed(2) });
+  }
+  if (defRanking.length > 0) {
+    var topD = defRanking[0].score;
+    var winD = defRanking.filter(function(x) { return x.score === topD; });
+    var totD = potToDistribute * pDefPct;
+    var indD = totD / winD.length;
+    winD.forEach(function(w) { teamFinalPrizes[w.teamName] = (teamFinalPrizes[w.teamName] || 0) + indD; });
+    finalPrizes.push({ type: 'Equipo Menos Goleado', team: winD.map(function(w) { return w.teamName; }).join(', '), percentage: (pDefPct * 100).toFixed(1) + '%', prize: totD.toFixed(2), categoryPrize: totD.toFixed(2) });
+  }
+
+  var finalBalanceDetails = teams.map(function(t) {
+    var b = teamBalance[t];
+    var bal = b.prizes - b.contributions - b.transferFees;
+    var pf = teamFinalPrizes[t] || 0;
+    return {
+      team: t,
+      balanceJornadas: bal.toFixed(2),
+      premioFinal: pf.toFixed(2),
+      totalFinal: (bal + pf).toFixed(2)
+    };
+  }).sort(function(a, b) { return parseFloat(b.totalFinal) - parseFloat(a.totalFinal); });
   
   return {
     maxJornada: maxJ,
@@ -974,7 +1204,11 @@ function getAccountingData() {
     totalTransferFees: totalTransferFees.toFixed(2),
     totalPrizeMoneyAwarded: totalPrizeMoneyAwarded.toFixed(2),
     finalCajaBeforeFinalPrizes: finalCaja.toFixed(2),
-    teamBalanceDetails: details
+    finalCajaAfterFinalPrizes: "0.00",
+    teamBalanceDetails: details,
+    finalPrizes: finalPrizes,
+    finalBalanceDetails: finalBalanceDetails,
+    isFinalJornada: isFinalJornada
   };
 }
 
@@ -1010,11 +1244,20 @@ function processDraftSelection(team, token, player) {
     return { success: false, message: 'Token incorrecto o no autorizado para el equipo ' + team };
   }
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetAl = ss.getSheetByName('Alineaciones');
-  var sheetDraft = ss.getSheetByName('Draft') || ss.getSheetByName('Historial_Draft');
+  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas']);
+  var sheetDraft = findSheet(ss, [
+    'Historial_Draft',
+    'Historial del Draft',
+    'Historial de Draft',
+    'Historial Draft',
+    'Draft_Historial',
+    'Elecciones Draft',
+    'Draft',
+    'Draft Inicial'
+  ]);
   
   if (!sheetDraft) {
-    sheetDraft = ss.insertSheet('Draft');
+    sheetDraft = ss.insertSheet('Historial del Draft');
     sheetDraft.appendRow(['Fecha/Hora', 'Equipo', 'Nombre_Jugador', 'Equipo_Liga', 'Posicion', 'Valor']);
   }
   
@@ -1049,11 +1292,20 @@ function processMultipleTransfers(team, token, jornada, transfers) {
     return { success: false, message: 'Token incorrecto o no autorizado para el equipo ' + team };
   }
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetAl = ss.getSheetByName('Alineaciones');
-  var sheetFichajes = ss.getSheetByName('Fichajes') || ss.getSheetByName('Historial_Fichajes');
+  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas']);
+  var sheetFichajes = findSheet(ss, [
+    'Historial_Fichajes',
+    'Historial de Fichajes',
+    'Historial del Fichaje',
+    'Historial Fichajes',
+    'Fichajes',
+    'Transfers',
+    'Fichaje',
+    'Mercado Fichajes'
+  ]);
   
   if (!sheetFichajes) {
-    sheetFichajes = ss.insertSheet('Fichajes');
+    sheetFichajes = ss.insertSheet('Historial de Fichajes');
     sheetFichajes.appendRow(['Fecha/Hora', 'Equipo', 'Jornada', 'Jugador Sale', 'Jugador Entra', 'Coste', 'Tipo']);
   }
   

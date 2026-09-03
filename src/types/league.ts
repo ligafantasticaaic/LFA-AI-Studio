@@ -84,6 +84,7 @@ export interface TeamBalanceDetail {
 export interface FinalPrize {
   type: string;
   team: string;
+  percentage?: string;
   prize?: string;
   categoryPrize?: string;
   balanceFinal?: string;
@@ -104,6 +105,7 @@ export interface AccountingData {
   totalTransferFees: string;
   totalPrizeMoneyAwarded: string;
   finalCajaBeforeFinalPrizes: string;
+  finalCajaAfterFinalPrizes?: string;
   teamBalanceDetails: TeamBalanceDetail[];
   finalPrizes: FinalPrize[];
   finalPrizeAmounts: Record<string, string>;
