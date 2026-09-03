@@ -262,10 +262,113 @@ class GasEngineService {
     return Boolean(this.getGasUrl());
   }
 
-  public async testConnection(customUrl?: string): Promise<{ success: boolean; message: string; data?: any; latencyMs?: number }> {
+  /**
+   * Ejecuta peticiones contra la Web App de Google Apps Script.
+   * Emplea Fetch estándar y realiza fallback automático a JSONP para evitar bloqueos de CORS o iframes.
+   */
+  private async fetchGasData(baseUrl: string, params: Record<string, string>, timeoutMs = 15000): Promise<any> {
+    const cleanUrl = baseUrl.trim();
+    if (!cleanUrl) throw new Error('EMPTY_URL');
+
+    if (cleanUrl.includes('/dev')) {
+      throw new Error('DEV_URL_ERROR');
+    }
+
+    const queryParts = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+    queryParts.push(`_t=${Date.now()}`);
+    const sep = cleanUrl.includes('?') ? '&' : '?';
+    const fullUrl = cleanUrl + sep + queryParts.join('&');
+
+    // Estrategia 1: Fetch estándar sin cabeceras personalizadas (para que el redirect 302 de GAS funcione sin error preflight)
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      const res = await fetch(fullUrl, {
+        method: 'GET',
+        mode: 'cors',
+        redirect: 'follow',
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const text = await res.text();
+        const trimmed = text.trim();
+
+        if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || text.includes('accounts.google.com')) {
+          if (text.includes('ServiceLogin') || text.includes('accounts.google.com')) {
+            throw new Error('AUTH_REQUIRED');
+          }
+          if (text.includes('Liga Fantástica') || text.includes('Index')) {
+            throw new Error('OLD_GAS_CODE');
+          }
+          throw new Error('RETURNED_HTML');
+        }
+
+        try {
+          const json = JSON.parse(text);
+          return json;
+        } catch {
+          // Si no es JSON válido, continúa a JSONP
+        }
+      }
+    } catch (err: any) {
+      if (['AUTH_REQUIRED', 'OLD_GAS_CODE', 'RETURNED_HTML', 'DEV_URL_ERROR'].includes(err.message)) {
+        throw err;
+      }
+      // Error de red / CORS o timeout en fetch: intentamos JSONP
+    }
+
+    // Estrategia 2: JSONP (Invulnerable a políticas de CORS y restricciones de iframes)
+    return new Promise((resolve, reject) => {
+      if (typeof document === 'undefined') {
+        reject(new Error('NO_DOCUMENT'));
+        return;
+      }
+
+      const callbackName = 'lfa_cb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+      const script = document.createElement('script');
+      const jsonpUrl = fullUrl + '&callback=' + callbackName;
+
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error('TIMEOUT_JSONP'));
+      }, timeoutMs);
+
+      function cleanup() {
+        clearTimeout(timer);
+        if (script.parentNode) script.parentNode.removeChild(script);
+        delete (window as any)[callbackName];
+      }
+
+      (window as any)[callbackName] = (data: any) => {
+        cleanup();
+        resolve(data);
+      };
+
+      script.onerror = () => {
+        cleanup();
+        reject(new Error('SCRIPT_LOAD_ERROR'));
+      };
+
+      script.src = jsonpUrl;
+      document.head.appendChild(script);
+    });
+  }
+
+  public async testConnection(customUrl?: string): Promise<{ success: boolean; message: string; data?: any; latencyMs?: number; code?: string }> {
     const targetUrl = (customUrl !== undefined ? customUrl : this.getGasUrl()).trim();
     if (!targetUrl) {
       return { success: false, message: 'Introduce una URL válida de Google Apps Script (Web App)' };
+    }
+
+    if (targetUrl.includes('/dev')) {
+      return {
+        success: false,
+        code: 'DEV_URL',
+        message: '⚠️ Has introducido una URL terminada en "/dev" (modo desarrollador). Esta URL exige inicio de sesión en Google. En Apps Script, haz clic en "Implementar > Nueva implementación > Aplicación web" y copia la URL terminada en "/exec".'
+      };
     }
 
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
@@ -274,43 +377,58 @@ class GasEngineService {
 
     const startTime = Date.now();
     try {
-      const pingUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 'action=ping&_t=' + Date.now();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
-
-      const res = await fetch(pingUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        mode: 'cors',
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      const data = await this.fetchGasData(targetUrl, { action: 'ping' }, 14000);
       const latencyMs = Date.now() - startTime;
 
-      if (!res.ok) {
-        return { success: false, message: `Error HTTP: ${res.status} ${res.statusText}`, latencyMs };
-      }
-
-      const json = await res.json();
-      if (json.error) {
-        return { success: false, message: 'Google Apps Script respondió: ' + json.error, latencyMs };
+      if (data && data.error) {
+        return {
+          success: false,
+          latencyMs,
+          message: 'Google Apps Script respondió: ' + data.error
+        };
       }
 
       return {
         success: true,
-        message: '¡Conexión exitosa con tu Google Sheets!',
-        data: json,
-        latencyMs
+        latencyMs,
+        message: '¡Conexión verificada con éxito! Tu Google Sheets responde correctamente.',
+        data
       };
     } catch (err: any) {
       const latencyMs = Date.now() - startTime;
-      if (err.name === 'AbortError') {
-        return { success: false, message: 'Tiempo de espera agotado (Timeout de 12s). Verifica la URL.', latencyMs };
+      if (err.message === 'DEV_URL_ERROR') {
+        return {
+          success: false,
+          code: 'DEV_URL',
+          message: '⚠️ La URL termina en "/dev". Debes usar la URL de implementación que termina en "/exec".'
+        };
       }
+      if (err.message === 'AUTH_REQUIRED') {
+        return {
+          success: false,
+          code: 'AUTH_REQUIRED',
+          message: '🔒 Google exige autorización de cuenta. En Google Apps Script: "Implementar > Administrar implementaciones > Editar", y en "¿Quién tiene acceso?" elige "Cualquiera" (Anyone).'
+        };
+      }
+      if (err.message === 'OLD_GAS_CODE') {
+        return {
+          success: false,
+          code: 'OLD_CODE',
+          message: '⚠️ Tu Web App devolvió la página HTML antigua. En Google Apps Script debes: 1) Pegar el nuevo "Código.gs" (cópialo desde el botón "Código Apps Script"), 2) Guardar (Ctrl+S), y 3) Ir a "Implementar > Administrar implementaciones > Editar > Versión: Nueva versión > Implementar".'
+        };
+      }
+      if (err.message === 'RETURNED_HTML') {
+        return {
+          success: false,
+          code: 'HTML_RESPONSE',
+          message: '⚠️ La Web App respondió con HTML en vez de la API JSON. Asegúrate de actualizar el archivo "Código.gs" en tu proyecto de Apps Script y crear una "Nueva versión" en la implementación.'
+        };
+      }
+
       return {
         success: false,
-        message: 'No se pudo conectar con la Web App. Comprueba que el acceso de la implementación esté configurado en "Cualquiera" (Anyone).',
-        latencyMs
+        latencyMs,
+        message: 'No se pudo conectar con la Web App. Comprueba que: 1) La URL termine en "/exec", 2) Hayas pegado el nuevo "Código.gs", y 3) En Apps Script hayas seleccionado "Nueva versión" en Implementar > Administrar implementaciones.'
       };
     }
   }
@@ -322,24 +440,9 @@ class GasEngineService {
     }
 
     try {
-      const syncUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 'action=getFullSync&_t=' + Date.now();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const data = await this.fetchGasData(targetUrl, { action: 'getFullSync' }, 22000);
 
-      const res = await fetch(syncUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        mode: 'cors',
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        return { success: false, message: `Error en la llamada: HTTP ${res.status} ${res.statusText}` };
-      }
-
-      const data = await res.json();
-      if (data.error) {
+      if (data && data.error) {
         return { success: false, message: 'Error de Google Apps Script: ' + data.error };
       }
 
@@ -396,9 +499,18 @@ class GasEngineService {
         }
       };
     } catch (err: any) {
+      if (err.message === 'DEV_URL_ERROR') {
+        return { success: false, message: 'La URL termina en "/dev". Usa la URL de implementación que termina en "/exec".' };
+      }
+      if (err.message === 'AUTH_REQUIRED') {
+        return { success: false, message: 'Google exige autenticación. Configura "Quién tiene acceso" en "Cualquiera" (Anyone).' };
+      }
+      if (err.message === 'OLD_GAS_CODE' || err.message === 'RETURNED_HTML') {
+        return { success: false, message: 'La Web App devolvió HTML en vez de datos. Pega el nuevo "Código.gs" en Apps Script y publica una "Nueva versión".' };
+      }
       return {
         success: false,
-        message: 'Fallo al sincronizar: ' + (err.name === 'AbortError' ? 'Tiempo de espera agotado' : err.message || 'Error de red')
+        message: 'Fallo al sincronizar con Google Sheets. Revisa la URL y que la implementación tenga acceso "Cualquiera".'
       };
     }
   }

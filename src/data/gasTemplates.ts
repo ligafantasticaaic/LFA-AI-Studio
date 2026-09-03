@@ -356,7 +356,14 @@ function doGet(e) {
       result = { error: err.toString() };
     }
     
-    return ContentService.createTextOutput(JSON.stringify(result))
+    var callback = (e && e.parameter && e.parameter.callback) ? e.parameter.callback : '';
+    var outputText = JSON.stringify(result);
+    if (callback) {
+      return ContentService.createTextOutput(callback + '(' + outputText + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    
+    return ContentService.createTextOutput(outputText)
       .setMimeType(ContentService.MimeType.JSON);
   }
 

@@ -18,6 +18,7 @@ import {
   Layers
 } from 'lucide-react';
 import { gasEngine } from '../services/gasEngine';
+import { GAS_TEMPLATES } from '../data/gasTemplates';
 
 interface ConnectionModalProps {
   isOpen: boolean;
@@ -270,51 +271,122 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 <p className="text-[11px] text-slate-400">
                   Esta es la URL que te genera Google Apps Script al pulsar <strong className="text-amber-400">Implementar &gt; Nueva implementación &gt; Aplicación web</strong>.
                 </p>
+
+                {gasUrlInput.includes('/dev') && (
+                  <div className="p-2.5 bg-rose-950/60 border border-rose-500/40 rounded-lg text-xs text-rose-300 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>
+                      <strong>Atención:</strong> La URL termina en <code className="bg-slate-900 px-1 py-0.5 rounded font-bold text-rose-200">/dev</code>. Google exige login obligatorio para URLs de desarrollo. Sustituye <code className="text-amber-300 font-bold">/dev</code> por <code className="text-emerald-300 font-bold">/exec</code>.
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {/* Feedback messages */}
+              {/* Feedback messages & Diagnostics */}
               {testResult && (
-                <div className={`p-4 rounded-xl border text-xs flex items-start gap-3 animate-in fade-in ${
-                  testResult.success 
-                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' 
-                    : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                }`}>
-                  {testResult.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  )}
-                  <div>
-                    <p className="font-semibold">{testResult.message}</p>
-                    {testResult.latencyMs !== undefined && (
-                      <p className="text-[10px] opacity-75 mt-1">Tiempo de respuesta: {testResult.latencyMs} ms</p>
+                <div className="space-y-2">
+                  <div className={`p-4 rounded-xl border text-xs flex items-start gap-3 animate-in fade-in ${
+                    testResult.success 
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' 
+                      : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                  }`}>
+                    {testResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     )}
+                    <div className="flex-1">
+                      <p className="font-semibold text-xs leading-relaxed">{testResult.message}</p>
+                      {testResult.latencyMs !== undefined && (
+                        <p className="text-[10px] opacity-75 mt-1">Tiempo de respuesta: {testResult.latencyMs} ms</p>
+                      )}
+                    </div>
                   </div>
+
+                  {!testResult.success && gasUrlInput.trim() && (
+                    <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-xs space-y-2 text-amber-200/90">
+                      <div className="font-bold flex items-center justify-between">
+                        <span>🔍 Guía de diagnóstico rápido (Las 2 causas más comunes):</span>
+                        <a
+                          href={gasUrlInput.trim() + (gasUrlInput.includes('?') ? '&' : '?') + 'action=ping'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-amber-300 hover:text-white underline font-normal text-[11px]"
+                        >
+                          Abrir prueba en navegador <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+                          <p className="font-bold text-amber-300">1. ¿Publicaste "Nueva versión"?</p>
+                          <p className="text-slate-300 mt-1">
+                            En Google Apps Script, guardar el código no actualiza la web. Debes ir a:
+                            <br />
+                            <strong className="text-white">Implementar &gt; Administrar implementaciones &gt; Editar (icono lápiz) &gt; Versión: [Nueva versión] &gt; Implementar</strong>.
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+                          <p className="font-bold text-amber-300">2. Copia el nuevo Código.gs</p>
+                          <p className="text-slate-300 mt-1">
+                            Para que Google Sheets responda con datos JSON y admita peticiones web, pega este código en tu editor:
+                          </p>
+                          <button
+                            onClick={() => {
+                              const code = GAS_TEMPLATES['Código.gs'] || '';
+                              handleCopy(code, 'codigo-quick');
+                            }}
+                            className="mt-2 text-[10px] font-bold px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded flex items-center gap-1 transition cursor-pointer"
+                          >
+                            {copiedSection === 'codigo-quick' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            <span>{copiedSection === 'codigo-quick' ? '¡Código.gs copiado!' : 'Copiar Código.gs'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Quick instructions */}
               <div className="border border-slate-800/80 bg-slate-950/40 rounded-xl p-4 space-y-3">
-                <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  ¿Cómo obtener tu URL en Google Apps Script? (30 segundos)
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Pasos en Google Apps Script (30 segundos)
+                  </h4>
+                  <button
+                    onClick={() => {
+                      const code = GAS_TEMPLATES['Código.gs'] || '';
+                      handleCopy(code, 'codigo-quick-btn');
+                    }}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 transition cursor-pointer"
+                  >
+                    {copiedSection === 'codigo-quick-btn' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSection === 'codigo-quick-btn' ? '¡Copiado!' : 'Copiar Código.gs'}</span>
+                  </button>
+                </div>
                 <ol className="list-decimal list-inside space-y-2 text-xs text-slate-300 leading-relaxed">
                   <li>
                     Abre tu hoja de cálculo y ve a <strong className="text-white">Extensiones &gt; Apps Script</strong>.
                   </li>
                   <li>
-                    Asegúrate de haber pegado el código de <strong className="text-amber-400">Código.gs</strong> (puedes copiarlo desde el botón <em>Código Apps Script</em> en la cabecera).
+                    Pega el código de <strong className="text-amber-400">Código.gs</strong> (pulsa el botón de arriba <em>"Copiar Código.gs"</em>) y guarda con <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-300 text-[10px]">Ctrl+S</kbd>.
                   </li>
                   <li>
-                    Arriba a la derecha, haz clic en el botón azul <strong className="text-white">Implementar</strong> y elige <strong className="text-white">Nueva implementación</strong>.
+                    Arriba a la derecha, haz clic en el botón azul <strong className="text-white">Implementar</strong> y elige:
+                    <ul className="list-disc list-inside pl-4 mt-1 space-y-1 text-slate-400">
+                      <li>Si es la primera vez: <strong className="text-white">Nueva implementación</strong></li>
+                      <li>Si ya tenías una creada: <strong className="text-amber-400">Administrar implementaciones &gt; Editar (lápiz) &gt; Versión: Nueva versión</strong></li>
+                    </ul>
                   </li>
                   <li>
                     Configura:
                     <ul className="list-disc list-inside pl-4 mt-1 space-y-1 text-slate-400">
                       <li>Tipo: <strong className="text-white">Aplicación web</strong></li>
                       <li>Ejecutar como: <strong className="text-white">Yo (tu cuenta de Google)</strong></li>
-                      <li>Quién tiene acceso: <strong className="text-amber-400">Cualquier usuario (Anyone)</strong> <span className="text-[10px] text-amber-500/80">(¡imprescindible para que conecte!)</span></li>
+                      <li>Quién tiene acceso: <strong className="text-amber-400">Cualquier usuario (Anyone)</strong> <span className="text-[10px] text-amber-500/80">(¡imprescindible!)</span></li>
                     </ul>
                   </li>
                   <li>
