@@ -280,6 +280,14 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                     </span>
                   </div>
                 )}
+
+                {/* Centralized notification */}
+                <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-xs text-emerald-200 flex items-start gap-2.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5 shrink-0 animate-pulse" />
+                  <div className="leading-relaxed">
+                    <strong className="text-emerald-300">Conexión Automática para Jugadores:</strong> Solo el administrador necesita guardar la URL. Una vez guardada, todos los usuarios que abran la aplicación desde cualquier móvil, tablet o PC quedarán sincronizados automáticamente con la misma hoja de cálculo. Si la URL cambia en el futuro, el administrador solo la actualiza una vez y se propaga a todos.
+                  </div>
+                </div>
               </div>
 
               {/* Feedback messages & Diagnostics */}

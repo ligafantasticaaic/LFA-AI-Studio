@@ -28,7 +28,8 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   onTabChange,
   maxJornada,
-  totalCaja
+  totalCaja,
+  onOpenConnectionModal
 }) => {
   // Determine stats if not passed
   const displayJornada = maxJornada ?? gasEngine.getMaxJornada();
@@ -78,6 +79,26 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Global Stats Badges */}
         <div className="flex items-center flex-wrap gap-2.5">
+          {gasEngine.isRemoteConnected() ? (
+            <button
+              onClick={onOpenConnectionModal}
+              title="Google Sheets conectado centralizadamente"
+              className="bg-slate-950 hover:bg-slate-900 border border-emerald-500/30 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-inner transition cursor-pointer text-[11px] text-emerald-400 font-semibold"
+            >
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Sheets En Línea</span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenConnectionModal}
+              title="Modo local (el administrador conectará Google Sheets)"
+              className="bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-inner transition cursor-pointer text-[11px] text-slate-400 hover:text-amber-400 font-semibold"
+            >
+              <div className="w-2 h-2 rounded-full bg-amber-400" />
+              <span>Modo Local</span>
+            </button>
+          )}
+
           <div className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-1.5 flex items-center gap-2 shadow-inner">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[11px] text-slate-400 uppercase font-semibold">Jornada Activa:</span>

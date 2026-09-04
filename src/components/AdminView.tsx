@@ -474,6 +474,56 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <p className="text-[11px] text-slate-500">
                 * Debe terminar en <span className="font-mono text-amber-400">/exec</span> (no /dev) y haber sido implementada con acceso para <strong className="text-slate-300">"Cualquiera" (Anyone)</strong>.
               </p>
+
+              {/* Banner de Sincronización Centralizada Multidispositivo */}
+              <div className="bg-slate-950/90 border border-emerald-500/30 rounded-xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2.5 w-2.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-xs font-black uppercase text-emerald-400 tracking-wider">
+                      Sincronización Centralizada Activa
+                    </span>
+                  </div>
+                  {gasEngine.getServerUpdatedAt() && (
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Servidor actualizado: {new Date(gasEngine.getServerUpdatedAt()!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed m-0">
+                  Como administrador, al introducir o modificar la URL aquí, se guarda en el servidor de la liga. <strong>Todos los participantes que abran la app desde sus móviles, ordenadores o tablets se conectarán automáticamente</strong> a esta misma hoja de cálculo sin tener que hacer nada en sus dispositivos.
+                </p>
+                <div className="pt-1 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const shareUrl = window.location.origin + window.location.pathname;
+                      navigator.clipboard.writeText(shareUrl);
+                      showAlert('Enlace de la app copiado. Los participantes pueden abrirlo en su móvil o PC y conectarán directamente.', true);
+                    }}
+                    className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copiar Enlace de la App para Jugadores</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleanUrl = gasEngine.getGasUrl();
+                      const shareUrl = window.location.origin + window.location.pathname + (cleanUrl ? `?gasUrl=${encodeURIComponent(cleanUrl)}` : '');
+                      navigator.clipboard.writeText(shareUrl);
+                      showAlert('Enlace con autoconexión directa copiado al portapapeles.', true);
+                    }}
+                    className="text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 transition cursor-pointer"
+                  >
+                    <Link2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Copiar Enlace con Autoconexión Directa</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Feedback alert if any */}

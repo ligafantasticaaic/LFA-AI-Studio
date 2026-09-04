@@ -236,10 +236,48 @@ class GasEngineService {
   private schedules: ScheduleRecord[] = [];
   private gasUrl: string = '';
   private lastSyncTime: string | null = null;
+  private serverUpdatedAt: string | null = null;
   private listeners: Array<() => void> = [];
 
   constructor() {
     this.loadState();
+    this.initCentralizedSync();
+  }
+
+  private initCentralizedSync() {
+    if (typeof window === 'undefined') return;
+
+    try {
+      // 1. Detectar si viene una URL en los parámetros de la página (?gasUrl=... o ?gas_url=...)
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlFromParam = urlParams.get('gasUrl') || urlParams.get('gas_url');
+      if (urlFromParam && urlFromParam.trim()) {
+        const cleanParamUrl = urlFromParam.trim();
+        this.gasUrl = cleanParamUrl;
+        localStorage.setItem('lfa_gas_url', cleanParamUrl);
+        this.pushGasConfigToServer(cleanParamUrl).catch(() => {});
+        // Limpiar parámetro de la barra de direcciones sin recargar
+        try {
+          const cleanUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        } catch {}
+      }
+    } catch {}
+
+    // 2. Comprobación inicial contra el servidor central (/api/gas-config)
+    setTimeout(() => {
+      this.fetchServerGasConfig(true).catch(() => {});
+    }, 150);
+
+    // 3. Comprobación al volver a enfocar la ventana/pestaña
+    window.addEventListener('focus', () => {
+      this.fetchServerGasConfig(true).catch(() => {});
+    });
+
+    // 4. Sondeo periódico de fondo (cada 60 segundos) para detectar si el administrador cambió la URL
+    setInterval(() => {
+      this.fetchServerGasConfig(true).catch(() => {});
+    }, 60000);
   }
 
   public subscribe(listener: () => void) {
@@ -262,9 +300,86 @@ class GasEngineService {
     return this.gasUrl;
   }
 
+  public getServerUpdatedAt(): string | null {
+    return this.serverUpdatedAt;
+  }
+
+  /**
+   * Consulta el servidor central para obtener la URL oficial de Google Sheets.
+   * Si la URL en el servidor ha cambiado respecto a la local, se actualiza automáticamente
+   * y se lanza la sincronización de datos con Google Sheets.
+   */
+  public async fetchServerGasConfig(triggerSyncIfNew = true): Promise<{ gasUrl: string; updatedAt: string | null } | null> {
+    try {
+      const resp = await fetch('/api/gas-config', { cache: 'no-store' });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (data && typeof data.gasUrl === 'string') {
+        const serverUrl = data.gasUrl.trim();
+        this.serverUpdatedAt = data.updatedAt || null;
+
+        if (serverUrl) {
+          const currentLocal = this.getGasUrl();
+          if (serverUrl !== currentLocal) {
+            console.log('[gasEngine] 🔄 URL de Sheets actualizada automáticamente desde el servidor central:', serverUrl);
+            this.gasUrl = serverUrl;
+            localStorage.setItem('lfa_gas_url', serverUrl);
+            this.notify();
+
+            if (triggerSyncIfNew) {
+              this.syncFromRemote(serverUrl).catch(err => {
+                console.warn('[gasEngine] Auto-sync post URL update failed:', err);
+              });
+            }
+          }
+        } else {
+          // Si el servidor aún no tiene URL guardada pero este cliente sí tiene una (ej: admin en primera configuración)
+          const currentLocal = this.getGasUrl();
+          if (currentLocal) {
+            this.pushGasConfigToServer(currentLocal).catch(() => {});
+          }
+        }
+        return data;
+      }
+    } catch (err) {
+      // Entorno sin backend o fuera de línea, se continúa con localStorage
+    }
+    return null;
+  }
+
+  /**
+   * Envía la URL oficial al servidor central para que todos los dispositivos
+   * (móviles, ordenadores, tablets) la reciban automáticamente.
+   */
+  public async pushGasConfigToServer(url: string, adminPassword?: string): Promise<boolean> {
+    const clean = (url || '').trim();
+    try {
+      const resp = await fetch('/api/gas-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gasUrl: clean,
+          adminPassword: adminPassword || ADMIN_PASSWORD
+        })
+      });
+      if (resp.ok) {
+        const result = await resp.json();
+        if (result?.config?.updatedAt) {
+          this.serverUpdatedAt = result.config.updatedAt;
+        }
+        return true;
+      }
+    } catch (err) {
+      console.warn('[gasEngine] No se pudo persistir URL en el servidor central:', err);
+    }
+    return false;
+  }
+
   public setGasUrl(url: string) {
     this.gasUrl = url.trim();
     localStorage.setItem('lfa_gas_url', this.gasUrl);
+    // Propagar inmediatamente al servidor central para todos los dispositivos
+    this.pushGasConfigToServer(this.gasUrl).catch(() => {});
     this.notify();
   }
 
