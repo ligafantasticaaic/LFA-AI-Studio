@@ -11,7 +11,10 @@ import {
   AccountingData,
   FinalPrize,
   FinalBalanceDetail,
-  TeamJornadasReportResponse
+  TeamJornadasReportResponse,
+  ClubStyle,
+  NotificationConfig,
+  LeagueConfig
 } from '../types/league';
 
 // Constants matching Código.gs exactly
@@ -21,6 +24,31 @@ export const WEEKLY_CONTRIBUTION = 1.5;
 export const TRANSFER_COST = 2;
 export const FREE_TRANSFERS_PER_TEAM = 3;
 export const ADMIN_PASSWORD = 'admin';
+
+export const DEFAULT_CLUB_STYLES: ClubStyle[] = [
+  { code: 'RMA', name: 'Real Madrid', bgColor: '#FFFFFF', textColor: '#0f172a', borderColor: '#f59e0b' },
+  { code: 'BAR', name: 'FC Barcelona', bgColor: '#004d98', textColor: '#edbb00', borderColor: '#a50044' },
+  { code: 'ATM', name: 'Atlético de Madrid', bgColor: '#cb3524', textColor: '#ffffff', borderColor: '#272e61' },
+  { code: 'VIL', name: 'Villarreal CF', bgColor: '#FFFF00', textColor: '#000000', borderColor: '#005187' },
+  { code: 'ATH', name: 'Athletic Club', bgColor: '#ee2524', textColor: '#ffffff', borderColor: '#000000' },
+  { code: 'RSO', name: 'Real Sociedad', bgColor: '#0067b1', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'BET', name: 'Real Betis', bgColor: '#00954c', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'SEV', name: 'Sevilla FC', bgColor: '#d4001f', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'VAL', name: 'Valencia CF', bgColor: '#ee7500', textColor: '#ffffff', borderColor: '#000000' },
+  { code: 'ESP', name: 'RCD Espanyol', bgColor: '#007fc8', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'GET', name: 'Getafe CF', bgColor: '#00529f', textColor: '#ffffff', borderColor: '#003366' },
+  { code: 'CEL', name: 'RC Celta', bgColor: '#87ceeb', textColor: '#082f49', borderColor: '#dc2626' },
+  { code: 'ALV', name: 'Deportivo Alavés', bgColor: '#004fa3', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'MLL', name: 'RCD Mallorca', bgColor: '#bd1b23', textColor: '#ffffff', borderColor: '#000000' },
+  { code: 'OSA', name: 'CA Osasuna', bgColor: '#9e1b32', textColor: '#ffffff', borderColor: '#0a1e3f' },
+  { code: 'RAY', name: 'Rayo Vallecano', bgColor: '#ffffff', textColor: '#e11d48', borderColor: '#e11d48' },
+  { code: 'GIR', name: 'Girona FC', bgColor: '#d81e05', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'LEG', name: 'CD Leganés', bgColor: '#0055a5', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'LGD', name: 'CD Leganés', bgColor: '#0055a5', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'VLD', name: 'Real Valladolid', bgColor: '#660099', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'OVI', name: 'Real Oviedo', bgColor: '#0047ab', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'ESP', name: 'RCD Espanyol', bgColor: '#007fc8', textColor: '#ffffff', borderColor: '#ffffff' }
+];
 
 export function parseCleanNumber(val: any): number {
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
@@ -235,6 +263,15 @@ class GasEngineService {
   private drafts: DraftRecord[] = [];
   private schedules: ScheduleRecord[] = [];
   private gasUrl: string = '';
+  private firstContributionJornada: number = 4;
+  private customClubStyles: ClubStyle[] = [...DEFAULT_CLUB_STYLES];
+  private notificationConfig: NotificationConfig = {
+    githubRepo: '',
+    githubToken: '',
+    telegramBotToken: '',
+    telegramChatId: '',
+    directTelegram: false
+  };
   private lastSyncTime: string | null = null;
   private serverUpdatedAt: string | null = null;
   private listeners: Array<() => void> = [];
@@ -314,31 +351,65 @@ class GasEngineService {
       const resp = await fetch('/api/gas-config', { cache: 'no-store' });
       if (!resp.ok) return null;
       const data = await resp.json();
-      if (data && typeof data.gasUrl === 'string') {
-        const serverUrl = data.gasUrl.trim();
+      if (data && typeof data === 'object') {
+        let changed = false;
         this.serverUpdatedAt = data.updatedAt || null;
 
-        if (serverUrl) {
-          const currentLocal = this.getGasUrl();
-          if (serverUrl !== currentLocal) {
-            console.log('[gasEngine] 🔄 URL de Sheets actualizada automáticamente desde el servidor central:', serverUrl);
-            this.gasUrl = serverUrl;
-            localStorage.setItem('lfa_gas_url', serverUrl);
-            this.notify();
+        // URL Sheets
+        if (typeof data.gasUrl === 'string') {
+          const serverUrl = data.gasUrl.trim();
+          if (serverUrl) {
+            const currentLocal = this.getGasUrl();
+            if (serverUrl !== currentLocal) {
+              console.log('[gasEngine] 🔄 URL de Sheets actualizada automáticamente desde el servidor central:', serverUrl);
+              this.gasUrl = serverUrl;
+              localStorage.setItem('lfa_gas_url', serverUrl);
+              changed = true;
 
-            if (triggerSyncIfNew) {
-              this.syncFromRemote(serverUrl).catch(err => {
-                console.warn('[gasEngine] Auto-sync post URL update failed:', err);
-              });
+              if (triggerSyncIfNew) {
+                this.syncFromRemote(serverUrl).catch(err => {
+                  console.warn('[gasEngine] Auto-sync post URL update failed:', err);
+                });
+              }
+            }
+          } else {
+            const currentLocal = this.getGasUrl();
+            if (currentLocal) {
+              this.pushGasConfigToServer(currentLocal).catch(() => {});
             }
           }
-        } else {
-          // Si el servidor aún no tiene URL guardada pero este cliente sí tiene una (ej: admin en primera configuración)
-          const currentLocal = this.getGasUrl();
-          if (currentLocal) {
-            this.pushGasConfigToServer(currentLocal).catch(() => {});
+        }
+
+        // Jornada de aportes
+        if (typeof data.firstContributionJornada === 'number') {
+          if (data.firstContributionJornada !== this.firstContributionJornada) {
+            this.firstContributionJornada = data.firstContributionJornada;
+            localStorage.setItem('lfa_first_contribution_jornada', String(this.firstContributionJornada));
+            changed = true;
           }
         }
+
+        // Equipos y colores personalizados
+        if (Array.isArray(data.customClubStyles) && data.customClubStyles.length > 0) {
+          this.customClubStyles = data.customClubStyles;
+          localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
+          changed = true;
+        }
+
+        // Configuración de notificaciones
+        if (data.notificationConfig && typeof data.notificationConfig === 'object') {
+          this.notificationConfig = {
+            ...this.notificationConfig,
+            ...data.notificationConfig
+          };
+          localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
+          changed = true;
+        }
+
+        if (changed) {
+          this.notify();
+        }
+
         return data;
       }
     } catch (err) {
@@ -348,31 +419,44 @@ class GasEngineService {
   }
 
   /**
-   * Envía la URL oficial al servidor central para que todos los dispositivos
-   * (móviles, ordenadores, tablets) la reciban automáticamente.
+   * Envía toda la configuración de la liga al servidor central (o URL de Sheets)
    */
-  public async pushGasConfigToServer(url: string, adminPassword?: string): Promise<boolean> {
-    const clean = (url || '').trim();
+  public async pushLeagueConfigToServer(partial?: Partial<LeagueConfig>, adminPassword?: string): Promise<boolean> {
+    const payload = {
+      gasUrl: partial?.gasUrl !== undefined ? partial.gasUrl : this.gasUrl,
+      firstContributionJornada: partial?.firstContributionJornada !== undefined ? partial.firstContributionJornada : this.firstContributionJornada,
+      customClubStyles: partial?.customClubStyles !== undefined ? partial.customClubStyles : this.customClubStyles,
+      notificationConfig: partial?.notificationConfig !== undefined ? partial.notificationConfig : this.notificationConfig,
+      adminPassword: adminPassword || ADMIN_PASSWORD
+    };
+
     try {
       const resp = await fetch('/api/gas-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gasUrl: clean,
-          adminPassword: adminPassword || ADMIN_PASSWORD
-        })
+        body: JSON.stringify(payload)
       });
       if (resp.ok) {
         const result = await resp.json();
         if (result?.config?.updatedAt) {
           this.serverUpdatedAt = result.config.updatedAt;
         }
+        this.notify();
         return true;
       }
     } catch (err) {
-      console.warn('[gasEngine] No se pudo persistir URL en el servidor central:', err);
+      console.warn('[gasEngine] No se pudo sincronizar config con servidor central:', err);
     }
     return false;
+  }
+
+  /**
+   * Envía la URL oficial al servidor central para que todos los dispositivos
+   * (móviles, ordenadores, tablets) la reciban automáticamente.
+   */
+  public async pushGasConfigToServer(url: string, adminPassword?: string): Promise<boolean> {
+    const clean = (url || '').trim();
+    return this.pushLeagueConfigToServer({ gasUrl: clean }, adminPassword);
   }
 
   public setGasUrl(url: string) {
@@ -381,6 +465,189 @@ class GasEngineService {
     // Propagar inmediatamente al servidor central para todos los dispositivos
     this.pushGasConfigToServer(this.gasUrl).catch(() => {});
     this.notify();
+  }
+
+  // --- Métodos de Primera Jornada con Aportes ---
+  public getFirstContributionJornada(): number {
+    return this.firstContributionJornada;
+  }
+
+  public setFirstContributionJornada(j: number, adminPassword?: string): { success: boolean; message: string } {
+    const cleanJ = Math.max(1, Math.min(38, Math.round(j || 4)));
+    this.firstContributionJornada = cleanJ;
+    localStorage.setItem('lfa_first_contribution_jornada', String(cleanJ));
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ firstContributionJornada: cleanJ }, adminPassword).catch(() => {});
+    return {
+      success: true,
+      message: `Primera jornada con aportes establecida en J${cleanJ}. Sincronizada con el servidor.`
+    };
+  }
+
+  // --- Métodos de Equipos y Colores de LaLiga (Mercado) ---
+  public getClubStyles(): ClubStyle[] {
+    return [...this.customClubStyles];
+  }
+
+  public getClubBadgeStyle(codeOrName: string): ClubStyle {
+    if (!codeOrName) {
+      return { code: 'DEF', name: 'Desconocido', bgColor: '#1e293b', textColor: '#e2e8f0', borderColor: '#475569' };
+    }
+    const clean = codeOrName.trim().toUpperCase();
+    const found = this.customClubStyles.find(c => 
+      c.code.toUpperCase() === clean || 
+      c.name.toUpperCase() === clean ||
+      c.name.toUpperCase().includes(clean) ||
+      clean.includes(c.code.toUpperCase())
+    );
+    if (found) return found;
+
+    // Colores deterministas según el nombre si no está registrado
+    let hash = 0;
+    for (let i = 0; i < clean.length; i++) {
+      hash = clean.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash % 360);
+    return {
+      code: clean.slice(0, 4),
+      name: codeOrName,
+      bgColor: `hsl(${hue}, 70%, 20%)`,
+      textColor: '#ffffff',
+      borderColor: `hsl(${hue}, 80%, 45%)`
+    };
+  }
+
+  public saveClubStyle(club: ClubStyle, adminPassword?: string): void {
+    const cleanCode = (club.code || '').trim().toUpperCase();
+    if (!cleanCode) return;
+
+    const updatedClub: ClubStyle = {
+      code: cleanCode,
+      name: (club.name || cleanCode).trim(),
+      bgColor: club.bgColor || '#FFFF00',
+      textColor: club.textColor || '#000000',
+      borderColor: club.borderColor || club.bgColor || '#000000'
+    };
+
+    const existingIndex = this.customClubStyles.findIndex(c => c.code.toUpperCase() === cleanCode);
+    if (existingIndex >= 0) {
+      this.customClubStyles[existingIndex] = updatedClub;
+    } else {
+      this.customClubStyles.push(updatedClub);
+    }
+
+    localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ customClubStyles: this.customClubStyles }, adminPassword).catch(() => {});
+  }
+
+  public deleteClubStyle(code: string, adminPassword?: string): void {
+    const cleanCode = (code || '').trim().toUpperCase();
+    this.customClubStyles = this.customClubStyles.filter(c => c.code.toUpperCase() !== cleanCode);
+    localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ customClubStyles: this.customClubStyles }, adminPassword).catch(() => {});
+  }
+
+  public resetClubStyles(adminPassword?: string): void {
+    this.customClubStyles = [...DEFAULT_CLUB_STYLES];
+    localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ customClubStyles: this.customClubStyles }, adminPassword).catch(() => {});
+  }
+
+  // --- Métodos de Notificaciones (Telegram & GitHub Actions) ---
+  public getNotificationConfig(): NotificationConfig {
+    return { ...this.notificationConfig };
+  }
+
+  public saveNotificationConfig(config: NotificationConfig, adminPassword?: string): { success: boolean; message: string } {
+    this.notificationConfig = { ...config };
+    localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ notificationConfig: this.notificationConfig }, adminPassword).catch(() => {});
+    return {
+      success: true,
+      message: 'Configuración de avisos guardada y sincronizada correctamente.'
+    };
+  }
+
+  public async testTelegramNotification(config?: NotificationConfig): Promise<{ success: boolean; message: string }> {
+    if (config) {
+      this.notificationConfig = { ...this.notificationConfig, ...config };
+    }
+    const res = await this.testNotification('telegram', {
+      equipo: 'Equipo Demo LFA',
+      jugadorEntra: 'Pedri (Barcelona)',
+      jugadorSale: 'Gavi (Barcelona)',
+      coste: 15.5
+    });
+    return {
+      success: res.success,
+      message: res.success ? (res.message || 'Mensaje de prueba enviado a Telegram') : (res.error || 'Error al enviar a Telegram')
+    };
+  }
+
+  public async testGithubDispatch(config?: NotificationConfig): Promise<{ success: boolean; message: string }> {
+    if (config) {
+      this.notificationConfig = { ...this.notificationConfig, ...config };
+    }
+    const res = await this.testNotification('github', {
+      equipo: 'Equipo Demo LFA',
+      jugadorEntra: 'Vinicius Jr (Real Madrid)',
+      jugadorSale: 'Rodrygo (Real Madrid)',
+      coste: 20.0
+    });
+    return {
+      success: res.success,
+      message: res.success ? (res.message || 'Workflow dispatch disparado en GitHub') : (res.error || 'Error al disparar GitHub')
+    };
+  }
+
+  public async testNotification(testType: 'telegram' | 'github', sampleData?: any): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const resp = await fetch('/api/notify-fichaje-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testType,
+          telegramBotToken: this.notificationConfig.telegramBotToken,
+          telegramChatId: this.notificationConfig.telegramChatId,
+          githubRepo: this.notificationConfig.githubRepo,
+          githubToken: this.notificationConfig.githubToken,
+          sampleData
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        return { success: true, message: data.message || 'Prueba enviada exitosamente.' };
+      }
+      return { success: false, error: data.error || `Error ${resp.status}: no se pudo enviar la prueba.` };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error de conexión con el servidor.' };
+    }
+  }
+
+  public async triggerFichajeNotification(payload: {
+    equipo: string;
+    jugadorEntra: string;
+    jugadorSale: string;
+    jornada: number;
+    coste: string;
+    tipo: string;
+  }): Promise<void> {
+    const notif = this.notificationConfig;
+    if (notif.telegramBotToken && notif.telegramChatId) {
+      this.testNotification('telegram', payload).catch(e => console.warn('[gasEngine] Fallo aviso Telegram:', e));
+    }
+    if (notif.githubRepo && notif.githubToken) {
+      this.testNotification('github', payload).catch(e => console.warn('[gasEngine] Fallo dispatch GitHub Actions:', e));
+    }
   }
 
   public getLastSyncTime(): string | null {
@@ -872,6 +1139,37 @@ class GasEngineService {
       this.transfers = savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS];
       this.drafts = savedDrafts ? JSON.parse(savedDrafts) : [...INITIAL_DRAFTS];
       this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
+
+      const savedJornada = localStorage.getItem('lfa_first_contribution_jornada');
+      if (savedJornada) {
+        const parsedJ = parseInt(savedJornada, 10);
+        if (!isNaN(parsedJ) && parsedJ >= 1) {
+          this.firstContributionJornada = parsedJ;
+        }
+      }
+
+      const savedClubStyles = localStorage.getItem('lfa_club_styles');
+      if (savedClubStyles) {
+        try {
+          const parsedStyles = JSON.parse(savedClubStyles);
+          if (Array.isArray(parsedStyles) && parsedStyles.length > 0) {
+            this.customClubStyles = parsedStyles;
+          }
+        } catch {}
+      }
+
+      const savedNotif = localStorage.getItem('lfa_notification_config');
+      if (savedNotif) {
+        try {
+          const parsedNotif = JSON.parse(savedNotif);
+          if (parsedNotif && typeof parsedNotif === 'object') {
+            this.notificationConfig = {
+              ...this.notificationConfig,
+              ...parsedNotif
+            };
+          }
+        } catch {}
+      }
     } catch {
       this.teams = [...INITIAL_TEAMS];
       this.tokens = [...INITIAL_TOKENS];
@@ -880,6 +1178,8 @@ class GasEngineService {
       this.transfers = [...INITIAL_TRANSFERS];
       this.drafts = [...INITIAL_DRAFTS];
       this.schedules = [...INITIAL_SCHEDULES];
+      this.firstContributionJornada = 4;
+      this.customClubStyles = [...DEFAULT_CLUB_STYLES];
     }
   }
 
@@ -892,6 +1192,9 @@ class GasEngineService {
       localStorage.setItem('lfa_transfers', JSON.stringify(this.transfers));
       localStorage.setItem('lfa_drafts', JSON.stringify(this.drafts));
       localStorage.setItem('lfa_schedules', JSON.stringify(this.schedules));
+      localStorage.setItem('lfa_first_contribution_jornada', String(this.firstContributionJornada));
+      localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
+      localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
     } catch (e) {
       console.warn('LocalStorage save failed:', e);
     }
@@ -1388,6 +1691,18 @@ class GasEngineService {
           type: transferType
         });
 
+        // Disparar aviso automático (Telegram y GitHub Actions)
+        this.triggerFichajeNotification({
+          equipo: teamName,
+          jugadorEntra: pIn,
+          jugadorSale: pOut,
+          jornada,
+          coste: cost.toFixed(2),
+          tipo: transferType
+        }).catch(err => {
+          console.warn('[gasEngine] Error enviando notificación de fichaje:', err);
+        });
+
         processedSummary.push(`${pIn} por ${pOut} (${cost === 0 ? 'Gratis' : cost + '€'})`);
       }
     });
@@ -1550,7 +1865,7 @@ class GasEngineService {
     });
 
     // 2. Aportes y premios semanales
-    for (let j = 4; j <= maxJornada; j++) {
+    for (let j = this.firstContributionJornada; j <= maxJornada; j++) {
       totalContributions += numTeams * WEEKLY_CONTRIBUTION;
       teamNames.forEach(tName => {
         const b = teamBalanceMap.get(tName);

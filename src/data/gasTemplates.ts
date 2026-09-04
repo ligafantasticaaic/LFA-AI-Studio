@@ -315,6 +315,78 @@ var WEEKLY_CONTRIBUTION = 1.5;
 var TRANSFER_COST = 2;
 var FREE_TRANSFERS_PER_TEAM = 3;
 var ADMIN_PASSWORD = "admin";
+var FIRST_CONTRIBUTION_JORNADA = 4; // Primera jornada con aportaciones semanales (configurable)
+
+// Configuración de Notificaciones (Telegram y GitHub Actions)
+var GITHUB_REPO = ""; // Repositorio GitHub (ej: "usuario/liga-fantastica")
+var GITHUB_PAT = ""; // GitHub Personal Access Token con permiso de repo / contents
+var TELEGRAM_BOT_TOKEN = ""; // Token del Bot de Telegram (@BotFather)
+var TELEGRAM_CHAT_ID = ""; // ID del chat o grupo de Telegram (ej: -100xxxxxxxxxx)
+
+/**
+ * Función para enviar avisos de fichajes a Telegram y GitHub Actions
+ */
+function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jornada, tipo) {
+  // 1. Notificación a GitHub Actions (repository_dispatch)
+  if (GITHUB_REPO && GITHUB_PAT) {
+    try {
+      var ghUrl = "https://api.github.com/repos/" + GITHUB_REPO + "/dispatches";
+      var ghPayload = {
+        event_type: "fichaje_realizado",
+        client_payload: {
+          equipo: equipo,
+          jugadorEntra: jugadorEntra,
+          jugadorSale: jugadorSale,
+          coste: String(coste) + " €",
+          jornada: String(jornada),
+          tipo: tipo || "Normal",
+          timestamp: new Date().toISOString()
+        }
+      };
+      UrlFetchApp.fetch(ghUrl, {
+        method: "post",
+        headers: {
+          "Authorization": "Bearer " + GITHUB_PAT,
+          "Accept": "application/vnd.github.v3+json",
+          "User-Agent": "Google-Apps-Script-LFA"
+        },
+        payload: JSON.stringify(ghPayload),
+        muteHttpExceptions: true
+      });
+    } catch (errGh) {
+      Logger.log("Error llamando a GitHub Actions: " + errGh.message);
+    }
+  }
+
+  // 2. Notificación directa a Telegram (inmediata sin esperar runners)
+  if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
+    try {
+      var mensaje = "🚨 *¡NUEVO FICHAJE EN LA LIGA FANTÁSTICA!* ⚽\\n" +
+                    "━━━━━━━━━━━━━━━━━━━━\\n" +
+                    "🏟 *Equipo:* " + equipo + "\\n" +
+                    "🟢 *Alta:* " + jugadorEntra + "\\n" +
+                    "🔴 *Baja:* " + jugadorSale + "\\n" +
+                    "💰 *Coste:* " + coste + " €\\n" +
+                    "📅 *Jornada:* J" + jornada + "\\n" +
+                    "📝 *Tipo:* " + (tipo || "Normal") + "\\n" +
+                    "━━━━━━━━━━━━━━━━━━━━\\n" +
+                    "🏆 _Liga Fantástica de Amigos_";
+      var tgUrl = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendMessage";
+      UrlFetchApp.fetch(tgUrl, {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify({
+          chat_id: TELEGRAM_CHAT_ID,
+          text: mensaje,
+          parse_mode: "Markdown"
+        }),
+        muteHttpExceptions: true
+      });
+    } catch (errTg) {
+      Logger.log("Error enviando mensaje a Telegram: " + errTg.message);
+    }
+  }
+}
 
 /**
  * Enrutador principal de páginas HTML y API JSON para Web App y GitHub Pages
@@ -1090,8 +1162,8 @@ function getAccountingData() {
     // Salvaguarda
   }
   
-  // Calcular aportes desde J4
-  for (var j = 4; j <= maxJ; j++) {
+  // Calcular aportes desde la jornada configurada
+  for (var j = FIRST_CONTRIBUTION_JORNADA; j <= maxJ; j++) {
     totalContributions += (numTeams * WEEKLY_CONTRIBUTION);
     teams.forEach(function(t) {
       teamBalance[t].contributions += WEEKLY_CONTRIBUTION;
@@ -1333,6 +1405,13 @@ function processMultipleTransfers(team, token, jornada, transfers) {
     }
     
     sheetFichajes.appendRow([nowStr, team, jornada, pOut, pIn, cost, type]);
+    
+    // Disparar aviso automático a Telegram y GitHub Actions
+    try {
+      enviarAvisoTelegramYGitHub(team, pIn, pOut, cost, jornada, type);
+    } catch(errAviso) {
+      Logger.log("Error al disparar aviso de fichaje: " + errAviso);
+    }
     
     if (sheetAl) {
       var alData = sheetAl.getDataRange().getValues();
@@ -2031,3 +2110,54 @@ export const GAS_TEMPLATES: Record<string, string> = {
 </body>
 </html>`
 };
+
+/**
+ * Genera el archivo Código.gs con los valores personalizados inyectados:
+ * - Primera jornada de aportes
+ * - Credenciales de Telegram (Bot Token y Chat ID)
+ * - Credenciales de GitHub Actions (Repo y Token)
+ */
+export function generateCustomGasCode(options?: {
+  firstContributionJornada?: number;
+  githubRepo?: string;
+  githubToken?: string;
+  telegramBotToken?: string;
+  telegramChatId?: string;
+}): string {
+  let code = REDESIGNED_CODE_GS;
+  const j = options?.firstContributionJornada ?? 4;
+  code = code.replace(
+    /var FIRST_CONTRIBUTION_JORNADA = \d+;/,
+    `var FIRST_CONTRIBUTION_JORNADA = ${j};`
+  );
+
+  if (options?.githubRepo !== undefined) {
+    code = code.replace(
+      /var GITHUB_REPO = ".*?";/,
+      `var GITHUB_REPO = "${options.githubRepo.replace(/"/g, '')}";`
+    );
+  }
+
+  if (options?.githubToken !== undefined) {
+    code = code.replace(
+      /var GITHUB_PAT = ".*?";/,
+      `var GITHUB_PAT = "${options.githubToken.replace(/"/g, '')}";`
+    );
+  }
+
+  if (options?.telegramBotToken !== undefined) {
+    code = code.replace(
+      /var TELEGRAM_BOT_TOKEN = ".*?";/,
+      `var TELEGRAM_BOT_TOKEN = "${options.telegramBotToken.replace(/"/g, '')}";`
+    );
+  }
+
+  if (options?.telegramChatId !== undefined) {
+    code = code.replace(
+      /var TELEGRAM_CHAT_ID = ".*?";/,
+      `var TELEGRAM_CHAT_ID = "${options.telegramChatId.replace(/"/g, '')}";`
+    );
+  }
+
+  return code;
+}

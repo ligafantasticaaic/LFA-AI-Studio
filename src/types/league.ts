@@ -132,3 +132,29 @@ export interface TeamJornadasReportResponse {
   jornadas?: number[];
   rows?: TeamJornadasReportRow[];
 }
+
+export interface ClubStyle {
+  code: string;
+  name: string;
+  bgColor: string;
+  textColor: string;
+  borderColor?: string;
+}
+
+export interface NotificationConfig {
+  githubRepo: string;
+  githubToken: string;
+  telegramBotToken: string;
+  telegramChatId: string;
+  directTelegram: boolean;
+}
+
+export interface LeagueConfig {
+  gasUrl: string;
+  firstContributionJornada: number;
+  customClubStyles: ClubStyle[];
+  notificationConfig: NotificationConfig;
+  updatedAt: string | null;
+  updatedBy?: string;
+}
+

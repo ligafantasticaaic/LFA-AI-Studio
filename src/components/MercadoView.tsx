@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { gasEngine } from '../services/gasEngine';
-import { Player } from '../types/league';
-import { Store, Search, Filter, Sparkles, CheckCircle, Shield } from 'lucide-react';
+import { Player, ClubStyle } from '../types/league';
+import { Store, Search, Filter, Plus, Palette, X, Check } from 'lucide-react';
 
 export const MercadoView: React.FC = () => {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -9,35 +9,30 @@ export const MercadoView: React.FC = () => {
   const [selectedPosition, setSelectedPosition] = useState<string>('Todos');
   const [selectedClub, setSelectedClub] = useState<string>('Todos');
   const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [clubStyles, setClubStyles] = useState<ClubStyle[]>(gasEngine.getClubStyles());
 
-  useEffect(() => {
-    setIsLoading(true);
+  // Modal para añadir/editar equipo y color
+  const [showAddTeamModal, setShowAddTeamModal] = useState<boolean>(false);
+  const [newClubCode, setNewClubCode] = useState<string>('');
+  const [newClubName, setNewClubName] = useState<string>('');
+  const [newClubBg, setNewClubBg] = useState<string>('#FFFF00');
+  const [newClubText, setNewClubText] = useState<string>('#000000');
+  const [newClubBorder, setNewClubBorder] = useState<string>('#005187');
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  const loadData = () => {
     const data = gasEngine.getPlayersForMercado();
     setPlayers(data);
-    setIsLoading(false);
-  }, []);
-
-  const CLUB_BADGES: Record<string, { bg: string; text: string; border: string }> = {
-    'RMA': { bg: 'bg-white', text: 'text-slate-950 font-black', border: 'border-amber-400' },
-    'BAR': { bg: 'bg-gradient-to-r from-blue-700 to-red-700', text: 'text-amber-300 font-black', border: 'border-amber-400' },
-    'ATM': { bg: 'bg-gradient-to-r from-red-600 to-blue-700', text: 'text-white font-black', border: 'border-red-500' },
-    'VIL': { bg: 'bg-yellow-400', text: 'text-blue-950 font-black', border: 'border-yellow-500' },
-    'ATH': { bg: 'bg-red-700', text: 'text-white font-black', border: 'border-neutral-200' },
-    'RSO': { bg: 'bg-blue-600', text: 'text-white font-black', border: 'border-blue-300' },
-    'BET': { bg: 'bg-emerald-600', text: 'text-white font-black', border: 'border-emerald-300' },
-    'SEV': { bg: 'bg-red-600', text: 'text-white font-black', border: 'border-white' },
-    'VAL': { bg: 'bg-gradient-to-r from-orange-500 to-black', text: 'text-white font-black', border: 'border-orange-400' },
-    'ESP': { bg: 'bg-blue-500', text: 'text-white font-black', border: 'border-blue-300' },
-    'GET': { bg: 'bg-blue-800', text: 'text-white font-black', border: 'border-blue-400' },
-    'CEL': { bg: 'bg-sky-400', text: 'text-sky-950 font-black', border: 'border-sky-200' },
-    'ALV': { bg: 'bg-blue-700', text: 'text-white font-black', border: 'border-blue-300' },
-    'MLL': { bg: 'bg-red-800', text: 'text-white font-black', border: 'border-black' },
-    'OSA': { bg: 'bg-red-900', text: 'text-white font-black', border: 'border-blue-400' },
-    'RAY': { bg: 'bg-neutral-100', text: 'text-red-600 font-black', border: 'border-red-600' },
-    'GIR': { bg: 'bg-red-600', text: 'text-white font-black', border: 'border-white' },
-    'DEFAULT': { bg: 'bg-slate-800', text: 'text-slate-200 font-bold', border: 'border-slate-700' }
+    setClubStyles(gasEngine.getClubStyles());
   };
+
+  useEffect(() => {
+    loadData();
+    const unsub = gasEngine.subscribe(() => {
+      loadData();
+    });
+    return unsub;
+  }, []);
 
   const getPosBadgeClass = (pos: string) => {
     switch (pos?.toLowerCase()) {
@@ -54,7 +49,12 @@ export const MercadoView: React.FC = () => {
     }
   };
 
-  const allClubs = Array.from(new Set(players.map(p => p.realTeam))).filter(Boolean).sort();
+  const allClubs = Array.from(
+    new Set([
+      ...players.map(p => p.realTeam),
+      ...clubStyles.map(c => c.code)
+    ])
+  ).filter(Boolean).sort();
 
   const filteredPlayers = players.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -70,6 +70,28 @@ export const MercadoView: React.FC = () => {
   const totalMarketValue = players.reduce((acc, p) => acc + (typeof p.value === 'number' ? p.value : 0), 0);
   const totalSigned = players.filter(p => p.status === 'Fichado').length;
   const totalAvailable = players.filter(p => p.status === 'Disponible').length;
+
+  const handleSaveNewClub = (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = newClubCode.trim().toUpperCase();
+    if (!code) return;
+
+    gasEngine.saveClubStyle({
+      code,
+      name: newClubName.trim() || code,
+      bgColor: newClubBg,
+      textColor: newClubText,
+      borderColor: newClubBorder || newClubBg
+    });
+
+    setSaveSuccessMsg(`¡Equipo ${code} guardado con sus colores!`);
+    setTimeout(() => {
+      setSaveSuccessMsg(null);
+      setShowAddTeamModal(false);
+      setNewClubCode('');
+      setNewClubName('');
+    }, 1200);
+  };
 
   return (
     <div className="space-y-6">
@@ -90,7 +112,7 @@ export const MercadoView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="bg-slate-950 border border-slate-800 text-xs px-3 py-1.5 rounded-xl font-bold text-slate-300">
               Total Jugadores: <strong className="text-white">{players.length}</strong>
             </span>
@@ -100,6 +122,14 @@ export const MercadoView: React.FC = () => {
             <span className="bg-slate-950 border border-emerald-500/30 text-xs px-3 py-1.5 rounded-xl font-bold text-emerald-400">
               Libres: <strong className="text-emerald-400">{totalAvailable}</strong>
             </span>
+            <button
+              onClick={() => setShowAddTeamModal(true)}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="Añadir o personalizar un equipo y sus colores (.team-color-COD)"
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span>+ Equipo / Color</span>
+            </button>
           </div>
         </div>
 
@@ -181,14 +211,22 @@ export const MercadoView: React.FC = () => {
                 </tr>
               ) : (
                 filteredPlayers.map((player, idx) => {
-                  const clubStyle = CLUB_BADGES[player.realTeam] || CLUB_BADGES['DEFAULT'];
+                  const clubStyle = gasEngine.getClubBadgeStyle(player.realTeam);
                   const isFichado = player.status?.toLowerCase() === 'fichado';
 
                   return (
                     <tr key={`mercado-player-${player.name}-${player.realTeam}-${idx}`} className="hover:bg-slate-800/40 transition">
-                      {/* Equipo Liga */}
+                      {/* Equipo Liga con Colores Personalizados Dinámicos */}
                       <td className="p-3">
-                        <span className={`inline-block px-2.5 py-1 rounded-md text-[11px] shadow-sm font-mono ${clubStyle.bg} ${clubStyle.text} border ${clubStyle.border}`}>
+                        <span
+                          className="inline-block px-2.5 py-1 rounded-md text-[11px] font-mono font-black shadow-sm border"
+                          style={{
+                            backgroundColor: clubStyle.bgColor,
+                            color: clubStyle.textColor,
+                            borderColor: clubStyle.borderColor || clubStyle.bgColor
+                          }}
+                          title={`${clubStyle.name || player.realTeam} (${clubStyle.code})`}
+                        >
                           {player.realTeam}
                         </span>
                       </td>
@@ -235,6 +273,178 @@ export const MercadoView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Modal para Añadir / Editar Equipo y Color */}
+      {showAddTeamModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Palette className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0">
+                    Añadir / Personalizar Equipo
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    Establece el código y colores para el Mercado (.team-color-COD)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddTeamModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {saveSuccessMsg && (
+              <div className="p-3 bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-xl flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{saveSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveNewClub} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Código del Club (3-4 letras)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={5}
+                    value={newClubCode}
+                    onChange={(e) => setNewClubCode(e.target.value.toUpperCase())}
+                    placeholder="Ej: VIL, ESP, OVI"
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono font-bold text-sm py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Nombre Completo
+                  </label>
+                  <input
+                    type="text"
+                    value={newClubName}
+                    onChange={(e) => setNewClubName(e.target.value)}
+                    placeholder="Ej: Villarreal CF"
+                    className="w-full bg-slate-950 border border-slate-700 text-white text-sm py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Selectores de color */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Color de Fondo
+                  </label>
+                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 p-1.5 rounded-xl">
+                    <input
+                      type="color"
+                      value={newClubBg}
+                      onChange={(e) => setNewClubBg(e.target.value)}
+                      className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={newClubBg}
+                      onChange={(e) => setNewClubBg(e.target.value)}
+                      className="w-full bg-transparent text-white font-mono text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Color del Texto
+                  </label>
+                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 p-1.5 rounded-xl">
+                    <input
+                      type="color"
+                      value={newClubText}
+                      onChange={(e) => setNewClubText(e.target.value)}
+                      className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={newClubText}
+                      onChange={(e) => setNewClubText(e.target.value)}
+                      className="w-full bg-transparent text-white font-mono text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Color del Borde
+                  </label>
+                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 p-1.5 rounded-xl">
+                    <input
+                      type="color"
+                      value={newClubBorder}
+                      onChange={(e) => setNewClubBorder(e.target.value)}
+                      className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={newClubBorder}
+                      onChange={(e) => setNewClubBorder(e.target.value)}
+                      className="w-full bg-transparent text-white font-mono text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Vista previa en vivo */}
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                  Vista Previa de la Insignia en Mercado:
+                </span>
+                <div className="flex items-center gap-3">
+                  <span
+                    className="inline-block px-3 py-1.5 rounded-md text-xs font-mono font-black shadow-md border"
+                    style={{
+                      backgroundColor: newClubBg,
+                      color: newClubText,
+                      borderColor: newClubBorder
+                    }}
+                  >
+                    {newClubCode || 'VIL'}
+                  </span>
+                  <span className="text-xs text-slate-300 font-bold">
+                    {newClubName || 'Villarreal CF'}
+                  </span>
+                </div>
+                <div className="text-[11px] font-mono text-amber-400/90 bg-slate-900 p-2 rounded-lg border border-slate-800 overflow-x-auto">
+                  .team-color-{newClubCode || 'VIL'} {'{'} background-color: {newClubBg}; color: {newClubText}; {'}'}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTeamModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Guardar Equipo y Colores</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { gasEngine, ADMIN_PASSWORD } from '../services/gasEngine';
-import { TeamToken, TeamJornadasReportResponse } from '../types/league';
+import { TeamToken, TeamJornadasReportResponse, ClubStyle, NotificationConfig } from '../types/league';
 import { 
   Lock, 
   Key, 
@@ -19,9 +19,17 @@ import {
   RotateCcw,
   Link2,
   Database,
-  Code
+  Code,
+  Palette,
+  Send,
+  Bell,
+  Coins,
+  DollarSign,
+  ExternalLink,
+  HelpCircle,
+  Sparkles
 } from 'lucide-react';
-import { GAS_TEMPLATES } from '../data/gasTemplates';
+import { GAS_TEMPLATES, generateCustomGasCode } from '../data/gasTemplates';
 
 export interface AdminViewProps {
   onOpenConnectionModal?: () => void;
@@ -46,6 +54,25 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [copiedGasCode, setCopiedGasCode] = useState<boolean>(false);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [, setSyncVersion] = useState<number>(0);
+
+  // 1. Primera Jornada con Aportaciones (j) State
+  const [firstJornadaInput, setFirstJornadaInput] = useState<number>(gasEngine.getFirstContributionJornada());
+
+  // 2. Equipos y Colores para Mercado State
+  const [clubStylesList, setClubStylesList] = useState<ClubStyle[]>(gasEngine.getClubStyles());
+  const [adminClubCode, setAdminClubCode] = useState<string>('');
+  const [adminClubName, setAdminClubName] = useState<string>('');
+  const [adminClubBg, setAdminClubBg] = useState<string>('#FFFF00');
+  const [adminClubText, setAdminClubText] = useState<string>('#000000');
+  const [adminClubBorder, setAdminClubBorder] = useState<string>('#005187');
+  const [editingClubCode, setEditingClubCode] = useState<string | null>(null);
+
+  // 3. Sistema de Avisos de Fichajes State
+  const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(gasEngine.getNotificationConfig());
+  const [isTestingTelegram, setIsTestingTelegram] = useState<boolean>(false);
+  const [isTestingGithub, setIsTestingGithub] = useState<boolean>(false);
+  const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     const unsub = gasEngine.subscribe(() => {
@@ -116,6 +143,105 @@ export const AdminView: React.FC<AdminViewProps> = ({
     const aTeams = gasEngine.getAdminTeamNamesList(adminPass);
     setAdminTeamsList(aTeams);
     if (aTeams.length > 0) setReportTeam(aTeams[0]);
+
+    setFirstJornadaInput(gasEngine.getFirstContributionJornada());
+    setClubStylesList(gasEngine.getClubStyles());
+    setNotificationConfig(gasEngine.getNotificationConfig());
+  };
+
+  // Handlers para 1. Primera Jornada con Aportaciones
+  const handleSaveFirstJornada = () => {
+    const j = Number(firstJornadaInput);
+    if (isNaN(j) || j < 1 || j > 38) {
+      showAlert('La jornada debe ser un número entero entre 1 y 38.', false);
+      return;
+    }
+    const res = gasEngine.setFirstContributionJornada(j, adminPass);
+    showAlert(res.message, res.success);
+  };
+
+  // Handlers para 2. Equipos y Colores para Mercado
+  const handleSaveAdminClub = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const code = adminClubCode.trim().toUpperCase();
+    if (!code) {
+      showAlert('El código del equipo es obligatorio (ej: VIL, ESP).', false);
+      return;
+    }
+    gasEngine.saveClubStyle({
+      code,
+      name: adminClubName.trim() || code,
+      bgColor: adminClubBg,
+      textColor: adminClubText,
+      borderColor: adminClubBorder || adminClubBg
+    });
+    setClubStylesList(gasEngine.getClubStyles());
+    setAdminClubCode('');
+    setAdminClubName('');
+    setEditingClubCode(null);
+    showAlert(`Equipo ${code} y sus estilos guardados con éxito.`, true);
+  };
+
+  const handleEditClub = (club: ClubStyle) => {
+    setEditingClubCode(club.code);
+    setAdminClubCode(club.code);
+    setAdminClubName(club.name);
+    setAdminClubBg(club.bgColor);
+    setAdminClubText(club.textColor);
+    setAdminClubBorder(club.borderColor || club.bgColor);
+  };
+
+  const handleDeleteClub = (code: string) => {
+    if (!window.confirm(`¿Eliminar los colores del equipo "${code}"?`)) return;
+    gasEngine.deleteClubStyle(code);
+    setClubStylesList(gasEngine.getClubStyles());
+    showAlert(`Equipo ${code} eliminado.`, true);
+  };
+
+  const handleResetClubs = () => {
+    if (!window.confirm('¿Restablecer los colores de los equipos a los valores predeterminados?')) return;
+    gasEngine.resetClubStyles();
+    setClubStylesList(gasEngine.getClubStyles());
+    showAlert('Colores restablecidos a los valores oficiales.', true);
+  };
+
+  // Handlers para 3. Sistema de Avisos a Telegram y GitHub
+  const handleSaveNotifications = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const res = gasEngine.saveNotificationConfig(notificationConfig, adminPass);
+    showAlert(res.message, res.success);
+  };
+
+  const handleTestTelegram = async () => {
+    setIsTestingTelegram(true);
+    setTelegramTestResult(null);
+    const res = await gasEngine.testTelegramNotification(notificationConfig);
+    setIsTestingTelegram(false);
+    setTelegramTestResult(res);
+    showAlert(res.message, res.success);
+  };
+
+  const handleTestGithub = async () => {
+    setIsTestingGithub(true);
+    setGithubTestResult(null);
+    const res = await gasEngine.testGithubDispatch(notificationConfig);
+    setIsTestingGithub(false);
+    setGithubTestResult(res);
+    showAlert(res.message, res.success);
+  };
+
+  const handleCopyCustomGas = () => {
+    const code = generateCustomGasCode({
+      firstContributionJornada: Number(firstJornadaInput),
+      telegramBotToken: notificationConfig.telegramBotToken,
+      telegramChatId: notificationConfig.telegramChatId,
+      githubRepo: notificationConfig.githubRepo,
+      githubToken: notificationConfig.githubToken
+    });
+    navigator.clipboard.writeText(code);
+    setCopiedGasCode(true);
+    setTimeout(() => setCopiedGasCode(false), 2500);
+    showAlert('¡Código.gs personalizado copiado! Contiene tus tokens y la jornada configurada.', true);
   };
 
   const handleAddTeam = () => {
@@ -587,6 +713,506 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <li><strong className="text-slate-300">Draft:</strong> Historial de jugadores seleccionados durante el draft inicial.</li>
               </ul>
             </div>
+          </div>
+
+          {/* ======================================================== */}
+          {/* NUEVA SECCIÓN: 1. Primera Jornada con Aportes y Premios */}
+          {/* ======================================================== */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Coins className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Aportes y Premios de las Jornadas Semanales</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Establece a partir de qué jornada se contabilizan las aportaciones semanales (1.50€ por equipo) y premios
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-1 rounded-xl">
+                  Jornada Actual de Inicio: <strong>J{firstJornadaInput}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Explicación de Código GAS */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Code className="w-3.5 h-3.5 text-amber-400" />
+                  Equivalente en Google Apps Script (Código.gs):
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">variable j en bucle contable</span>
+              </div>
+              <pre className="text-[11px] font-mono bg-slate-900 p-3 rounded-lg border border-slate-800 text-amber-300/90 overflow-x-auto leading-relaxed">
+{`// 2. Calcular Aportes y Premios de las Jornadas semanales
+for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
+    totalContributions += numTeams * WEEKLY_CONTRIBUTION;
+    teamNames.forEach(teamName => {
+        if (teamBalanceDetails.has(teamName)) {
+            teamBalanceDetails.get(teamName).contributions += WEEKLY_CONTRIBUTION;
+        }
+    });
+}`}
+              </pre>
+              <p className="text-[11px] text-slate-400">
+                Puesto que cada temporada puede comenzar con aportaciones en jornadas distintas (por ejemplo Jornada 4 o Jornada 1), aquí puedes definir el valor exacto de inicio. Al guardarlo se recalcularán automáticamente los saldos contables y balances en la pestaña Balances.
+              </p>
+            </div>
+
+            {/* Formulario de Configuración de Jornada */}
+            <div className="flex flex-wrap items-center gap-3 p-4 bg-slate-950 rounded-xl border border-slate-800">
+              <div className="w-48">
+                <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                  Primera Jornada con Aportes (j)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="38"
+                  value={firstJornadaInput}
+                  onChange={(e) => setFirstJornadaInput(parseInt(e.target.value, 10) || 1)}
+                  className="w-full bg-slate-900 border border-slate-700 text-white font-mono font-bold text-sm py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Botones de selección rápida */}
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                  Selección Rápida de Jornada
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 4, 5, 6].map(num => (
+                    <button
+                      key={`quick-j-${num}`}
+                      type="button"
+                      onClick={() => setFirstJornadaInput(num)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                        firstJornadaInput === num
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      J{num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="self-end">
+                <button
+                  type="button"
+                  onClick={handleSaveFirstJornada}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs py-2 px-4 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Guardar Jornada de Aportes</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ======================================================== */}
+          {/* NUEVA SECCIÓN: 2. Equipos y Colores para el Mercado     */}
+          {/* ======================================================== */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Palette className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Equipos y Colores para la Página de Mercado</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Añade nuevos equipos reales y personaliza sus colores con formato CSS (.team-color-COD)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleResetClubs}
+                  className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+                  title="Restablecer a colores oficiales predeterminados"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Restablecer Oficiales</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Formulario Añadir / Editar Equipo */}
+            <form onSubmit={handleSaveAdminClub} className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5" />
+                  {editingClubCode ? `Editando Equipo: ${editingClubCode}` : 'Añadir / Personalizar Equipo'}
+                </span>
+                {editingClubCode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingClubCode(null);
+                      setAdminClubCode('');
+                      setAdminClubName('');
+                    }}
+                    className="text-xs text-slate-400 hover:text-white underline cursor-pointer"
+                  >
+                    Cancelar edición
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                {/* Código */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Código (3-4 letras)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={5}
+                    value={adminClubCode}
+                    onChange={(e) => setAdminClubCode(e.target.value.toUpperCase())}
+                    placeholder="Ej: VIL"
+                    className="w-full bg-slate-900 border border-slate-700 text-white font-mono font-bold text-xs py-2 px-3 rounded-lg focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* Nombre */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Nombre Completo
+                  </label>
+                  <input
+                    type="text"
+                    value={adminClubName}
+                    onChange={(e) => setAdminClubName(e.target.value)}
+                    placeholder="Ej: Villarreal CF"
+                    className="w-full bg-slate-900 border border-slate-700 text-white text-xs py-2 px-3 rounded-lg focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* Color de Fondo */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Color de Fondo
+                  </label>
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 p-1 rounded-lg">
+                    <input
+                      type="color"
+                      value={adminClubBg}
+                      onChange={(e) => setAdminClubBg(e.target.value)}
+                      className="w-7 h-7 rounded bg-transparent border-0 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={adminClubBg}
+                      onChange={(e) => setAdminClubBg(e.target.value)}
+                      className="w-full bg-transparent text-white font-mono text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Color de Texto */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Color del Texto
+                  </label>
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 p-1 rounded-lg">
+                    <input
+                      type="color"
+                      value={adminClubText}
+                      onChange={(e) => setAdminClubText(e.target.value)}
+                      className="w-7 h-7 rounded bg-transparent border-0 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={adminClubText}
+                      onChange={(e) => setAdminClubText(e.target.value)}
+                      className="w-full bg-transparent text-white font-mono text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Color de Borde */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                    Color de Borde
+                  </label>
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 p-1 rounded-lg">
+                    <input
+                      type="color"
+                      value={adminClubBorder}
+                      onChange={(e) => setAdminClubBorder(e.target.value)}
+                      className="w-7 h-7 rounded bg-transparent border-0 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={adminClubBorder}
+                      onChange={(e) => setAdminClubBorder(e.target.value)}
+                      className="w-full bg-transparent text-white font-mono text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Vista previa en vivo del distintivo y regla CSS */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-800">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-slate-400 font-bold">Vista Previa Mercado:</span>
+                  <span
+                    className="inline-block px-3 py-1 rounded-md text-xs font-mono font-black shadow-sm border"
+                    style={{
+                      backgroundColor: adminClubBg,
+                      color: adminClubText,
+                      borderColor: adminClubBorder
+                    }}
+                  >
+                    {adminClubCode || 'VIL'}
+                  </span>
+                  <span className="text-xs text-white font-semibold">{adminClubName || 'Villarreal CF'}</span>
+                </div>
+
+                <div className="text-[11px] font-mono text-amber-400/90 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+                  .team-color-{adminClubCode || 'VIL'} {'{'} background-color: {adminClubBg}; color: {adminClubText}; {'}'}
+                </div>
+
+                <button
+                  type="submit"
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs py-2 px-4 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{editingClubCode ? 'Actualizar Equipo' : 'Guardar Equipo'}</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Listado de Equipos Configurados */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                Equipos Registrados ({clubStylesList.length}):
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-64 overflow-y-auto p-1">
+                {clubStylesList.map((club) => (
+                  <div
+                    key={`club-item-${club.code}`}
+                    className="bg-slate-950 border border-slate-800 hover:border-slate-700 p-2.5 rounded-xl flex items-center justify-between gap-2 transition"
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span
+                        className="inline-block px-2 py-0.5 rounded text-[10px] font-mono font-black border shrink-0"
+                        style={{
+                          backgroundColor: club.bgColor,
+                          color: club.textColor,
+                          borderColor: club.borderColor || club.bgColor
+                        }}
+                      >
+                        {club.code}
+                      </span>
+                      <span className="text-[11px] text-slate-300 font-bold truncate" title={club.name}>
+                        {club.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleEditClub(club)}
+                        className="text-slate-400 hover:text-amber-400 p-1 transition cursor-pointer"
+                        title="Editar colores"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClub(club.code)}
+                        className="text-slate-500 hover:text-rose-400 p-1 transition cursor-pointer"
+                        title="Eliminar equipo"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ======================================================== */}
+          {/* NUEVA SECCIÓN: 3. Sistema de Avisos de Fichajes          */}
+          {/* ======================================================== */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <Send className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Sistema de Avisos de Fichajes (Telegram & GitHub Actions)</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Notifica en tiempo real a todos los participantes en Telegram cada vez que se produce un fichaje
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl">
+                  <input
+                    type="checkbox"
+                    checked={notificationConfig.enabled}
+                    onChange={(e) => setNotificationConfig({ ...notificationConfig, enabled: e.target.checked })}
+                    className="accent-amber-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-slate-200">
+                    {notificationConfig.enabled ? 'Avisos Activados' : 'Avisos Desactivados'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Configuración de Credenciales */}
+            <form onSubmit={handleSaveNotifications} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Telegram Bot Token */}
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                    Telegram Bot Token (@BotFather)
+                  </label>
+                  <input
+                    type="text"
+                    value={notificationConfig.telegramBotToken}
+                    onChange={(e) => setNotificationConfig({ ...notificationConfig, telegramBotToken: e.target.value.trim() })}
+                    placeholder="Ej: 123456789:ABCdefGHIjklmn..."
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block">
+                    Crea un bot en Telegram con @BotFather y pega aquí el token HTTP API.
+                  </span>
+                </div>
+
+                {/* Telegram Chat ID */}
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                    Telegram Chat ID / Canal
+                  </label>
+                  <input
+                    type="text"
+                    value={notificationConfig.telegramChatId}
+                    onChange={(e) => setNotificationConfig({ ...notificationConfig, telegramChatId: e.target.value.trim() })}
+                    placeholder="Ej: -1001234567890 o @micanal"
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block">
+                    ID del grupo o canal de Telegram donde están los jugadores de la liga (añade al bot como admin).
+                  </span>
+                </div>
+
+                {/* GitHub Repo */}
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                    GitHub Repositorio (Opcional - Workflow)
+                  </label>
+                  <input
+                    type="text"
+                    value={notificationConfig.githubRepo || ''}
+                    onChange={(e) => setNotificationConfig({ ...notificationConfig, githubRepo: e.target.value.trim() })}
+                    placeholder="Ej: usuario/liga-fantastica"
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block">
+                    Para activar workflows automáticos mediante <code>repository_dispatch</code> al fichar.
+                  </span>
+                </div>
+
+                {/* GitHub PAT */}
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                    GitHub Personal Access Token (PAT)
+                  </label>
+                  <input
+                    type="password"
+                    value={notificationConfig.githubToken || ''}
+                    onChange={(e) => setNotificationConfig({ ...notificationConfig, githubToken: e.target.value.trim() })}
+                    placeholder="ghp_..."
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block">
+                    Token con permiso de <code>repo</code> en GitHub para el dispatch de eventos.
+                  </span>
+                </div>
+              </div>
+
+              {/* Botones de acción y prueba */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestTelegram}
+                    disabled={isTestingTelegram || !notificationConfig.telegramBotToken || !notificationConfig.telegramChatId}
+                    className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{isTestingTelegram ? 'Enviando a Telegram...' : 'Probar Aviso en Telegram'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestGithub}
+                    disabled={isTestingGithub || !notificationConfig.githubRepo || !notificationConfig.githubToken}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Code className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{isTestingGithub ? 'Disparando GitHub...' : 'Probar Dispatch GitHub'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyCustomGas}
+                    className="bg-slate-950 hover:bg-slate-800 text-amber-400 border border-amber-500/40 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copiar Código.gs con Avisos Inyectados</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs py-2 px-4 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Guardar Configuración de Avisos</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mensaje de feedback de test si hay */}
+              {telegramTestResult && (
+                <div className={`p-3 rounded-xl text-xs font-semibold border flex items-center gap-2 ${
+                  telegramTestResult.success ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                }`}>
+                  {telegramTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                  <span>Telegram: {telegramTestResult.message}</span>
+                </div>
+              )}
+
+              {githubTestResult && (
+                <div className={`p-3 rounded-xl text-xs font-semibold border flex items-center gap-2 ${
+                  githubTestResult.success ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                }`}>
+                  {githubTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                  <span>GitHub: {githubTestResult.message}</span>
+                </div>
+              )}
+            </form>
           </div>
 
           {/* Section 1: Tokens de Equipos */}

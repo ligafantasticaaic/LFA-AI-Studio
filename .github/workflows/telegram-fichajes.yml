@@ -1,0 +1,85 @@
+name: Aviso Telegram Fichaje Liga Fantástica
+
+on:
+  repository_dispatch:
+    types: [fichaje_realizado]
+  workflow_dispatch:
+    inputs:
+      equipo:
+        description: 'Nombre del equipo'
+        required: true
+        default: 'Equipo Ejemplo'
+      jugadorEntra:
+        description: 'Jugador que entra'
+        required: true
+        default: 'Mbappé'
+      jugadorSale:
+        description: 'Jugador que sale'
+        required: true
+        default: 'Vinicius'
+      coste:
+        description: 'Coste del fichaje'
+        required: true
+        default: '2.00 €'
+      jornada:
+        description: 'Jornada'
+        required: true
+        default: '5'
+      tipo:
+        description: 'Tipo de fichaje (Normal, Intercambio, etc.)'
+        required: false
+        default: 'Normal'
+
+jobs:
+  notify-telegram:
+    name: Enviar Notificación a Telegram
+    runs-on: ubuntu-latest
+    steps:
+      - name: Formatear y Enviar Mensaje
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EQUIPO: ${{ github.event.client_payload.equipo || github.event.inputs.equipo }}
+          ENTRA: ${{ github.event.client_payload.jugadorEntra || github.event.inputs.jugadorEntra }}
+          SALE: ${{ github.event.client_payload.jugadorSale || github.event.inputs.jugadorSale }}
+          COSTE: ${{ github.event.client_payload.coste || github.event.inputs.coste }}
+          JORNADA: ${{ github.event.client_payload.jornada || github.event.inputs.jornada }}
+          TIPO: ${{ github.event.client_payload.tipo || github.event.inputs.tipo }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "ERROR: TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no están configurados en los secrets del repositorio."
+            exit 1
+          fi
+
+          MENSAJE="🚨 *¡NUEVO FICHAJE CONFIRMADO!* ⚽
+━━━━━━━━━━━━━━━━━━━━
+🏟 *Equipo:* ${EQUIPO}
+🟢 *Alta:* ${ENTRA}
+🔴 *Baja:* ${SALE}
+💰 *Coste:* ${COSTE} €
+📅 *Jornada:* J${JORNADA}
+📝 *Tipo:* ${TIPO}
+━━━━━━━━━━━━━━━━━━━━
+🏆 _Liga Fantástica de Amigos_"
+
+          # Enviar a la API de Telegram con formato Markdown
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg chat_id "$TELEGRAM_CHAT_ID" \
+              --arg text "$MENSAJE" \
+              --arg parse_mode "Markdown" \
+              '{chat_id: $chat_id, text: $text, parse_mode: $parse_mode}')")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Error enviando notificación a Telegram"
+            exit 1
+          fi
+
+          echo "¡Notificación enviada con éxito al grupo de Telegram!"

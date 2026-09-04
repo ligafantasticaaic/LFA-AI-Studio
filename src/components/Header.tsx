@@ -59,8 +59,13 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Top Banner */}
       <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20 text-slate-950 font-black text-2xl">
-            ⚽
+          <div className="w-12 h-12 rounded-xl bg-slate-950 border border-amber-500/30 flex items-center justify-center p-1 shadow-lg shadow-amber-500/10 overflow-hidden shrink-0">
+            <img 
+              src="/logo.png" 
+              alt="Logo Liga Fantástica" 
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
