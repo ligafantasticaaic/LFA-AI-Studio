@@ -633,9 +633,11 @@ class GasEngineService {
 
   public async testNotification(testType: 'telegram' | 'github', sampleData?: any): Promise<{ success: boolean; message?: string; error?: string }> {
     const notif = this.notificationConfig;
+
     if (testType === 'telegram') {
       const token = String(notif.telegramBotToken || '').trim();
       const chatId = String(notif.telegramChatId || '').trim();
+
       if (!token || !chatId) {
         return {
           success: false,
@@ -654,6 +656,96 @@ class GasEngineService {
           error: 'El Bot Token de Telegram debe contener dos puntos ":" (ej: 123456789:AAHk...). Consíguelo en @BotFather.'
         };
       }
+
+      const sample = {
+        equipo: sampleData?.equipo || 'Equipo Demo LFA',
+        jugadorEntra: sampleData?.jugadorEntra || 'Kylian Mbappé (RMA)',
+        jugadorSale: sampleData?.jugadorSale || 'Vinicius Jr (RMA)',
+        coste: sampleData?.coste !== undefined ? String(sampleData.coste) : '2.00',
+        jornada: sampleData?.jornada || 4,
+        tipo: sampleData?.tipo || 'Fichaje de Prueba'
+      };
+
+      const isRealFichaje = Boolean(sampleData?.tipo && sampleData.tipo !== 'Fichaje de Prueba');
+      const title = isRealFichaje ? '🚨 *¡NUEVO FICHAJE CONFIRMADO!* ⚽' : '🚨 *¡PRUEBA DE FICHAJE EN LA LIGA FANTÁSTICA!* ⚽';
+      const footer = isRealFichaje ? '🏆 _Liga Fantástica App_' : '✅ _Conexión directa con Telegram verificada correctamente._';
+      const text = `${title}\n━━━━━━━━━━━━━━━━━━━━\n🏟 *Equipo:* ${sample.equipo}\n🟢 *Alta:* ${sample.jugadorEntra}\n🔴 *Baja:* ${sample.jugadorSale}\n💰 *Coste:* ${sample.coste} €\n📅 *Jornada:* J${sample.jornada}\n📝 *Tipo:* ${sample.tipo}\n━━━━━━━━━━━━━━━━━━━━\n${footer}`;
+
+      // 1. Envío DIRECTO a la API oficial de Telegram (soporta CORS universalmente)
+      // Esto evita depender de proxies o servidores intermediarios y funciona en cualquier entorno (web compartida, Cloud Run, local, etc.)
+      try {
+        const tgResp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: text,
+            parse_mode: 'Markdown'
+          })
+        });
+
+        const tgData = await tgResp.json().catch(() => null);
+
+        if (tgResp.ok && tgData?.ok) {
+          return { success: true, message: '¡Mensaje de aviso enviado con éxito a Telegram!' };
+        }
+
+        const desc = tgData?.description || `Error HTTP ${tgResp.status}`;
+        if (desc.includes('chat not found')) {
+          return {
+            success: false,
+            error: `Chat no encontrado (${chatId}). Verifica que has añadido al bot al grupo o canal, o que has iniciado conversación con él.`
+          };
+        }
+        if (desc.includes('bot was blocked') || desc.includes("bot can't initiate conversation")) {
+          return {
+            success: false,
+            error: 'El bot no tiene permiso para escribir: abre Telegram, busca a tu bot y pulsa "Iniciar" (/start).'
+          };
+        }
+        if (desc.includes('Unauthorized') || tgResp.status === 401) {
+          return {
+            success: false,
+            error: 'Token no autorizado por Telegram. Comprueba que copiaste el token completo exactamente de @BotFather.'
+          };
+        }
+
+        return { success: false, error: `Telegram error (${tgData?.error_code || tgResp.status}): ${desc}` };
+      } catch (directErr: any) {
+        console.warn('[gasEngine] Petición directa a Telegram falló, intentando vía backend proxy:', directErr);
+        
+        // 2. Fallback secundario a través del servidor
+        try {
+          const resp = await fetch('/api/notify-fichaje-test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              testType: 'telegram',
+              telegramBotToken: token,
+              telegramChatId: chatId,
+              sampleData
+            })
+          });
+
+          const raw = await resp.text();
+          let data: any = null;
+          try {
+            data = JSON.parse(raw);
+          } catch {}
+
+          if (resp.ok && data?.success) {
+            return { success: true, message: data.message || 'Prueba enviada exitosamente.' };
+          }
+          if (data?.error) {
+            return { success: false, error: data.error };
+          }
+        } catch {}
+
+        return {
+          success: false,
+          error: `No se pudo conectar con Telegram: ${directErr?.message || 'Error de red'}. Comprueba tu conexión a internet.`
+        };
+      }
     } else if (testType === 'github') {
       const repo = String(notif.githubRepo || '').trim();
       const ghToken = String(notif.githubToken || '').trim();
@@ -663,41 +755,65 @@ class GasEngineService {
           error: 'Falta completar el Repositorio de GitHub (usuario/repo) o el Personal Access Token (PAT).'
         };
       }
-    }
 
-    try {
-      const resp = await fetch('/api/notify-fichaje-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          testType,
-          telegramBotToken: notif.telegramBotToken,
-          telegramChatId: notif.telegramChatId,
-          githubRepo: notif.githubRepo,
-          githubToken: notif.githubToken,
-          sampleData
-        })
-      });
-
-      const raw = await resp.text();
-      let data: any = null;
+      // 1. Intento directo a GitHub API (soporta CORS)
       try {
-        data = JSON.parse(raw);
-      } catch {
-        // En caso de que el backend devuelva HTML (por ejemplo si la ruta no existe)
+        const ghResp = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'Authorization': `token ${ghToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            event_type: 'fichaje_realizado',
+            client_payload: sampleData || {
+              equipo: 'Equipo Demo LFA',
+              jugadorEntra: 'Kylian Mbappé (RMA)',
+              jugadorSale: 'Vinicius Jr (RMA)',
+              coste: '2.00 €',
+              jornada: 4,
+              tipo: 'Prueba Dispatch'
+            }
+          })
+        });
+
+        if (ghResp.status === 204 || ghResp.ok) {
+          return { success: true, message: `Evento 'fichaje_realizado' enviado a GitHub Actions (${repo}) con éxito.` };
+        }
+
+        const ghData = await ghResp.json().catch(() => null);
+        return { success: false, error: `GitHub API (${ghResp.status}): ${ghData?.message || 'Error al disparar workflow'}` };
+      } catch (ghErr: any) {
+        // Fallback a través del servidor
+        try {
+          const resp = await fetch('/api/notify-fichaje-test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              testType: 'github',
+              githubRepo: repo,
+              githubToken: ghToken,
+              sampleData
+            })
+          });
+          const data = await resp.json().catch(() => null);
+          if (resp.ok && data?.success) {
+            return { success: true, message: data.message };
+          }
+          if (data?.error) {
+            return { success: false, error: data.error };
+          }
+        } catch {}
+
         return {
           success: false,
-          error: `El servidor devolvió un formato no reconocido (código ${resp.status}). Verifica la configuración del servidor.`
+          error: `Error conectando con GitHub: ${ghErr?.message || 'Error de red'}.`
         };
       }
-
-      if (resp.ok && data?.success) {
-        return { success: true, message: data.message || 'Prueba enviada exitosamente.' };
-      }
-      return { success: false, error: data?.error || `Error (${resp.status}): no se pudo procesar la prueba.` };
-    } catch (err: any) {
-      return { success: false, error: err?.message || 'Error de conexión con el servidor.' };
     }
+
+    return { success: false, error: 'Tipo de prueba no reconocido.' };
   }
 
   public async triggerFichajeNotification(payload: {
