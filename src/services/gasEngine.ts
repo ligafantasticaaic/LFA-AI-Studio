@@ -632,26 +632,71 @@ class GasEngineService {
   }
 
   public async testNotification(testType: 'telegram' | 'github', sampleData?: any): Promise<{ success: boolean; message?: string; error?: string }> {
+    const notif = this.notificationConfig;
+    if (testType === 'telegram') {
+      const token = String(notif.telegramBotToken || '').trim();
+      const chatId = String(notif.telegramChatId || '').trim();
+      if (!token || !chatId) {
+        return {
+          success: false,
+          error: 'Falta completar el Bot Token de Telegram o el Chat ID del grupo.'
+        };
+      }
+      if (token.startsWith('@')) {
+        return {
+          success: false,
+          error: `Has puesto un nombre de usuario ("${token}") en vez del token. El Bot Token es una clave proporcionada por @BotFather (ej: 123456789:ABCdefGhI...)`
+        };
+      }
+      if (!token.includes(':')) {
+        return {
+          success: false,
+          error: 'El Bot Token de Telegram debe contener dos puntos ":" (ej: 123456789:AAHk...). Consíguelo en @BotFather.'
+        };
+      }
+    } else if (testType === 'github') {
+      const repo = String(notif.githubRepo || '').trim();
+      const ghToken = String(notif.githubToken || '').trim();
+      if (!repo || !ghToken) {
+        return {
+          success: false,
+          error: 'Falta completar el Repositorio de GitHub (usuario/repo) o el Personal Access Token (PAT).'
+        };
+      }
+    }
+
     try {
       const resp = await fetch('/api/notify-fichaje-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           testType,
-          telegramBotToken: this.notificationConfig.telegramBotToken,
-          telegramChatId: this.notificationConfig.telegramChatId,
-          githubRepo: this.notificationConfig.githubRepo,
-          githubToken: this.notificationConfig.githubToken,
+          telegramBotToken: notif.telegramBotToken,
+          telegramChatId: notif.telegramChatId,
+          githubRepo: notif.githubRepo,
+          githubToken: notif.githubToken,
           sampleData
         })
       });
-      const data = await resp.json();
-      if (resp.ok && data.success) {
+
+      const raw = await resp.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        // En caso de que el backend devuelva HTML (por ejemplo si la ruta no existe)
+        return {
+          success: false,
+          error: `El servidor devolvió un formato no reconocido (código ${resp.status}). Verifica la configuración del servidor.`
+        };
+      }
+
+      if (resp.ok && data?.success) {
         return { success: true, message: data.message || 'Prueba enviada exitosamente.' };
       }
-      return { success: false, error: data.error || `Error ${resp.status}: no se pudo enviar la prueba.` };
+      return { success: false, error: data?.error || `Error (${resp.status}): no se pudo procesar la prueba.` };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Error de conexión con el servidor.' };
+      return { success: false, error: err?.message || 'Error de conexión con el servidor.' };
     }
   }
 

@@ -161,30 +161,69 @@ async function startServer() {
     }
 
     // Default: Telegram direct test
-    if (!telegramBotToken || !telegramChatId) {
-      return res.status(400).json({ error: 'Falta Bot Token de Telegram o Chat ID del grupo.' });
+    const cleanBotToken = String(telegramBotToken || '').trim();
+    const cleanChatId = String(telegramChatId || '').trim();
+
+    if (!cleanBotToken || !cleanChatId) {
+      return res.status(400).json({
+        error: 'Falta completar el "Bot Token de Telegram" o el "Chat ID del Grupo". Ambos son necesarios para enviar avisos a Telegram.'
+      });
+    }
+
+    if (cleanBotToken.startsWith('@')) {
+      return res.status(400).json({
+        error: `Has introducido un nombre de usuario ("${cleanBotToken}") en vez del token. El Bot Token es una clave proporcionada por @BotFather con formato números:letras (ejemplo: 748392019:AAHkjl8...)`
+      });
+    }
+
+    if (!cleanBotToken.includes(':')) {
+      return res.status(400).json({
+        error: 'El Bot Token parece incompleto o inválido (debe contener dos puntos ":", como 123456789:AAHk...). Consíguelo en Telegram escribiendo /newbot a @BotFather.'
+      });
     }
 
     const message = `🚨 *¡PRUEBA DE FICHAJE EN LA LIGA FANTÁSTICA!* ⚽\n━━━━━━━━━━━━━━━━━━━━\n🏟 *Equipo:* ${sample.equipo}\n🟢 *Alta:* ${sample.jugadorEntra}\n🔴 *Baja:* ${sample.jugadorSale}\n💰 *Coste:* ${sample.coste} €\n📅 *Jornada:* J${sample.jornada}\n📝 *Tipo:* ${sample.tipo}\n━━━━━━━━━━━━━━━━━━━━\n✅ _Conexión Apps Script / Telegram verificada correctamente._`;
 
     try {
-      const tgResp = await fetch(`https://api.telegram.org/bot${telegramBotToken.trim()}/sendMessage`, {
+      const tgResp = await fetch(`https://api.telegram.org/bot${cleanBotToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: telegramChatId.trim(),
+          chat_id: cleanChatId,
           text: message,
           parse_mode: 'Markdown'
         })
       });
 
-      const tgData = await tgResp.json();
-      if (tgData.ok) {
-        return res.json({ success: true, message: '¡Mensaje de prueba enviado con éxito al grupo de Telegram!' });
+      const rawText = await tgResp.text();
+      let tgData: any;
+      try {
+        tgData = JSON.parse(rawText);
+      } catch {
+        return res.status(400).json({
+          error: `Telegram rechazó la petición (HTTP ${tgResp.status}). Comprueba que el Bot Token es exactamente el que te entregó @BotFather y no tiene espacios ni caracteres extraños.`
+        });
       }
-      return res.status(400).json({ error: `Telegram error (${tgData.error_code}): ${tgData.description}` });
+
+      if (tgData && tgData.ok) {
+        return res.json({ success: true, message: '¡Mensaje de prueba enviado con éxito a Telegram!' });
+      }
+
+      const desc = tgData?.description || 'Error desconocido de Telegram';
+      if (desc.includes('chat not found')) {
+        return res.status(400).json({
+          error: `Chat no encontrado (${cleanChatId}). Asegúrate de haber iniciado conversación con el bot en Telegram o de haber añadido al bot como miembro/admin en tu grupo.`
+        });
+      }
+      if (desc.includes('bot was blocked') || desc.includes("bot can't initiate")) {
+        return res.status(400).json({
+          error: `El bot no tiene permiso para escribirte: abre tu Telegram, busca a tu bot y pulsa el botón "Iniciar" (/start).`
+        });
+      }
+
+      return res.status(400).json({ error: `Telegram error (${tgData?.error_code || tgResp.status}): ${desc}` });
     } catch (err: any) {
-      return res.status(500).json({ error: `Error al enviar a Telegram: ${err.message}` });
+      return res.status(500).json({ error: `Error de conexión al enviar a Telegram: ${err.message}` });
     }
   });
 

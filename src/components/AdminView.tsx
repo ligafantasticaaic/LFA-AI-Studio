@@ -27,7 +27,10 @@ import {
   DollarSign,
   ExternalLink,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  Info,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { GAS_TEMPLATES, generateCustomGasCode } from '../data/gasTemplates';
 
@@ -73,6 +76,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [isTestingGithub, setIsTestingGithub] = useState<boolean>(false);
   const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showTelegramGuide, setShowTelegramGuide] = useState<boolean>(false);
+  const [showGithubGuide, setShowGithubGuide] = useState<boolean>(false);
 
   useEffect(() => {
     const unsub = gasEngine.subscribe(() => {
@@ -1044,7 +1049,7 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
           {/* ======================================================== */}
           {/* NUEVA SECCIÓN: 3. Sistema de Avisos de Fichajes          */}
           {/* ======================================================== */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
@@ -1052,10 +1057,10 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
                 </div>
                 <div>
                   <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
-                    <span>Sistema de Avisos de Fichajes (Telegram & GitHub Actions)</span>
+                    <span>Sistema de Avisos de Fichajes</span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Notifica en tiempo real a todos los participantes en Telegram cada vez que se produce un fichaje
+                    Notifica en tiempo real a tu grupo de Telegram cada vez que un participante realiza un fichaje
                   </p>
                 </div>
               </div>
@@ -1075,81 +1080,88 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
               </div>
             </div>
 
-            {/* Configuración de Credenciales */}
-            <form onSubmit={handleSaveNotifications} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Telegram Bot Token */}
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
-                    Telegram Bot Token (@BotFather)
-                  </label>
-                  <input
-                    type="text"
-                    value={notificationConfig.telegramBotToken}
-                    onChange={(e) => setNotificationConfig({ ...notificationConfig, telegramBotToken: e.target.value.trim() })}
-                    placeholder="Ej: 123456789:ABCdefGHIjklmn..."
-                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
-                  />
-                  <span className="text-[10px] text-slate-500 block">
-                    Crea un bot en Telegram con @BotFather y pega aquí el token HTTP API.
-                  </span>
+            <form onSubmit={handleSaveNotifications} className="space-y-6">
+              {/* BLOQUE A: Telegram Directo (Principal y Recomendado) */}
+              <div className="bg-slate-950/70 border border-blue-500/30 rounded-xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm font-black text-white uppercase tracking-wide">
+                      1. Notificaciones en Telegram (Directo)
+                    </span>
+                    <span className="text-[10px] bg-blue-500/20 text-blue-300 font-bold px-2 py-0.5 rounded-full border border-blue-500/30">
+                      Recomendado
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowTelegramGuide(!showTelegramGuide)}
+                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>{showTelegramGuide ? 'Ocultar guía' : '¿Cómo obtener el Token y Chat ID?'}</span>
+                    {showTelegramGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
 
-                {/* Telegram Chat ID */}
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
-                    Telegram Chat ID / Canal
-                  </label>
-                  <input
-                    type="text"
-                    value={notificationConfig.telegramChatId}
-                    onChange={(e) => setNotificationConfig({ ...notificationConfig, telegramChatId: e.target.value.trim() })}
-                    placeholder="Ej: -1001234567890 o @micanal"
-                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
-                  />
-                  <span className="text-[10px] text-slate-500 block">
-                    ID del grupo o canal de Telegram donde están los jugadores de la liga (añade al bot como admin).
-                  </span>
+                {/* Guía Desplegable Telegram */}
+                {showTelegramGuide && (
+                  <div className="bg-blue-950/30 border border-blue-500/30 rounded-xl p-4 text-xs text-slate-300 space-y-2.5">
+                    <p className="font-bold text-blue-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                      Configura tus avisos en Telegram en 3 sencillos pasos:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
+                      <li>
+                        <strong className="text-white">Crear el bot:</strong> Abre Telegram, busca a <code className="text-amber-400">@BotFather</code> y envíale el comando <code className="text-amber-400">/newbot</code>. Sigue las instrucciones y te dará un <strong className="text-white">Token HTTP API</strong> (ejemplo: <code className="text-amber-400">748392019:AAHkjl8z9...</code>). Cópialo y pégalo en el campo <em>Telegram Bot Token</em>.
+                      </li>
+                      <li>
+                        <strong className="text-white">Añadir el bot al grupo:</strong> En Telegram, ve al grupo o canal de tu liga y añade a tu bot como miembro (y dale permisos para escribir).
+                      </li>
+                      <li>
+                        <strong className="text-white">Obtener el Chat ID:</strong> Añade al grupo temporalmente al bot <code className="text-amber-400">@RawDataBot</code> o reenvía un mensaje del grupo a <code className="text-amber-400">@userinfobot</code> para ver el ID del grupo (suele ser un número negativo que empieza por <code className="text-amber-400">-100...</code>, por ejemplo <code className="text-amber-400">-1002345678901</code>). Pégalo en <em>Telegram Chat ID</em>.
+                      </li>
+                    </ol>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Telegram Bot Token */}
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                      Telegram Bot Token (@BotFather) *
+                    </label>
+                    <input
+                      type="text"
+                      value={notificationConfig.telegramBotToken}
+                      onChange={(e) => setNotificationConfig({ ...notificationConfig, telegramBotToken: e.target.value.trim() })}
+                      placeholder="Ej: 123456789:ABCdefGHIjklmn..."
+                      className="w-full bg-slate-900 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-blue-500"
+                    />
+                    <span className="text-[10px] text-slate-400 block">
+                      Token numérico con dos puntos entregado por @BotFather (no pongas @nombre_de_usuario).
+                    </span>
+                  </div>
+
+                  {/* Telegram Chat ID */}
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                      Telegram Chat ID del Grupo / Canal *
+                    </label>
+                    <input
+                      type="text"
+                      value={notificationConfig.telegramChatId}
+                      onChange={(e) => setNotificationConfig({ ...notificationConfig, telegramChatId: e.target.value.trim() })}
+                      placeholder="Ej: -1001982736450"
+                      className="w-full bg-slate-900 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-blue-500"
+                    />
+                    <span className="text-[10px] text-slate-400 block">
+                      ID del grupo (empieza por -100...) o tu ID personal si quieres avisos individuales.
+                    </span>
+                  </div>
                 </div>
 
-                {/* GitHub Repo */}
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
-                    GitHub Repositorio (Opcional - Workflow)
-                  </label>
-                  <input
-                    type="text"
-                    value={notificationConfig.githubRepo || ''}
-                    onChange={(e) => setNotificationConfig({ ...notificationConfig, githubRepo: e.target.value.trim() })}
-                    placeholder="Ej: usuario/liga-fantastica"
-                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
-                  />
-                  <span className="text-[10px] text-slate-500 block">
-                    Para activar workflows automáticos mediante <code>repository_dispatch</code> al fichar.
-                  </span>
-                </div>
-
-                {/* GitHub PAT */}
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
-                    GitHub Personal Access Token (PAT)
-                  </label>
-                  <input
-                    type="password"
-                    value={notificationConfig.githubToken || ''}
-                    onChange={(e) => setNotificationConfig({ ...notificationConfig, githubToken: e.target.value.trim() })}
-                    placeholder="ghp_..."
-                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500"
-                  />
-                  <span className="text-[10px] text-slate-500 block">
-                    Token con permiso de <code>repo</code> en GitHub para el dispatch de eventos.
-                  </span>
-                </div>
-              </div>
-
-              {/* Botones de acción y prueba */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="pt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleTestTelegram}
@@ -1157,58 +1169,137 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
                     className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <Send className="w-3.5 h-3.5 text-blue-400" />
-                    <span>{isTestingTelegram ? 'Enviando a Telegram...' : 'Probar Aviso en Telegram'}</span>
+                    <span>{isTestingTelegram ? 'Enviando prueba a Telegram...' : 'Probar Aviso en Telegram'}</span>
                   </button>
 
+                  {telegramTestResult && (
+                    <div className={`p-2.5 rounded-xl text-xs font-semibold border flex items-center gap-2 ${
+                      telegramTestResult.success ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                    }`}>
+                      {telegramTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                      <span>{telegramTestResult.message}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* BLOQUE B: GitHub Actions Dispatch (100% Opcional) */}
+              <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Code className="w-4 h-4 text-amber-400" />
+                    <span className="text-sm font-black text-white uppercase tracking-wide">
+                      2. GitHub Actions (Workflow Dispatch)
+                    </span>
+                    <span className="text-[10px] bg-slate-800 text-amber-400 font-bold px-2 py-0.5 rounded-full border border-amber-500/20">
+                      100% Opcional
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowGithubGuide(!showGithubGuide)}
+                    className="text-xs text-amber-400/90 hover:text-amber-300 flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                    <span>{showGithubGuide ? 'Ocultar info' : '¿Para qué sirve esto y qué debo poner?'}</span>
+                    {showGithubGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                {/* Explicación de GitHub */}
+                {showGithubGuide ? (
+                  <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-4 text-xs text-slate-300 space-y-2">
+                    <p className="font-bold text-amber-300">
+                      💡 ¿Es obligatorio rellenar GitHub? ¡NO!
+                    </p>
+                    <p className="text-slate-300 leading-relaxed">
+                      Si solo quieres que se envíen avisos a tu grupo de Telegram, <strong className="text-white">deja estos dos campos de GitHub completamente vacíos</strong>.
+                    </p>
+                    <p className="text-slate-400 leading-relaxed">
+                      <strong className="text-amber-300">¿Para qué sirve?</strong> Está pensado únicamente si eres programador y tienes el código de esta aplicación alojado en tu propia cuenta de GitHub, y quieres que cada vez que alguien fiche se dispare automáticamente un Workflow de GitHub Actions (por ejemplo, para actualizar un archivo o compilar la web).
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-slate-300 pt-1">
+                      <li><strong className="text-white">GitHub Repositorio:</strong> tu nombre de usuario y el repositorio (ej: <code className="text-amber-400">usuario/liga-fantastica</code>).</li>
+                      <li><strong className="text-white">GitHub PAT:</strong> un token de acceso personal que creas en <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" className="text-blue-400 underline">GitHub Settings &rarr; Developer Settings &rarr; Personal access tokens</a> con permiso de <code className="text-amber-400">repo</code>.</li>
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">
+                    <strong className="text-slate-300">Nota:</strong> Si solo quieres avisos por Telegram, deja estos campos en blanco. Solo se utilizan si tienes un workflow automático configurado en tu repositorio de GitHub.
+                  </p>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* GitHub Repo */}
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                      GitHub Repositorio (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={notificationConfig.githubRepo || ''}
+                      onChange={(e) => setNotificationConfig({ ...notificationConfig, githubRepo: e.target.value.trim() })}
+                      placeholder="Ej: tu-usuario/liga-fantastica (o déjalo vacío)"
+                      className="w-full bg-slate-900 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500 placeholder:text-slate-600"
+                    />
+                  </div>
+
+                  {/* GitHub PAT */}
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                      GitHub Personal Access Token (PAT - Opcional)
+                    </label>
+                    <input
+                      type="password"
+                      value={notificationConfig.githubToken || ''}
+                      onChange={(e) => setNotificationConfig({ ...notificationConfig, githubToken: e.target.value.trim() })}
+                      placeholder="ghp_... (o déjalo vacío)"
+                      className="w-full bg-slate-900 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500 placeholder:text-slate-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleTestGithub}
                     disabled={isTestingGithub || !notificationConfig.githubRepo || !notificationConfig.githubToken}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
                   >
                     <Code className="w-3.5 h-3.5 text-amber-400" />
                     <span>{isTestingGithub ? 'Disparando GitHub...' : 'Probar Dispatch GitHub'}</span>
                   </button>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCopyCustomGas}
-                    className="bg-slate-950 hover:bg-slate-800 text-amber-400 border border-amber-500/40 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copiar Código.gs con Avisos Inyectados</span>
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs py-2 px-4 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>Guardar Configuración de Avisos</span>
-                  </button>
+                  {githubTestResult && (
+                    <div className={`p-2.5 rounded-xl text-xs font-semibold border flex items-center gap-2 ${
+                      githubTestResult.success ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                    }`}>
+                      {githubTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                      <span>GitHub: {githubTestResult.message}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Mensaje de feedback de test si hay */}
-              {telegramTestResult && (
-                <div className={`p-3 rounded-xl text-xs font-semibold border flex items-center gap-2 ${
-                  telegramTestResult.success ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
-                }`}>
-                  {telegramTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                  <span>Telegram: {telegramTestResult.message}</span>
-                </div>
-              )}
+              {/* Botones de acción generales */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={handleCopyCustomGas}
+                  className="bg-slate-950 hover:bg-slate-800 text-amber-400 border border-amber-500/40 text-xs font-bold py-2.5 px-4 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copiar Código.gs con Avisos Inyectados</span>
+                </button>
 
-              {githubTestResult && (
-                <div className={`p-3 rounded-xl text-xs font-semibold border flex items-center gap-2 ${
-                  githubTestResult.success ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
-                }`}>
-                  {githubTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                  <span>GitHub: {githubTestResult.message}</span>
-                </div>
-              )}
+                <button
+                  type="submit"
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider py-2.5 px-6 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Guardar Configuración de Avisos</span>
+                </button>
+              </div>
             </form>
           </div>
 
