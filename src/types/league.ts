@@ -152,6 +152,8 @@ export interface NotificationConfig {
 export interface LeagueConfig {
   gasUrl: string;
   firstContributionJornada: number;
+  teams?: string[];
+  tokens?: TeamToken[];
   customClubStyles: ClubStyle[];
   notificationConfig: NotificationConfig;
   updatedAt: string | null;

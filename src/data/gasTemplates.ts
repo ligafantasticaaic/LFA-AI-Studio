@@ -412,6 +412,8 @@ function doGet(e) {
         result = { success: true, data: getDraftHistory() };
       } else if (action === 'getTeamNames') {
         result = { success: true, data: getTeamNames() };
+      } else if (action === 'getTeamTokens' || action === 'getTokens') {
+        result = { success: true, data: getTeamTokensData(), tokens: getTeamTokensData() };
       } else if (action === 'getMaxJornada') {
         result = { success: true, data: getMaxJornada() };
       } else if (action === 'getStandings') {
@@ -535,14 +537,20 @@ function findSheet(ss, candidates) {
 function getFullSyncData() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 1. Equipos (1 sola lectura de rango)
+  // 1. Equipos y Tokens (1 sola lectura de rango)
   var sheetTeams = findSheet(ss, ['Equipos', 'Tokens', 'Teams', 'Clubs', 'Equipos_Tokens']);
   var teams = [];
+  var tokens = [];
   if (sheetTeams) {
     var tData = sheetTeams.getDataRange().getValues();
     for (var i = 1; i < tData.length; i++) {
-      if (tData[i][0] && String(tData[i][0]).trim() !== '') {
-        teams.push(String(tData[i][0]).trim());
+      var tName = tData[i][0] ? String(tData[i][0]).trim() : '';
+      if (tName !== '') {
+        teams.push(tName);
+        var tToken = tData[i][1] ? String(tData[i][1]).trim() : '';
+        if (tToken) {
+          tokens.push({ team: tName, token: tToken });
+        }
       }
     }
   }
@@ -841,12 +849,32 @@ function getFullSyncData() {
     success: true,
     maxJornada: maxJ,
     teams: teams,
+    tokens: tokens,
     players: players,
     lineups: lineups,
     transfers: transfers,
     drafts: drafts,
     syncedAt: new Date().toISOString()
   };
+}
+
+/**
+ * Helper para obtener tokens de equipos
+ */
+function getTeamTokensData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = findSheet(ss, ['Equipos', 'Tokens', 'Teams', 'Clubs', 'Equipos_Tokens']);
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  var list = [];
+  for (var i = 1; i < data.length; i++) {
+    var tName = data[i][0] ? String(data[i][0]).trim() : '';
+    var tToken = data[i][1] ? String(data[i][1]).trim() : '';
+    if (tName) {
+      list.push({ team: tName, token: tToken });
+    }
+  }
+  return list;
 }
 
 /**

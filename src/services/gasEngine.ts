@@ -67,21 +67,21 @@ export function parseCleanNumber(val: any): number {
 
 // Initial Starter Dataset
 const INITIAL_TEAMS: string[] = [
-  'Galácticos FC',
-  'Tiki-Taka United',
-  'La Saeta Rubia',
-  'Furia Rojiblanca',
-  'Boquerones CF',
-  'Dream Team 92',
+  'BRIKKOMARIAN',
+  'DOVIS',
+  'FREDERER',
+  'LA AUDINETA',
+  'MERENDOLO',
+  'PLAYA DE CUEVA',
 ];
 
 const INITIAL_TOKENS: TeamToken[] = [
-  { team: 'Galácticos FC', token: 'a81e9f12-4c22-44b2-9d21-9128aa90c811' },
-  { team: 'Tiki-Taka United', token: 'b73d8a45-5e33-41c3-8e32-8239bb01d922' },
-  { team: 'La Saeta Rubia', token: 'c64e7b56-6f44-42d4-9f43-7340cc12e033' },
-  { team: 'Furia Rojiblanca', token: 'd55f6c67-7a55-43e5-af54-6451dd23f144' },
-  { team: 'Boquerones CF', token: 'e46a5d78-8b66-44f6-b065-5562ee34a255' },
-  { team: 'Dream Team 92', token: 'f37b4e89-9c77-45a7-c176-4673ff45b366' },
+  { team: 'BRIKKOMARIAN', token: 'a81e9f12-4c22-44b2-9d21-9128aa90c811' },
+  { team: 'DOVIS', token: 'b73d8a45-5e33-41c3-8e32-8239bb01d922' },
+  { team: 'FREDERER', token: 'c64e7b56-6f44-42d4-9f43-7340cc12e033' },
+  { team: 'LA AUDINETA', token: 'd55f6c67-7a55-43e5-af54-6451dd23f144' },
+  { team: 'MERENDOLO', token: 'e46a5d78-8b66-44f6-b065-5562ee34a255' },
+  { team: 'PLAYA DE CUEVA', token: 'f37b4e89-9c77-45a7-c176-4673ff45b366' },
 ];
 
 const INITIAL_REAL_TEAMS: string[] = [
@@ -396,6 +396,26 @@ class GasEngineService {
           changed = true;
         }
 
+        // Equipos y tokens desde el servidor central
+        if (Array.isArray(data.teams) && data.teams.length > 0) {
+          const validTeams = data.teams.map((t: any) => String(t || '').trim()).filter(Boolean);
+          if (validTeams.length > 0) {
+            this.teams = validTeams;
+            localStorage.setItem('lfa_teams', JSON.stringify(this.teams));
+            changed = true;
+          }
+        }
+
+        if (Array.isArray(data.tokens) && data.tokens.length > 0) {
+          this.tokens = data.tokens;
+          localStorage.setItem('lfa_tokens', JSON.stringify(this.tokens));
+          changed = true;
+        }
+
+        if (this.ensureTokensMatchTeams()) {
+          changed = true;
+        }
+
         // Configuración de notificaciones
         if (data.notificationConfig && typeof data.notificationConfig === 'object') {
           this.notificationConfig = {
@@ -425,6 +445,8 @@ class GasEngineService {
     const payload = {
       gasUrl: partial?.gasUrl !== undefined ? partial.gasUrl : this.gasUrl,
       firstContributionJornada: partial?.firstContributionJornada !== undefined ? partial.firstContributionJornada : this.firstContributionJornada,
+      teams: partial?.teams !== undefined ? partial.teams : this.teams,
+      tokens: partial?.tokens !== undefined ? partial.tokens : this.tokens,
       customClubStyles: partial?.customClubStyles !== undefined ? partial.customClubStyles : this.customClubStyles,
       notificationConfig: partial?.notificationConfig !== undefined ? partial.notificationConfig : this.notificationConfig,
       adminPassword: adminPassword || ADMIN_PASSWORD
@@ -912,9 +934,32 @@ class GasEngineService {
 
       // Actualizar lista de equipos si viene en la respuesta
       if (Array.isArray(data.teams) && data.teams.length > 0) {
-        this.teams = data.teams;
-        updatedTeamsCount = data.teams.length;
+        const remoteTeams = data.teams.map((t: any) => String(t || '').trim()).filter(Boolean);
+        if (remoteTeams.length > 0) {
+          this.teams = remoteTeams;
+          updatedTeamsCount = this.teams.length;
+        }
       }
+
+      // Actualizar tokens si vienen de la hoja de cálculo
+      if (Array.isArray(data.tokens) && data.tokens.length > 0) {
+        data.tokens.forEach((tk: any) => {
+          const tTeam = String(tk.team || '').trim();
+          const tVal = String(tk.token || '').trim();
+          if (tTeam && tVal) {
+            const idx = this.tokens.findIndex(t => t.team.toLowerCase() === tTeam.toLowerCase());
+            if (idx !== -1) {
+              this.tokens[idx].token = tVal;
+              this.tokens[idx].team = tTeam;
+            } else {
+              this.tokens.push({ team: tTeam, token: tVal });
+            }
+          }
+        });
+      }
+
+      // Garantizar que todos los equipos de la liga tengan su token
+      this.ensureTokensMatchTeams();
 
       // Actualizar jugadores si vienen en la respuesta (con deduplicación por nombre)
       if (Array.isArray(data.players) && data.players.length > 0) {
@@ -1110,6 +1155,13 @@ class GasEngineService {
 
       this.teams = savedTeams ? JSON.parse(savedTeams) : [...INITIAL_TEAMS];
       this.tokens = savedTokens ? JSON.parse(savedTokens) : [...INITIAL_TOKENS];
+
+      // Purge old demo teams if they were saved in localStorage
+      const demoNames = new Set(['galácticos fc', 'tiki-taka united', 'la saeta rubia', 'furia rojiblanca', 'boquerones cf', 'dream team 92']);
+      if (!Array.isArray(this.teams) || this.teams.length === 0 || this.teams.every(t => demoNames.has(String(t).trim().toLowerCase()))) {
+        this.teams = [...INITIAL_TEAMS];
+      }
+      this.ensureTokensMatchTeams();
       if (savedPlayers) {
         try {
           const parsed = JSON.parse(savedPlayers);
@@ -2122,10 +2174,77 @@ class GasEngineService {
     return String(password || '').trim() === ADMIN_PASSWORD;
   }
 
+  public ensureTokensMatchTeams(): boolean {
+    if (!Array.isArray(this.teams) || this.teams.length === 0) {
+      this.teams = [...INITIAL_TEAMS];
+    }
+
+    const currentTeamsMap = new Map<string, string>(); // lowerCase -> originalCase
+    this.teams.forEach(t => {
+      const trimmed = String(t || '').trim();
+      if (trimmed) currentTeamsMap.set(trimmed.toLowerCase(), trimmed);
+    });
+
+    const demoTeamNames = new Set([
+      'galácticos fc',
+      'tiki-taka united',
+      'la saeta rubia',
+      'furia rojiblanca',
+      'boquerones cf',
+      'dream team 92'
+    ]);
+
+    const hasRealTeams = Array.from(currentTeamsMap.keys()).some(k => !demoTeamNames.has(k));
+
+    // Filter tokens to keep only those belonging to currently active teams in this.teams
+    const cleanTokens: TeamToken[] = [];
+    const seenTokenTeams = new Set<string>();
+
+    for (const tk of (this.tokens || [])) {
+      const tkName = String(tk.team || '').trim();
+      const tkLower = tkName.toLowerCase();
+      if (!tkLower) continue;
+
+      // If we have real teams, discard any demo tokens that aren't in this.teams
+      if (hasRealTeams && demoTeamNames.has(tkLower) && !currentTeamsMap.has(tkLower)) {
+        continue;
+      }
+
+      if (currentTeamsMap.has(tkLower) && !seenTokenTeams.has(tkLower)) {
+        cleanTokens.push({
+          team: currentTeamsMap.get(tkLower)!,
+          token: String(tk.token || '').trim() || crypto.randomUUID()
+        });
+        seenTokenTeams.add(tkLower);
+      }
+    }
+
+    // Ensure every team in this.teams has a valid token
+    for (const [lowerName, originalName] of currentTeamsMap.entries()) {
+      if (!seenTokenTeams.has(lowerName)) {
+        const defaultMatch = INITIAL_TOKENS.find(it => it.team.toLowerCase() === lowerName);
+        cleanTokens.push({
+          team: originalName,
+          token: defaultMatch ? defaultMatch.token : crypto.randomUUID()
+        });
+        seenTokenTeams.add(lowerName);
+      }
+    }
+
+    let modified = false;
+    if (JSON.stringify(this.tokens) !== JSON.stringify(cleanTokens)) {
+      this.tokens = cleanTokens;
+      modified = true;
+      this.saveState();
+    }
+    return modified;
+  }
+
   public getTeamTokensAdmin(adminPass: string): { success: boolean; message?: string; tokens: TeamToken[] } {
     if (!this.verifyAdminPassword(adminPass)) {
       return { success: false, message: 'Acceso no autorizado.', tokens: [] };
     }
+    this.ensureTokensMatchTeams();
     return { success: true, tokens: [...this.tokens] };
   }
 
@@ -2145,11 +2264,14 @@ class GasEngineService {
     const existingIdx = this.tokens.findIndex(t => t.team.toLowerCase() === team.toLowerCase());
     if (existingIdx !== -1) {
       this.tokens[existingIdx].token = token;
+      this.tokens[existingIdx].team = team;
     } else {
       this.tokens.push({ team, token });
     }
 
     this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ teams: this.teams, tokens: this.tokens }, adminPass).catch(() => {});
     return { success: true, message: `Equipo '${team}' añadido correctamente con token.` };
   }
 
@@ -2174,6 +2296,8 @@ class GasEngineService {
     const teamIdx = this.teams.findIndex(t => t.toLowerCase() === oldTarget);
     if (teamIdx !== -1) {
       this.teams[teamIdx] = newTeam;
+    } else {
+      this.teams.push(newTeam);
     }
 
     // Update lineups & histories
@@ -2188,6 +2312,8 @@ class GasEngineService {
     });
 
     this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ teams: this.teams, tokens: this.tokens }, adminPass).catch(() => {});
     return { success: true, message: 'Equipo y token actualizados correctamente.' };
   }
 
@@ -2199,6 +2325,8 @@ class GasEngineService {
     this.tokens = this.tokens.filter(t => t.team.toLowerCase() !== target);
     this.teams = this.teams.filter(t => t.toLowerCase() !== target);
     this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ teams: this.teams, tokens: this.tokens }, adminPass).catch(() => {});
     return { success: true, message: `Equipo '${teamName}' eliminado.` };
   }
 
@@ -2211,6 +2339,8 @@ class GasEngineService {
       token: crypto.randomUUID()
     }));
     this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ teams: this.teams, tokens: this.tokens }, adminPass).catch(() => {});
     return { success: true, message: `Se generaron ${this.tokens.length} tokens correctamente.` };
   }
 

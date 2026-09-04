@@ -480,7 +480,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               type="password"
               value={adminPass}
               onChange={(e) => setAdminPass(e.target.value)}
-              placeholder="Introduce la clave admin (por defecto: admin)"
+              placeholder="Introduce la clave de administrador"
               className="flex-1 bg-slate-950 border border-slate-700 text-white font-semibold py-2.5 px-4 rounded-xl text-sm focus:outline-none focus:border-amber-500 transition placeholder:text-slate-600"
             />
             <button
@@ -490,9 +490,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
               Acceder
             </button>
           </form>
-          <p className="text-[11px] text-slate-500">
-            * Contraseña por defecto según Código.gs: <strong className="text-slate-400 font-mono">admin</strong>
-          </p>
         </div>
       ) : (
         <div className="space-y-6">
