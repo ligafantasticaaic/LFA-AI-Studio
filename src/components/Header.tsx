@@ -120,32 +120,21 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 border border-slate-800 rounded-xl">
               <button
                 onClick={() => copyShareLink('player')}
-                title="Copiar enlace para los jugadores participantes (oculta completamente el acceso a Admin)"
+                title="Copiar enlace general para los jugadores participantes (la URL limpia abre directamente en Modo Jugador sin acceso a Admin)"
                 className="bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/40 text-slate-300 hover:text-amber-400 text-[11px] font-bold py-1 px-2.5 rounded-lg transition flex items-center gap-1 cursor-pointer"
               >
                 {copiedLink === 'player' ? <Check className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3" />}
-                <span>{copiedLink === 'player' ? '¡Enlace Jugadores Copiado!' : 'Enlace para Jugadores'}</span>
+                <span>{copiedLink === 'player' ? '¡Enlace Jugadores Copiado!' : 'Copiar Enlace Jugadores'}</span>
               </button>
 
               <button
                 onClick={() => gasEngine.setPlayerMode(true)}
-                title="Ver la app exactamente como la ven los jugadores (oculta Admin)"
+                title="Ver la app exactamente como la ven los jugadores (oculta Admin y limpia la URL)"
                 className="bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
               </button>
             </div>
-          )}
-
-          {isPlayerMode && (
-            <button
-              onClick={() => gasEngine.setPlayerMode(false)}
-              title="Volver a la vista completa de Administrador"
-              className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-bold py-1 px-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Modo Admin</span>
-            </button>
           )}
 
           {gasEngine.isRemoteConnected() ? (

@@ -2517,18 +2517,20 @@ class GasEngineService {
   }
 
   public isPlayerMode(): boolean {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return true;
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
-    const player = params.get('player');
+    const admin = params.get('admin');
     const rol = params.get('rol');
-    if (mode === 'player' || player === '1' || rol === 'jugador') {
-      return true;
-    }
-    if (mode === 'admin' || player === '0' || rol === 'admin') {
+
+    // Modo Administrador se activa ÚNICAMENTE si la URL incluye explícitamente ?mode=admin, ?admin=1, ?admin=true o ?rol=admin
+    if (mode === 'admin' || admin === '1' || admin === 'true' || rol === 'admin') {
       return false;
     }
-    return this.playerModeActive;
+
+    // El enlace general (ej: https://ligafantasticaaic.github.io/LFA-AI-Studio/) y cualquier acceso sin parámetro
+    // es por defecto MODO JUGADOR (la pestaña de Admin permanece 100% oculta e inaccesible)
+    return true;
   }
 
   public setPlayerMode(active: boolean): void {
@@ -2536,9 +2538,13 @@ class GasEngineService {
     try {
       const url = new URL(window.location.href);
       if (active) {
-        url.searchParams.set('mode', 'player');
-      } else {
+        // Enlace general sin parámetros = modo jugador
         url.searchParams.delete('mode');
+        url.searchParams.delete('admin');
+        url.searchParams.delete('rol');
+      } else {
+        // Para modo administrador se añade ?mode=admin a la URL
+        url.searchParams.set('mode', 'admin');
       }
       window.history.replaceState({}, document.title, url.toString());
     } catch {}
@@ -2549,14 +2555,104 @@ class GasEngineService {
     if (typeof window === 'undefined') return '';
     const origin = window.location.origin;
     const pathname = window.location.pathname;
-    return `${origin}${pathname}?mode=player`;
+    // Enlace general sin parámetros: abre por defecto en modo jugador
+    return `${origin}${pathname}`;
   }
 
   public getAdminShareUrl(): string {
     if (typeof window === 'undefined') return '';
     const origin = window.location.origin;
     const pathname = window.location.pathname;
-    return `${origin}${pathname}`;
+    // Enlace con ?mode=admin para acceder como administrador
+    return `${origin}${pathname}?mode=admin`;
+  }
+
+  public async diagnoseTelegram(token: string): Promise<{
+    ok: boolean;
+    error?: string;
+    bot?: { id: number; username: string; first_name: string; can_join_groups?: boolean };
+    detectedChats?: Array<{ id: string; title: string; type: string; isGroup: boolean; isChannel: boolean; username: string }>;
+  }> {
+    const cleanToken = String(token || '').trim();
+    if (!cleanToken) {
+      return { ok: false, error: 'Introduce el Bot Token de Telegram para diagnosticar.' };
+    }
+    if (cleanToken.startsWith('@')) {
+      return { ok: false, error: 'Has introducido un nombre de usuario (@...) en vez del token. El Bot Token tiene formato números:letras (ej: 123456789:ABCdef...).' };
+    }
+    if (!cleanToken.includes(':')) {
+      return { ok: false, error: 'El formato del Bot Token debe incluir dos puntos ":" (ej: 748392019:AAHkjl8...).' };
+    }
+
+    // 1. Intento vía backend server
+    try {
+      const resp = await fetch('/api/telegram-diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramBotToken: cleanToken })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        return data;
+      }
+      const errData = await resp.json().catch(() => null);
+      if (errData?.error && resp.status !== 405 && resp.status !== 404) {
+        return { ok: false, error: errData.error };
+      }
+    } catch {}
+
+    // 2. Intento directo del navegador (CORS soportado por Telegram Bot API)
+    try {
+      const meResp = await fetch(`https://api.telegram.org/bot${cleanToken}/getMe`);
+      const meData = await meResp.json().catch(() => null);
+      if (!meResp.ok || !meData?.ok) {
+        const desc = meData?.description || `HTTP ${meResp.status}`;
+        return {
+          ok: false,
+          error: `Telegram rechazó el Bot Token: "${desc}". Verifica haberlo copiado completo de @BotFather.`
+        };
+      }
+
+      const bot = {
+        id: meData.result.id,
+        username: meData.result.username,
+        first_name: meData.result.first_name,
+        can_join_groups: meData.result.can_join_groups ?? true
+      };
+
+      const updatesResp = await fetch(`https://api.telegram.org/bot${cleanToken}/getUpdates`);
+      const updatesData = await updatesResp.json().catch(() => null);
+
+      const foundChatsMap = new Map<string, any>();
+      if (updatesResp.ok && updatesData?.ok && Array.isArray(updatesData.result)) {
+        for (const u of updatesData.result) {
+          const item = u.message || u.channel_post || u.my_chat_member || u.chat_member;
+          const chat = item?.chat;
+          if (chat && chat.id) {
+            const chatIdStr = String(chat.id);
+            const isGroup = chat.type === 'group' || chat.type === 'supergroup';
+            const isChannel = chat.type === 'channel';
+            const label = chat.title || chat.username || `${chat.first_name || ''} ${chat.last_name || ''}`.trim() || 'Chat';
+            foundChatsMap.set(chatIdStr, {
+              id: chatIdStr,
+              title: label,
+              type: chat.type,
+              isGroup,
+              isChannel,
+              username: chat.username || ''
+            });
+          }
+        }
+      }
+
+      return {
+        ok: true,
+        bot,
+        detectedChats: Array.from(foundChatsMap.values())
+      };
+    } catch (directErr: any) {
+      return { ok: false, error: `Error conectando con la API de Telegram: ${directErr?.message || 'Error de red'}` };
+    }
   }
 
   public ensureTokensMatchTeams(): boolean {

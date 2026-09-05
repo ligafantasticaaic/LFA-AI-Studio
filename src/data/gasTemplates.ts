@@ -359,29 +359,48 @@ function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jo
   }
 
   // 2. Notificación directa a Telegram (inmediata sin esperar runners)
-  if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
+  var cleanTgToken = (typeof TELEGRAM_BOT_TOKEN !== "undefined" && TELEGRAM_BOT_TOKEN) ? String(TELEGRAM_BOT_TOKEN).trim() : "";
+  var cleanTgChatId = (typeof TELEGRAM_CHAT_ID !== "undefined" && TELEGRAM_CHAT_ID) ? String(TELEGRAM_CHAT_ID).trim() : "";
+
+  if (cleanTgToken && cleanTgChatId) {
     try {
-      var mensaje = "🚨 *¡NUEVO FICHAJE EN LA LIGA FANTÁSTICA!* ⚽\\n" +
-                    "━━━━━━━━━━━━━━━━━━━━\\n" +
-                    "🏟 *Equipo:* " + equipo + "\\n" +
-                    "🟢 *Alta:* " + jugadorEntra + "\\n" +
-                    "🔴 *Baja:* " + jugadorSale + "\\n" +
-                    "💰 *Coste:* " + coste + " €\\n" +
-                    "📅 *Jornada:* J" + jornada + "\\n" +
-                    "📝 *Tipo:* " + (tipo || "Normal") + "\\n" +
-                    "━━━━━━━━━━━━━━━━━━━━\\n" +
+      var mensaje = "🚨 *¡NUEVO FICHAJE EN LA LIGA FANTÁSTICA!* ⚽\n" +
+                    "━━━━━━━━━━━━━━━━━━━━\n" +
+                    "🏟 *Equipo:* " + equipo + "\n" +
+                    "🟢 *Alta:* " + jugadorEntra + "\n" +
+                    "🔴 *Baja:* " + jugadorSale + "\n" +
+                    "💰 *Coste:* " + coste + " €\n" +
+                    "📅 *Jornada:* J" + jornada + "\n" +
+                    "📝 *Tipo:* " + (tipo || "Normal") + "\n" +
+                    "━━━━━━━━━━━━━━━━━━━━\n" +
                     "🏆 _Liga Fantástica de Amigos_";
-      var tgUrl = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendMessage";
-      UrlFetchApp.fetch(tgUrl, {
+      var tgUrl = "https://api.telegram.org/bot" + cleanTgToken + "/sendMessage";
+      var tgResp = UrlFetchApp.fetch(tgUrl, {
         method: "post",
         contentType: "application/json",
         payload: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
+          chat_id: cleanTgChatId,
           text: mensaje,
           parse_mode: "Markdown"
         }),
         muteHttpExceptions: true
       });
+      var respCode = tgResp.getResponseCode();
+      var respText = tgResp.getContentText();
+      Logger.log("Telegram (" + cleanTgChatId + ") response: " + respCode + " -> " + respText);
+
+      // Si falla por formato Markdown (ej: guiones bajos o asteriscos en nombres), reintentamos en texto plano
+      if (respCode >= 400 && respText.indexOf("parse") !== -1) {
+        UrlFetchApp.fetch(tgUrl, {
+          method: "post",
+          contentType: "application/json",
+          payload: JSON.stringify({
+            chat_id: cleanTgChatId,
+            text: mensaje.replace(/[*_]/g, "")
+          }),
+          muteHttpExceptions: true
+        });
+      }
     } catch (errTg) {
       Logger.log("Error enviando mensaje a Telegram: " + errTg.message);
     }

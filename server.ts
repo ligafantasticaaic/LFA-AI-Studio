@@ -169,6 +169,87 @@ async function startServer() {
     res.json({ success: true, message: '¡Contraseña de administrador actualizada correctamente!', config: saved });
   });
 
+  // Endpoint de diagnóstico para Bot de Telegram y detección automática de chats
+  app.post('/api/telegram-diagnose', async (req, res) => {
+    const { telegramBotToken } = req.body || {};
+    const cleanToken = String(telegramBotToken || '').trim();
+
+    if (!cleanToken) {
+      return res.status(400).json({ error: 'Debes proporcionar el Bot Token de Telegram para realizar el diagnóstico.' });
+    }
+
+    if (cleanToken.startsWith('@')) {
+      return res.status(400).json({
+        error: `Has introducido un nombre de usuario ("${cleanToken}") en lugar del token. El Bot Token te lo da @BotFather y tiene formato 123456789:AAHk...`
+      });
+    }
+
+    if (!cleanToken.includes(':')) {
+      return res.status(400).json({
+        error: 'El formato del Bot Token no es correcto. Debe contener dos puntos ":" separando los dígitos numéricos de las letras (ej: 748392019:AAHkjl8...).'
+      });
+    }
+
+    try {
+      // 1. Validar el Bot con getMe
+      const meResp = await fetch(`https://api.telegram.org/bot${cleanToken}/getMe`);
+      const meData = await meResp.json().catch(() => null);
+
+      if (!meResp.ok || !meData?.ok) {
+        const desc = meData?.description || `HTTP ${meResp.status}`;
+        return res.status(400).json({
+          ok: false,
+          error: `Telegram rechazó el Bot Token: "${desc}". Verifica que lo has copiado completo de @BotFather sin espacios adicionales.`
+        });
+      }
+
+      const bot = {
+        id: meData.result.id,
+        username: meData.result.username,
+        first_name: meData.result.first_name,
+        can_join_groups: meData.result.can_join_groups ?? true
+      };
+
+      // 2. Obtener actualizaciones recientes con getUpdates para encontrar los Chat IDs
+      const updatesResp = await fetch(`https://api.telegram.org/bot${cleanToken}/getUpdates`);
+      const updatesData = await updatesResp.json().catch(() => null);
+
+      const foundChatsMap = new Map<string, any>();
+
+      if (updatesResp.ok && updatesData?.ok && Array.isArray(updatesData.result)) {
+        for (const u of updatesData.result) {
+          const item = u.message || u.channel_post || u.my_chat_member || u.chat_member;
+          const chat = item?.chat;
+          if (chat && chat.id) {
+            const chatIdStr = String(chat.id);
+            const isGroup = chat.type === 'group' || chat.type === 'supergroup';
+            const isChannel = chat.type === 'channel';
+            const label = chat.title || chat.username || `${chat.first_name || ''} ${chat.last_name || ''}`.trim() || 'Chat';
+            foundChatsMap.set(chatIdStr, {
+              id: chatIdStr,
+              title: label,
+              type: chat.type,
+              isGroup,
+              isChannel,
+              username: chat.username || ''
+            });
+          }
+        }
+      }
+
+      const detectedChats = Array.from(foundChatsMap.values());
+
+      return res.json({
+        ok: true,
+        bot,
+        detectedChats,
+        hasChats: detectedChats.length > 0
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: `Error de red al consultar la API de Telegram: ${err.message}` });
+    }
+  });
+
   // Test Telegram or GitHub Actions webhook
   app.post('/api/notify-fichaje-test', async (req, res) => {
     const { telegramBotToken, telegramChatId, githubRepo, githubToken, testType, sampleData } = req.body || {};
@@ -234,7 +315,7 @@ async function startServer() {
     const message = `🚨 *¡PRUEBA DE FICHAJE EN LA LIGA FANTÁSTICA!* ⚽\n━━━━━━━━━━━━━━━━━━━━\n🏟 *Equipo:* ${sample.equipo}\n🟢 *Alta:* ${sample.jugadorEntra}\n🔴 *Baja:* ${sample.jugadorSale}\n💰 *Coste:* ${sample.coste} €\n📅 *Jornada:* J${sample.jornada}\n📝 *Tipo:* ${sample.tipo}\n━━━━━━━━━━━━━━━━━━━━\n✅ _Conexión Apps Script / Telegram verificada correctamente._`;
 
     try {
-      const tgResp = await fetch(`https://api.telegram.org/bot${cleanBotToken}/sendMessage`, {
+      let tgResp = await fetch(`https://api.telegram.org/bot${cleanBotToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -244,14 +325,26 @@ async function startServer() {
         })
       });
 
-      const rawText = await tgResp.text();
+      let rawText = await tgResp.text();
       let tgData: any;
       try {
         tgData = JSON.parse(rawText);
       } catch {
-        return res.status(400).json({
-          error: `Telegram rechazó la petición (HTTP ${tgResp.status}). Comprueba que el Bot Token es exactamente el que te entregó @BotFather y no tiene espacios ni caracteres extraños.`
+        tgData = null;
+      }
+
+      // Reintento sin markdown si hubo fallo de formato
+      if (!tgResp.ok && tgData?.description?.includes("can't parse entities")) {
+        tgResp = await fetch(`https://api.telegram.org/bot${cleanBotToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: cleanChatId,
+            text: message.replace(/[*_]/g, '')
+          })
         });
+        rawText = await tgResp.text();
+        try { tgData = JSON.parse(rawText); } catch {}
       }
 
       if (tgData && tgData.ok) {
@@ -261,7 +354,7 @@ async function startServer() {
       const desc = tgData?.description || 'Error desconocido de Telegram';
       if (desc.includes('chat not found')) {
         return res.status(400).json({
-          error: `Chat no encontrado (${cleanChatId}). Asegúrate de haber iniciado conversación con el bot en Telegram o de haber añadido al bot como miembro/admin en tu grupo.`
+          error: `Telegram indica: "Chat no encontrado" (${cleanChatId}).\n\n¿Por qué ocurre esto?\n1. Si es un GRUPO: Debes añadir a tu bot como miembro del grupo en Telegram. Telegram no permite enviar mensajes a grupos donde el bot no está dentro.\n2. Si es un GRUPO o SUPERGRUPO: los IDs siempre empiezan por "-100" (ejemplo: "-100${cleanChatId.replace(/^-100/, '').replace(/^-/, '')}").\n3. Si es un CANAL: el bot debe ser Administrador con permisos de publicación.\n4. Si es un chat PRIVADO contigo: debes buscar a tu bot en Telegram y pulsar el botón "Iniciar" (/start).`
         });
       }
       if (desc.includes('bot was blocked') || desc.includes("bot can't initiate")) {

@@ -39,7 +39,8 @@ import {
   ShieldCheck,
   Save,
   Users,
-  FileCode
+  FileCode,
+  Bot
 } from 'lucide-react';
 import { GAS_TEMPLATES, generateCustomGasCode } from '../data/gasTemplates';
 
@@ -87,6 +88,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showTelegramGuide, setShowTelegramGuide] = useState<boolean>(false);
   const [showGithubGuide, setShowGithubGuide] = useState<boolean>(false);
+  const [isDiagnosingTelegram, setIsDiagnosingTelegram] = useState<boolean>(false);
+  const [telegramDiagnosisResult, setTelegramDiagnosisResult] = useState<any | null>(null);
 
   // 4. Contraseña de Administrador State
   const [currentPassChange, setCurrentPassChange] = useState<string>('');
@@ -253,6 +256,32 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setIsTestingTelegram(false);
     setTelegramTestResult(res);
     showAlert(res.message, res.success);
+  };
+
+  const handleDiagnoseTelegram = async () => {
+    if (!notificationConfig.telegramBotToken) {
+      showAlert('Introduce primero el Telegram Bot Token para realizar el diagnóstico.', false);
+      return;
+    }
+    setIsDiagnosingTelegram(true);
+    setTelegramDiagnosisResult(null);
+    try {
+      const res = await gasEngine.diagnoseTelegram(notificationConfig.telegramBotToken);
+      setIsDiagnosingTelegram(false);
+      setTelegramDiagnosisResult(res);
+      if (res.ok) {
+        if (res.detectedChats && res.detectedChats.length > 0) {
+          showAlert(`¡Bot verificado! Se detectaron ${res.detectedChats.length} chat(s)/grupo(s).`, true);
+        } else {
+          showAlert(`Bot verificado (@${res.bot?.username}), pero no tiene chats registrados todavía.`, true);
+        }
+      } else {
+        showAlert(res.error || 'No se pudo conectar con Telegram.', false);
+      }
+    } catch (err: any) {
+      setIsDiagnosingTelegram(false);
+      showAlert(`Error en el diagnóstico: ${err?.message || 'Error de conexión'}`, false);
+    }
   };
 
   const handleTestGithub = async () => {
@@ -933,14 +962,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
                       <Users className="w-3.5 h-3.5" />
-                      <span>Enlace Oficial para Jugadores</span>
+                      <span>Enlace General para Jugadores (Por Defecto)</span>
                     </span>
                     <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-md border border-emerald-500/30">
-                      Recomendado para el Grupo
+                      URL Limpia
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    Este enlace activa el <strong className="text-white">Modo Jugador</strong>: la pestaña de Administrador queda <strong className="text-emerald-400">totalmente oculta e inaccesible</strong> en la barra de navegación. Los participantes solo ven clasificaciones, campo táctico, draft, mercado, premios y fichajes.
+                    El enlace general <strong className="text-white font-mono">https://ligafantasticaaic.github.io/LFA-AI-Studio/</strong> abre por defecto en <strong className="text-emerald-400">Modo Jugador</strong>: la pestaña y funciones de Administrador quedan <strong className="text-white">100% ocultas e inaccesibles</strong>.
                   </p>
                   <button
                     type="button"
@@ -948,7 +977,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                   >
                     {copiedLinkType === 'player' ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedLinkType === 'player' ? '¡Enlace de Jugadores Copiado!' : 'Copiar Enlace para Jugadores (Sin Admin)'}</span>
+                    <span>{copiedLinkType === 'player' ? '¡Enlace de Jugadores Copiado!' : 'Copiar Enlace General para Jugadores'}</span>
                   </button>
                 </div>
 
@@ -957,14 +986,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
                       <Lock className="w-3.5 h-3.5" />
-                      <span>Enlace de Administrador</span>
+                      <span>Enlace de Administrador (?mode=admin)</span>
                     </span>
                     <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-500/30">
                       Solo Organizador
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Enlace completo que muestra la pestaña de Admin protegida por contraseña para configurar la competición.
+                    Añade <code className="text-amber-400 font-bold">?mode=admin</code> al final de la URL para desbloquear el panel de Administrador con contraseña y poder gestionar tokens, colores, fichajes y avisos.
                   </p>
                   <button
                     type="button"
@@ -972,7 +1001,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     className="w-full bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {copiedLinkType === 'admin' ? <Check className="w-3.5 h-3.5 text-amber-300" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedLinkType === 'admin' ? '¡Enlace de Admin Copiado!' : 'Copiar Enlace de Administrador'}</span>
+                    <span>{copiedLinkType === 'admin' ? '¡Enlace de Admin Copiado!' : 'Copiar Enlace de Administrador (?mode=admin)'}</span>
                   </button>
                 </div>
               </div>
@@ -1689,13 +1718,37 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
                       placeholder="Ej: -1001982736450"
                       className="w-full bg-slate-900 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-blue-500"
                     />
-                    <span className="text-[10px] text-slate-400 block">
-                      ID del grupo (empieza por -100...) o tu ID personal si quieres avisos individuales.
-                    </span>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>ID del grupo (debe empezar por <strong>-100...</strong>) o ID personal.</span>
+                      {notificationConfig.telegramChatId && !notificationConfig.telegramChatId.startsWith('-') && notificationConfig.telegramChatId.length >= 8 && (
+                        <button
+                          type="button"
+                          onClick={() => setNotificationConfig({
+                            ...notificationConfig,
+                            telegramChatId: `-100${notificationConfig.telegramChatId.replace(/^-/, '')}`
+                          })}
+                          className="text-amber-400 hover:underline font-bold cursor-pointer"
+                        >
+                          ¿Convertir a grupo (-100...)?
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
+                {/* Acciones de Telegram: Diagnosticar y Probar */}
                 <div className="pt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDiagnoseTelegram}
+                    disabled={isDiagnosingTelegram || !notificationConfig.telegramBotToken}
+                    className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Valida el token con la API de Telegram y busca los Chat IDs de tus grupos automáticamente"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-purple-400 ${isDiagnosingTelegram ? 'animate-spin' : ''}`} />
+                    <span>{isDiagnosingTelegram ? 'Diagnosticando Bot...' : 'Diagnosticar y Detectar Chats'}</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={handleTestTelegram}
@@ -1703,18 +1756,96 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
                     className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <Send className="w-3.5 h-3.5 text-blue-400" />
-                    <span>{isTestingTelegram ? 'Enviando prueba a Telegram...' : 'Probar Aviso en Telegram'}</span>
+                    <span>{isTestingTelegram ? 'Enviando prueba...' : 'Probar Aviso en Telegram'}</span>
                   </button>
-
-                  {telegramTestResult && (
-                    <div className={`p-2.5 rounded-xl text-xs font-semibold border flex items-center gap-2 ${
-                      telegramTestResult.success ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
-                    }`}>
-                      {telegramTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                      <span>{telegramTestResult.message}</span>
-                    </div>
-                  )}
                 </div>
+
+                {/* Resultado del Diagnóstico de Telegram */}
+                {telegramDiagnosisResult && (
+                  <div className={`p-4 rounded-xl text-xs border space-y-3 ${
+                    telegramDiagnosisResult.ok ? 'bg-slate-900/90 border-purple-500/40 text-slate-200' : 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+                  }`}>
+                    {telegramDiagnosisResult.ok ? (
+                      <>
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                          <div className="flex items-center gap-2">
+                            <Bot className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="font-bold text-white">
+                              Bot verificado: <span className="text-emerald-400">@{telegramDiagnosisResult.bot?.username}</span> ({telegramDiagnosisResult.bot?.first_name})
+                            </span>
+                          </div>
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded border border-emerald-500/30">
+                            Token Válido
+                          </span>
+                        </div>
+
+                        {telegramDiagnosisResult.detectedChats && telegramDiagnosisResult.detectedChats.length > 0 ? (
+                          <div className="space-y-2">
+                            <span className="text-[11px] font-bold text-slate-300 block">
+                              Grupos y chats detectados para tu bot (haz clic para asignar el ID):
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {telegramDiagnosisResult.detectedChats.map((c: any) => (
+                                <div key={c.id} className="p-2.5 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <span className="font-bold text-white text-xs truncate block">{c.title}</span>
+                                    <span className="text-[10px] font-mono text-slate-400 block truncate">
+                                      ID: <strong className="text-amber-400">{c.id}</strong> ({c.type})
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNotificationConfig({ ...notificationConfig, telegramChatId: c.id });
+                                      showAlert(`Chat ID "${c.id}" (${c.title}) seleccionado.`, true);
+                                    }}
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-2.5 py-1 rounded-md transition cursor-pointer shrink-0"
+                                  >
+                                    Usar este ID
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-amber-950/40 border border-amber-500/40 rounded-lg space-y-2 text-amber-200">
+                            <div className="flex items-center gap-2 font-bold text-amber-300">
+                              <AlertTriangle className="w-4 h-4 shrink-0" />
+                              <span>El bot está conectado, pero aún no tiene ningún grupo registrado</span>
+                            </div>
+                            <p className="text-[11px] text-slate-300 leading-relaxed m-0">
+                              Telegram <strong>no permite</strong> enviar mensajes a grupos si el bot no está dentro como miembro. Por esta razón Telegram devuelve el error <em>"chat not found"</em> (chat no existe).
+                            </p>
+                            <div className="bg-slate-950 p-2.5 rounded border border-slate-800 text-[11px] space-y-1">
+                              <span className="font-bold text-white block">Cómo solucionarlo en 1 minuto:</span>
+                              <ol className="list-decimal list-inside space-y-1 text-slate-300">
+                                <li>Abre Telegram y entra en el <strong className="text-white">grupo de tu liga</strong>.</li>
+                                <li>Pulsa en la información del grupo &gt; <strong className="text-amber-400">Añadir miembro</strong> y busca: <code className="text-emerald-400 font-mono font-bold">@{telegramDiagnosisResult.bot?.username}</code>.</li>
+                                <li>Escribe una palabra en el grupo (ejemplo: <code className="text-amber-400 font-mono">hola</code>).</li>
+                                <li>Vuelve a esta pantalla y pulsa el botón morado <strong className="text-white">"Diagnosticar y Detectar Chats"</strong>. Tu grupo aparecerá automáticamente para seleccionarlo.</li>
+                              </ol>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{telegramDiagnosisResult.error}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Resultado del Test de Telegram */}
+                {telegramTestResult && (
+                  <div className={`p-3 rounded-xl text-xs font-semibold border flex items-start gap-2.5 whitespace-pre-line leading-relaxed ${
+                    telegramTestResult.success ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+                  }`}>
+                    {telegramTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+                    <span>{telegramTestResult.message}</span>
+                  </div>
+                )}
               </div>
 
               {/* BLOQUE B: GitHub Actions Dispatch (100% Opcional) */}

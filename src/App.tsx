@@ -28,6 +28,13 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // En modo jugador (por defecto), nunca se puede visualizar la pestaña de admin
+  useEffect(() => {
+    if (gasEngine.isPlayerMode() && activeTab === 'admin') {
+      setActiveTab('index');
+    }
+  }, [activeTab]);
+
   const handleGoToField = (team: string, jornada: number) => {
     setFieldParams({ team, jornada });
     setActiveTab('campo');
