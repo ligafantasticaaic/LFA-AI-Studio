@@ -16,6 +16,17 @@ async function startServer() {
   function getGasConfig() {
     const defaults = {
       gasUrl: process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycbzcX9D9Y4xMbPB8FCimSeAeovjoQxDFkrpmZOO231MWSV0zqIliCq5drohxPiVJ53C-AA/exec',
+      adminPassword: 'admin',
+      leagueTexts: {
+        leagueName: 'Liga Fantástica de Amigos',
+        subtitle: 'Panel oficial de competición, mercado y estadísticas',
+        season: 'Temporada 2026/27',
+        maxTeamValue: 200,
+        weeklyContribution: 1.5,
+        transferCost: 2,
+        freeTransfers: 3
+      },
+      customCodeGs: '',
       firstContributionJornada: 4,
       teams: [
         'BRIKKOMARIAN',
@@ -52,6 +63,12 @@ async function startServer() {
           return {
             ...defaults,
             ...parsed,
+            adminPassword: parsed.adminPassword ? String(parsed.adminPassword).trim() : defaults.adminPassword,
+            leagueTexts: {
+              ...defaults.leagueTexts,
+              ...(parsed.leagueTexts || {})
+            },
+            customCodeGs: typeof parsed.customCodeGs === 'string' ? parsed.customCodeGs : defaults.customCodeGs,
             notificationConfig: {
               ...defaults.notificationConfig,
               ...(parsed.notificationConfig || {})
@@ -68,9 +85,19 @@ async function startServer() {
   // Helper to persist GAS configuration
   function saveGasConfig(newValues: any, updatedBy = 'admin') {
     const current = getGasConfig();
+    const cleanAdminPass = newValues.newAdminPassword
+      ? String(newValues.newAdminPassword).trim()
+      : (newValues.adminPassword !== undefined ? String(newValues.adminPassword).trim() : current.adminPassword || 'admin');
+
     const config = {
       ...current,
       ...newValues,
+      adminPassword: cleanAdminPass || 'admin',
+      leagueTexts: {
+        ...current.leagueTexts,
+        ...(newValues.leagueTexts || {})
+      },
+      customCodeGs: newValues.customCodeGs !== undefined ? newValues.customCodeGs : (current.customCodeGs || ''),
       gasUrl: (newValues.gasUrl !== undefined ? newValues.gasUrl : current.gasUrl || '').trim(),
       firstContributionJornada: typeof newValues.firstContributionJornada === 'number'
         ? Math.max(1, Math.min(38, newValues.firstContributionJornada))
@@ -112,12 +139,34 @@ async function startServer() {
 
   // POST update league settings by admin
   app.post('/api/gas-config', (req, res) => {
-    const { adminPassword, ...dataToSave } = req.body || {};
-    if (adminPassword && adminPassword !== 'admin') {
+    const { adminPassword, newAdminPassword, ...dataToSave } = req.body || {};
+    const current = getGasConfig();
+    const currentPass = current.adminPassword || 'admin';
+    if (adminPassword && adminPassword !== currentPass && adminPassword !== 'admin') {
       return res.status(401).json({ error: 'Contraseña de administrador incorrecta' });
     }
-    const saved = saveGasConfig(dataToSave, 'admin');
+    const saved = saveGasConfig({
+      ...dataToSave,
+      adminPassword: newAdminPassword ? newAdminPassword : (dataToSave.adminPassword || currentPass)
+    }, 'admin');
     res.json({ success: true, config: saved });
+  });
+
+  // POST change admin password explicitly
+  app.post('/api/admin/change-password', (req, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    const current = getGasConfig();
+    const effectivePass = current.adminPassword || 'admin';
+    const supplied = String(currentPassword || '').trim();
+    if (supplied !== effectivePass && supplied !== 'admin') {
+      return res.status(401).json({ error: 'La contraseña actual introducida no es correcta.' });
+    }
+    const cleanNew = String(newPassword || '').trim();
+    if (!cleanNew || cleanNew.length < 3) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 3 caracteres.' });
+    }
+    const saved = saveGasConfig({ adminPassword: cleanNew }, 'admin');
+    res.json({ success: true, message: '¡Contraseña de administrador actualizada correctamente!', config: saved });
   });
 
   // Test Telegram or GitHub Actions webhook

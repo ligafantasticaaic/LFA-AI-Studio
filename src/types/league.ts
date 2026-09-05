@@ -149,13 +149,26 @@ export interface NotificationConfig {
   directTelegram: boolean;
 }
 
+export interface LeagueTexts {
+  leagueName: string;
+  subtitle: string;
+  season: string;
+  maxTeamValue?: number;
+  weeklyContribution?: number;
+  transferCost?: number;
+  freeTransfers?: number;
+}
+
 export interface LeagueConfig {
   gasUrl: string;
+  adminPassword?: string;
   firstContributionJornada: number;
   teams?: string[];
   tokens?: TeamToken[];
   customClubStyles: ClubStyle[];
   notificationConfig: NotificationConfig;
+  leagueTexts?: LeagueTexts;
+  customCodeGs?: string;
   updatedAt: string | null;
   updatedBy?: string;
 }

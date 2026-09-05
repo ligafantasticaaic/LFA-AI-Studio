@@ -11,7 +11,8 @@ import {
   Clock, 
   Coins, 
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  Search
 } from 'lucide-react';
 
 interface TransferRowState {
@@ -33,6 +34,9 @@ export const FichajesView: React.FC = () => {
   const [transferRows, setTransferRows] = useState<TransferRowState[]>([
     { id: '1', playerOut: '', playerIn: '', isAbandonment: false }
   ]);
+  const [activeRowId, setActiveRowId] = useState<string>('1');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [positionFilter, setPositionFilter] = useState<string>('Todos');
 
   const [transferHistory, setTransferHistory] = useState<TransferRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -52,30 +56,57 @@ export const FichajesView: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const j = selectedJornada || 5;
+    const avail = gasEngine.getAvailablePlayersForJornada(j);
+    setAvailablePlayersIn(avail && avail.length > 0 ? avail : gasEngine.getPlayersForMercado().filter(p => p.status === 'Disponible'));
+
     if (selectedTeam && selectedJornada) {
       setPlayersOutList(gasEngine.getTeamPlayersForJornada(selectedTeam, selectedJornada));
-      setAvailablePlayersIn(gasEngine.getAvailablePlayersForJornada(selectedJornada));
     } else {
       setPlayersOutList([]);
-      setAvailablePlayersIn([]);
     }
   }, [selectedTeam, selectedJornada]);
 
   const addTransferRow = () => {
+    const newId = String(Date.now());
     setTransferRows(prev => [
       ...prev,
-      { id: String(Date.now()), playerOut: '', playerIn: '', isAbandonment: false }
+      { id: newId, playerOut: '', playerIn: '', isAbandonment: false }
     ]);
+    setActiveRowId(newId);
   };
 
   const removeTransferRow = (id: string) => {
     if (transferRows.length <= 1) return;
-    setTransferRows(prev => prev.filter(r => r.id !== id));
+    setTransferRows(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      if (activeRowId === id && updated.length > 0) {
+        setActiveRowId(updated[0].id);
+      }
+      return updated;
+    });
   };
 
   const updateRow = (id: string, field: keyof TransferRowState, value: any) => {
     setTransferRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
+
+  const handleSelectPlayerIn = (playerName: string) => {
+    let targetRow = transferRows.find(r => r.id === activeRowId);
+    if (!targetRow) {
+      targetRow = transferRows[0];
+    }
+    if (targetRow) {
+      updateRow(targetRow.id, 'playerIn', playerName);
+    }
+  };
+
+  const filteredAvailablePlayers = availablePlayersIn.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          p.realTeam.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesPos = positionFilter === 'Todos' || p.position === positionFilter;
+    return matchesSearch && matchesPos;
+  });
 
   const handleTransferSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,16 +246,31 @@ export const FichajesView: React.FC = () => {
               {transferRows.map((row, idx) => (
                 <div 
                   key={row.id || `row-${idx}`} 
-                  className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3 transition hover:border-slate-700"
+                  onClick={() => setActiveRowId(row.id)}
+                  className={`border rounded-xl p-4 space-y-3 transition cursor-pointer ${
+                    activeRowId === row.id && transferRows.length > 1
+                      ? 'bg-slate-950 border-amber-500/50 shadow-md ring-1 ring-amber-500/20'
+                      : 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
+                  }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
-                      Cambio #{idx + 1}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
+                        Cambio #{idx + 1}
+                      </span>
+                      {activeRowId === row.id && transferRows.length > 1 && (
+                        <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                          Selección Activa
+                        </span>
+                      )}
+                    </div>
                     {transferRows.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => removeTransferRow(row.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeTransferRow(row.id);
+                        }}
                         className="text-rose-400 hover:text-rose-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -299,6 +345,97 @@ export const FichajesView: React.FC = () => {
                 <Plus className="w-4 h-4" />
                 <span>Añadir otro cambio</span>
               </button>
+            </div>
+          </div>
+
+          {/* Buscador Rápido de Jugadores Disponibles (Idéntico al del Draft) */}
+          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Buscador Rápido de Jugadores Disponibles ({filteredAvailablePlayers.length})
+                </span>
+                {transferRows.length > 1 && (
+                  <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                    Destino: Cambio #{transferRows.findIndex(r => r.id === activeRowId) + 1 || 1}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-48">
+                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filtrar por nombre o club..."
+                    className="w-full bg-slate-900 border border-slate-800 text-xs text-white pl-8 pr-2.5 py-1.5 rounded-lg focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <select
+                  value={positionFilter}
+                  onChange={(e) => setPositionFilter(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 text-xs text-white py-1.5 px-2.5 rounded-lg focus:outline-none"
+                >
+                  <option value="Todos">Todas Pos.</option>
+                  <option value="Portero">Portero</option>
+                  <option value="Defensa">Defensa</option>
+                  <option value="Medio">Medio</option>
+                  <option value="Delantero">Delantero</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Selector de cambio destino si hay varios cambios */}
+            {transferRows.length > 1 && (
+              <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                <span className="text-[11px] text-slate-400 font-medium">Asignar jugador seleccionado a:</span>
+                {transferRows.map((r, i) => (
+                  <button
+                    key={`slot-picker-${r.id}`}
+                    type="button"
+                    onClick={() => setActiveRowId(r.id)}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1 ${
+                      activeRowId === r.id
+                        ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>Cambio #{i + 1}</span>
+                    {r.playerIn && <span className="opacity-80 text-[10px] font-normal truncate max-w-[100px]">({r.playerIn})</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pr-1">
+              {filteredAvailablePlayers.slice(0, 24).map((p, idx) => {
+                const currentActiveRow = transferRows.find(r => r.id === activeRowId) || transferRows[0];
+                const isSelected = currentActiveRow?.playerIn === p.name;
+                return (
+                  <button
+                    key={`fich-fast-${p.name}-${p.realTeam}-${idx}`}
+                    type="button"
+                    onClick={() => handleSelectPlayerIn(p.name)}
+                    className={`p-2 rounded-lg text-left border transition text-xs flex items-center justify-between cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-500/20 border-amber-500 text-white'
+                        : 'bg-slate-900 border-slate-800/80 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="truncate">
+                      <span className="font-bold">{p.name}</span>
+                      <span className="text-[10px] text-slate-400 block font-mono">{p.realTeam} • {p.position}</span>
+                    </div>
+                    <span className="font-black text-amber-400 font-mono text-xs">{p.value ? `${p.value}M` : '-'}</span>
+                  </button>
+                );
+              })}
+              {filteredAvailablePlayers.length === 0 && (
+                <div className="col-span-full p-4 text-center text-slate-500 text-xs">
+                  No se encontraron jugadores disponibles con ese filtro.
+                </div>
+              )}
             </div>
           </div>
 

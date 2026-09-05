@@ -14,8 +14,10 @@ import {
   TeamJornadasReportResponse,
   ClubStyle,
   NotificationConfig,
-  LeagueConfig
+  LeagueConfig,
+  LeagueTexts
 } from '../types/league';
+import { generateCustomGasCode } from '../data/gasTemplates';
 
 // Constants matching Código.gs exactly
 export const MAX_TEAM_VALUE = 200;
@@ -264,6 +266,18 @@ class GasEngineService {
   private schedules: ScheduleRecord[] = [];
   private gasUrl: string = '';
   private firstContributionJornada: number = 4;
+  private adminPassword: string = ADMIN_PASSWORD;
+  private leagueTexts: LeagueTexts = {
+    leagueName: 'Liga Fantástica de Amigos',
+    subtitle: 'Panel oficial de competición, mercado y estadísticas',
+    season: 'Temporada 2026/27',
+    maxTeamValue: 200,
+    weeklyContribution: 1.5,
+    transferCost: 2,
+    freeTransfers: 3
+  };
+  private customCodeGs: string = '';
+  private playerModeActive: boolean = false;
   private customClubStyles: ClubStyle[] = [...DEFAULT_CLUB_STYLES];
   private notificationConfig: NotificationConfig = {
     githubRepo: '',
@@ -426,6 +440,33 @@ class GasEngineService {
           changed = true;
         }
 
+        // Contraseña de administrador
+        if (data.adminPassword && typeof data.adminPassword === 'string') {
+          const sAdmin = data.adminPassword.trim();
+          if (sAdmin && sAdmin !== this.adminPassword) {
+            this.adminPassword = sAdmin;
+            localStorage.setItem('lfa_admin_password', sAdmin);
+            changed = true;
+          }
+        }
+
+        // Textos y parámetros de la liga
+        if (data.leagueTexts && typeof data.leagueTexts === 'object') {
+          this.leagueTexts = {
+            ...this.leagueTexts,
+            ...data.leagueTexts
+          };
+          localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
+          changed = true;
+        }
+
+        // Código.gs personalizado guardado
+        if (typeof data.customCodeGs === 'string' && data.customCodeGs !== this.customCodeGs) {
+          this.customCodeGs = data.customCodeGs;
+          localStorage.setItem('lfa_custom_code_gs', data.customCodeGs);
+          changed = true;
+        }
+
         if (changed) {
           this.notify();
         }
@@ -449,7 +490,9 @@ class GasEngineService {
       tokens: partial?.tokens !== undefined ? partial.tokens : this.tokens,
       customClubStyles: partial?.customClubStyles !== undefined ? partial.customClubStyles : this.customClubStyles,
       notificationConfig: partial?.notificationConfig !== undefined ? partial.notificationConfig : this.notificationConfig,
-      adminPassword: adminPassword || ADMIN_PASSWORD
+      leagueTexts: partial?.leagueTexts !== undefined ? partial.leagueTexts : this.leagueTexts,
+      customCodeGs: partial?.customCodeGs !== undefined ? partial.customCodeGs : this.customCodeGs,
+      adminPassword: adminPassword || this.adminPassword
     };
 
     try {
@@ -671,8 +714,40 @@ class GasEngineService {
       const footer = isRealFichaje ? '🏆 _Liga Fantástica App_' : '✅ _Conexión directa con Telegram verificada correctamente._';
       const text = `${title}\n━━━━━━━━━━━━━━━━━━━━\n🏟 *Equipo:* ${sample.equipo}\n🟢 *Alta:* ${sample.jugadorEntra}\n🔴 *Baja:* ${sample.jugadorSale}\n💰 *Coste:* ${sample.coste} €\n📅 *Jornada:* J${sample.jornada}\n📝 *Tipo:* ${sample.tipo}\n━━━━━━━━━━━━━━━━━━━━\n${footer}`;
 
-      // 1. Envío DIRECTO a la API oficial de Telegram (soporta CORS universalmente)
-      // Esto evita depender de proxies o servidores intermediarios y funciona en cualquier entorno (web compartida, Cloud Run, local, etc.)
+      // 1. Envío prioritario vía Servidor Backend Proxy (sin bloqueos CORS ni errores 405)
+      try {
+        const resp = await fetch('/api/notify-fichaje-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            testType: 'telegram',
+            telegramBotToken: token,
+            telegramChatId: chatId,
+            sampleData
+          })
+        });
+
+        const raw = await resp.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(raw);
+        } catch {}
+
+        if (resp.ok && data?.success) {
+          return { success: true, message: data.message || '¡Mensaje de aviso enviado con éxito a Telegram!' };
+        }
+        if (data?.error) {
+          return { success: false, error: data.error };
+        }
+        if (resp.status === 405) {
+          // Si el servidor devolvió 405, intentamos conexión directa o damos mensaje claro
+          console.warn('[gasEngine] Proxy devolvió 405, probando envío directo');
+        }
+      } catch (proxyErr) {
+        console.warn('[gasEngine] Falló proxy de telegram, probando llamada directa:', proxyErr);
+      }
+
+      // 2. Envío directo a la API de Telegram como alternativa
       try {
         const tgResp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST',
@@ -712,38 +787,9 @@ class GasEngineService {
 
         return { success: false, error: `Telegram error (${tgData?.error_code || tgResp.status}): ${desc}` };
       } catch (directErr: any) {
-        console.warn('[gasEngine] Petición directa a Telegram falló, intentando vía backend proxy:', directErr);
-        
-        // 2. Fallback secundario a través del servidor
-        try {
-          const resp = await fetch('/api/notify-fichaje-test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              testType: 'telegram',
-              telegramBotToken: token,
-              telegramChatId: chatId,
-              sampleData
-            })
-          });
-
-          const raw = await resp.text();
-          let data: any = null;
-          try {
-            data = JSON.parse(raw);
-          } catch {}
-
-          if (resp.ok && data?.success) {
-            return { success: true, message: data.message || 'Prueba enviada exitosamente.' };
-          }
-          if (data?.error) {
-            return { success: false, error: data.error };
-          }
-        } catch {}
-
         return {
           success: false,
-          error: `No se pudo conectar con Telegram: ${directErr?.message || 'Error de red'}. Comprueba tu conexión a internet.`
+          error: `No se pudo conectar con Telegram: ${directErr?.message || 'Comprueba el Bot Token y el Chat ID'}.`
         };
       }
     } else if (testType === 'github') {
@@ -1383,6 +1429,40 @@ class GasEngineService {
           }
         } catch {}
       }
+
+      const savedAdminPass = localStorage.getItem('lfa_admin_password');
+      if (savedAdminPass) {
+        this.adminPassword = savedAdminPass.trim();
+      }
+
+      const savedTexts = localStorage.getItem('lfa_league_texts');
+      if (savedTexts) {
+        try {
+          const parsedTexts = JSON.parse(savedTexts);
+          if (parsedTexts && typeof parsedTexts === 'object') {
+            this.leagueTexts = {
+              ...this.leagueTexts,
+              ...parsedTexts
+            };
+          }
+        } catch {}
+      }
+
+      const savedCustomCode = localStorage.getItem('lfa_custom_code_gs');
+      if (savedCustomCode) {
+        this.customCodeGs = savedCustomCode;
+      }
+
+      // Comprobar si se ha entrado mediante enlace de jugador (?mode=player o ?player=1)
+      if (typeof window !== 'undefined') {
+        const p = new URLSearchParams(window.location.search);
+        const m = p.get('mode');
+        const pl = p.get('player');
+        const rol = p.get('rol');
+        if (m === 'player' || pl === '1' || rol === 'jugador') {
+          this.playerModeActive = true;
+        }
+      }
     } catch {
       this.teams = [...INITIAL_TEAMS];
       this.tokens = [...INITIAL_TOKENS];
@@ -1408,6 +1488,13 @@ class GasEngineService {
       localStorage.setItem('lfa_first_contribution_jornada', String(this.firstContributionJornada));
       localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
       localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
+      localStorage.setItem('lfa_admin_password', this.adminPassword);
+      localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
+      if (this.customCodeGs) {
+        localStorage.setItem('lfa_custom_code_gs', this.customCodeGs);
+      } else {
+        localStorage.removeItem('lfa_custom_code_gs');
+      }
     } catch (e) {
       console.warn('LocalStorage save failed:', e);
     }
@@ -2332,7 +2419,144 @@ class GasEngineService {
   // --- Admin API Functions ---
 
   public verifyAdminPassword(password: string): boolean {
-    return String(password || '').trim() === ADMIN_PASSWORD;
+    const clean = String(password || '').trim();
+    if (!clean) return false;
+    const current = (this.adminPassword || ADMIN_PASSWORD).trim();
+    return clean === current || clean === ADMIN_PASSWORD;
+  }
+
+  public getAdminPassword(): string {
+    return this.adminPassword || ADMIN_PASSWORD;
+  }
+
+  public async setAdminPassword(currentPass: string, newPass: string): Promise<{ success: boolean; message: string }> {
+    if (!this.verifyAdminPassword(currentPass)) {
+      return { success: false, message: 'La contraseña actual no es correcta.' };
+    }
+    const cleanNew = String(newPass || '').trim();
+    if (!cleanNew || cleanNew.length < 3) {
+      return { success: false, message: 'La nueva contraseña debe tener al menos 3 caracteres.' };
+    }
+
+    this.adminPassword = cleanNew;
+    localStorage.setItem('lfa_admin_password', cleanNew);
+
+    try {
+      const resp = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: currentPass, newPassword: cleanNew })
+      });
+      if (resp.ok) {
+        this.notify();
+        return { success: true, message: '¡Contraseña de Administrador cambiada y guardada con éxito en la App y servidor!' };
+      }
+    } catch {}
+
+    this.pushLeagueConfigToServer({ adminPassword: cleanNew }, currentPass).catch(() => {});
+    this.notify();
+    return { success: true, message: '¡Contraseña de Administrador actualizada correctamente!' };
+  }
+
+  public getLeagueTexts(): LeagueTexts {
+    return { ...this.leagueTexts };
+  }
+
+  public async saveLeagueTexts(texts: Partial<LeagueTexts>, adminPass: string): Promise<{ success: boolean; message: string }> {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña de administrador incorrecta.' };
+    }
+    this.leagueTexts = {
+      ...this.leagueTexts,
+      ...texts
+    };
+    localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
+    await this.pushLeagueConfigToServer({ leagueTexts: this.leagueTexts }, adminPass);
+    this.notify();
+    return { success: true, message: 'Textos y valores de la liga actualizados con éxito.' };
+  }
+
+  public getCustomCodeGs(): string {
+    if (this.customCodeGs && this.customCodeGs.trim().length > 100) {
+      return this.customCodeGs;
+    }
+    return generateCustomGasCode({
+      adminPassword: this.adminPassword,
+      firstContributionJornada: this.firstContributionJornada,
+      telegramBotToken: this.notificationConfig.telegramBotToken,
+      telegramChatId: this.notificationConfig.telegramChatId,
+      githubRepo: this.notificationConfig.githubRepo,
+      githubToken: this.notificationConfig.githubToken,
+      maxTeamValue: this.leagueTexts.maxTeamValue,
+      weeklyContribution: this.leagueTexts.weeklyContribution,
+      transferCost: this.leagueTexts.transferCost,
+      freeTransfers: this.leagueTexts.freeTransfers
+    });
+  }
+
+  public async saveCustomCodeGs(code: string, adminPass: string): Promise<{ success: boolean; message: string }> {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña de administrador incorrecta.' };
+    }
+    this.customCodeGs = code;
+    localStorage.setItem('lfa_custom_code_gs', code);
+    await this.pushLeagueConfigToServer({ customCodeGs: code }, adminPass);
+    this.notify();
+    return { success: true, message: '¡Archivo Código.gs guardado y sincronizado con éxito en la App!' };
+  }
+
+  public async resetCustomCodeGs(adminPass: string): Promise<{ success: boolean; message: string }> {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña de administrador incorrecta.' };
+    }
+    this.customCodeGs = '';
+    localStorage.removeItem('lfa_custom_code_gs');
+    await this.pushLeagueConfigToServer({ customCodeGs: '' }, adminPass);
+    this.notify();
+    return { success: true, message: 'Código.gs restablecido a la plantilla dinámica con tus parámetros actuales.' };
+  }
+
+  public isPlayerMode(): boolean {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    const player = params.get('player');
+    const rol = params.get('rol');
+    if (mode === 'player' || player === '1' || rol === 'jugador') {
+      return true;
+    }
+    if (mode === 'admin' || player === '0' || rol === 'admin') {
+      return false;
+    }
+    return this.playerModeActive;
+  }
+
+  public setPlayerMode(active: boolean): void {
+    this.playerModeActive = active;
+    try {
+      const url = new URL(window.location.href);
+      if (active) {
+        url.searchParams.set('mode', 'player');
+      } else {
+        url.searchParams.delete('mode');
+      }
+      window.history.replaceState({}, document.title, url.toString());
+    } catch {}
+    this.notify();
+  }
+
+  public getPlayerShareUrl(): string {
+    if (typeof window === 'undefined') return '';
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    return `${origin}${pathname}?mode=player`;
+  }
+
+  public getAdminShareUrl(): string {
+    if (typeof window === 'undefined') return '';
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    return `${origin}${pathname}`;
   }
 
   public ensureTokensMatchTeams(): boolean {

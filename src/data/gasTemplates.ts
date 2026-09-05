@@ -2141,23 +2141,72 @@ export const GAS_TEMPLATES: Record<string, string> = {
 
 /**
  * Genera el archivo Código.gs con los valores personalizados inyectados:
+ * - Contraseña de Administrador
  * - Primera jornada de aportes
  * - Credenciales de Telegram (Bot Token y Chat ID)
  * - Credenciales de GitHub Actions (Repo y Token)
+ * - Parámetros de liga (costes, aportaciones, transferencias)
  */
 export function generateCustomGasCode(options?: {
+  adminPassword?: string;
   firstContributionJornada?: number;
   githubRepo?: string;
   githubToken?: string;
   telegramBotToken?: string;
   telegramChatId?: string;
+  maxTeamValue?: number;
+  weeklyContribution?: number;
+  transferCost?: number;
+  freeTransfers?: number;
+  customCodeGs?: string;
 }): string {
+  // Si el usuario guardó un Código.gs editado manualmente y no está vacío, respetarlo
+  if (options?.customCodeGs && options.customCodeGs.trim().length > 100) {
+    return options.customCodeGs;
+  }
+
   let code = REDESIGNED_CODE_GS;
+
+  if (options?.adminPassword !== undefined && options.adminPassword.trim()) {
+    code = code.replace(
+      /var ADMIN_PASSWORD = ".*?";/,
+      `var ADMIN_PASSWORD = "${options.adminPassword.replace(/"/g, '')}";`
+    );
+  }
+
   const j = options?.firstContributionJornada ?? 4;
   code = code.replace(
     /var FIRST_CONTRIBUTION_JORNADA = \d+;/,
     `var FIRST_CONTRIBUTION_JORNADA = ${j};`
   );
+
+  if (options?.maxTeamValue !== undefined) {
+    code = code.replace(
+      /var MAX_TEAM_VALUE = \d+;/,
+      `var MAX_TEAM_VALUE = ${options.maxTeamValue};`
+    );
+  }
+
+  if (options?.weeklyContribution !== undefined) {
+    code = code.replace(
+      /var WEEKLY_CONTRIBUTION = [\d.]+;/,
+      `var WEEKLY_CONTRIBUTION = ${options.weeklyContribution};`
+    );
+  }
+
+  if (options?.transferCost !== undefined) {
+    code = code.replace(
+      /var TRANSFER_COST = [\d.]+;/,
+      `var TRANSFER_COST = ${options.transferCost};`
+    );
+  }
+
+  if (options?.freeTransfers !== undefined) {
+    code = code.replace(
+      /var FREE_TRANSFERS_PER_TEAM = \d+;/,
+      `var FREE_TRANSFERS_PER_TEAM = ${options.freeTransfers};`
+    );
+  }
 
   if (options?.githubRepo !== undefined) {
     code = code.replace(

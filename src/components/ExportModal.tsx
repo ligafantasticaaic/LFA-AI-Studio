@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { GAS_TEMPLATES } from '../data/gasTemplates';
+import { gasEngine } from '../services/gasEngine';
 import { Code, Copy, Check, Download, X, FileCode2, HelpCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface ExportModalProps {
@@ -14,7 +15,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
 
   if (!isOpen) return null;
 
-  const currentContent = (GAS_TEMPLATES as any)[selectedFile] || '';
+  const currentContent = (selectedFile === 'Código.gs' || selectedFile === 'Code.gs')
+    ? gasEngine.getCustomCodeGs()
+    : ((GAS_TEMPLATES as any)[selectedFile] || '');
 
   const handleCopy = () => {
     navigator.clipboard.writeText(currentContent).then(() => {
@@ -24,7 +27,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
   };
 
   const downloadAllZip = () => {
-    const files = Object.entries(GAS_TEMPLATES);
+    const files = Object.entries(GAS_TEMPLATES).map(([fileName, content]) => {
+      if (fileName === 'Código.gs' || fileName === 'Code.gs') {
+        return [fileName, gasEngine.getCustomCodeGs()];
+      }
+      return [fileName, content];
+    });
     files.forEach(([fileName, content]) => {
       const blob = new Blob([String(content)], { type: fileName.endsWith('.gs') ? 'text/javascript' : 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);

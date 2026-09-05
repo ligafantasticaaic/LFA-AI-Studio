@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { gasEngine, ADMIN_PASSWORD } from '../services/gasEngine';
-import { TeamToken, TeamJornadasReportResponse, ClubStyle, NotificationConfig } from '../types/league';
+import { TeamToken, TeamJornadasReportResponse, ClubStyle, NotificationConfig, LeagueTexts } from '../types/league';
 import { 
   Lock, 
   Key, 
@@ -30,7 +30,16 @@ import {
   Sparkles,
   Info,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  KeyRound,
+  Share2,
+  FileText,
+  Sliders,
+  Settings,
+  ShieldCheck,
+  Save,
+  Users,
+  FileCode
 } from 'lucide-react';
 import { GAS_TEMPLATES, generateCustomGasCode } from '../data/gasTemplates';
 
@@ -78,6 +87,24 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showTelegramGuide, setShowTelegramGuide] = useState<boolean>(false);
   const [showGithubGuide, setShowGithubGuide] = useState<boolean>(false);
+
+  // 4. Contraseña de Administrador State
+  const [currentPassChange, setCurrentPassChange] = useState<string>('');
+  const [newPassChange, setNewPassChange] = useState<string>('');
+  const [confirmPassChange, setConfirmPassChange] = useState<string>('');
+  const [isChangingPass, setIsChangingPass] = useState<boolean>(false);
+
+  // 5. Textos y Reglas de la Liga State (Ediciones Posteriores)
+  const [leagueTextsInput, setLeagueTextsInput] = useState<LeagueTexts>(gasEngine.getLeagueTexts());
+  const [isSavingTexts, setIsSavingTexts] = useState<boolean>(false);
+
+  // 6. Editor Directo de Código.gs / Code.gs State
+  const [customCodeGsInput, setCustomCodeGsInput] = useState<string>(gasEngine.getCustomCodeGs());
+  const [isSavingCodeGs, setIsSavingCodeGs] = useState<boolean>(false);
+  const [showCodeGsEditor, setShowCodeGsEditor] = useState<boolean>(false);
+
+  // 7. Enlaces de Acceso y Modo Jugador State
+  const [copiedLinkType, setCopiedLinkType] = useState<'player' | 'admin' | null>(null);
 
   useEffect(() => {
     const unsub = gasEngine.subscribe(() => {
@@ -152,6 +179,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setFirstJornadaInput(gasEngine.getFirstContributionJornada());
     setClubStylesList(gasEngine.getClubStyles());
     setNotificationConfig(gasEngine.getNotificationConfig());
+    setLeagueTextsInput(gasEngine.getLeagueTexts());
+    setCustomCodeGsInput(gasEngine.getCustomCodeGs());
   };
 
   // Handlers para 1. Primera Jornada con Aportaciones
@@ -236,17 +265,105 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleCopyCustomGas = () => {
-    const code = generateCustomGasCode({
+    const code = gasEngine.getCustomCodeGs();
+    navigator.clipboard.writeText(code);
+    setCopiedGasCode(true);
+    setTimeout(() => setCopiedGasCode(false), 2500);
+    showAlert('¡Código.gs personalizado copiado! Contiene tus tokens y la configuración actual.', true);
+  };
+
+  // Handlers para Cambio de Contraseña de Administrador
+  const handleChangeAdminPassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cur = currentPassChange.trim();
+    const nw = newPassChange.trim();
+    const conf = confirmPassChange.trim();
+
+    if (!cur) {
+      showAlert('Debes introducir tu contraseña actual de administrador.', false);
+      return;
+    }
+    if (!nw || nw.length < 3) {
+      showAlert('La nueva contraseña debe tener al menos 3 caracteres.', false);
+      return;
+    }
+    if (nw !== conf) {
+      showAlert('La confirmación de la nueva contraseña no coincide. Revísala.', false);
+      return;
+    }
+
+    setIsChangingPass(true);
+    const res = await gasEngine.setAdminPassword(cur, nw);
+    setIsChangingPass(false);
+    showAlert(res.message, res.success);
+    if (res.success) {
+      setAdminPass(nw);
+      setCurrentPassChange('');
+      setNewPassChange('');
+      setConfirmPassChange('');
+    }
+  };
+
+  // Handlers para Textos y Reglas de la Liga (Ediciones Posteriores)
+  const handleSaveLeagueTexts = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingTexts(true);
+    const res = await gasEngine.saveLeagueTexts(leagueTextsInput, adminPass);
+    setIsSavingTexts(false);
+    showAlert(res.message, res.success);
+    if (res.success) {
+      setCustomCodeGsInput(gasEngine.getCustomCodeGs());
+    }
+  };
+
+  // Handlers para Editor Directo de Código.gs
+  const handleSaveCustomCodeGs = async () => {
+    if (!customCodeGsInput.trim()) {
+      showAlert('El código no puede estar vacío.', false);
+      return;
+    }
+    setIsSavingCodeGs(true);
+    const res = await gasEngine.saveCustomCodeGs(customCodeGsInput, adminPass);
+    setIsSavingCodeGs(false);
+    showAlert(res.message, res.success);
+  };
+
+  const handleResetCustomCodeGs = async () => {
+    if (!window.confirm('¿Deseas restablecer el archivo Código.gs a la plantilla base oficial con tus credenciales actuales?')) return;
+    await gasEngine.resetCustomCodeGs(adminPass);
+    setCustomCodeGsInput(gasEngine.getCustomCodeGs());
+    showAlert('Código.gs restablecido a la plantilla oficial.', true);
+  };
+
+  const handleRegenerateCodeWithTokens = () => {
+    const updated = generateCustomGasCode({
+      adminPassword: adminPass,
       firstContributionJornada: Number(firstJornadaInput),
       telegramBotToken: notificationConfig.telegramBotToken,
       telegramChatId: notificationConfig.telegramChatId,
       githubRepo: notificationConfig.githubRepo,
-      githubToken: notificationConfig.githubToken
+      githubToken: notificationConfig.githubToken,
+      maxTeamValue: leagueTextsInput.maxTeamValue,
+      weeklyContribution: leagueTextsInput.weeklyContribution,
+      transferCost: leagueTextsInput.transferCost,
+      freeTransfers: leagueTextsInput.freeTransfers
     });
-    navigator.clipboard.writeText(code);
-    setCopiedGasCode(true);
-    setTimeout(() => setCopiedGasCode(false), 2500);
-    showAlert('¡Código.gs personalizado copiado! Contiene tus tokens y la jornada configurada.', true);
+    setCustomCodeGsInput(updated);
+    showAlert('Código.gs actualizado con tus tokens de Telegram y configuración actual.', true);
+  };
+
+  const handleCopyShareLink = (type: 'player' | 'admin') => {
+    const url = type === 'player' ? gasEngine.getPlayerShareUrl() : gasEngine.getAdminShareUrl();
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedLinkType(type);
+      setTimeout(() => setCopiedLinkType(null), 2500);
+      showAlert(
+        type === 'player' 
+          ? '¡Enlace de Jugadores copiado! Este enlace oculta por completo la pestaña de Admin para los participantes.' 
+          : '¡Enlace de Administrador copiado con acceso a configuración!',
+        true
+      );
+    });
   };
 
   const handleAddTeam = () => {
@@ -714,6 +831,423 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <li><strong className="text-slate-300">Fichajes:</strong> Historial de sustituciones y coste de mercado (se actualiza automáticamente).</li>
                 <li><strong className="text-slate-300">Draft:</strong> Historial de jugadores seleccionados durante el draft inicial.</li>
               </ul>
+            </div>
+          </div>
+
+          {/* ======================================================== */}
+          {/* NUEVA SECCIÓN: Seguridad, Clave Admin y Enlaces de Acceso */}
+          {/* ======================================================== */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Seguridad, Contraseña y Enlaces de Acceso</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Cambia la contraseña de administrador y genera enlaces diferenciados para jugadores y organizadores
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Bloque 1: Cambiar Contraseña de Administrador */}
+              <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-5 space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <KeyRound className="w-4 h-4 text-purple-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider m-0">
+                    Cambiar Contraseña de Administrador
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Actualiza la clave con la que desbloqueas este panel. Se sincroniza con el servidor y protege la liga.
+                </p>
+
+                <form onSubmit={handleChangeAdminPassword} className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                      Contraseña Actual
+                    </label>
+                    <input
+                      type="password"
+                      value={currentPassChange}
+                      onChange={(e) => setCurrentPassChange(e.target.value)}
+                      placeholder="Introduce la contraseña actual"
+                      className="w-full bg-slate-900 border border-slate-700 text-white text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-purple-500 transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Nueva Contraseña
+                      </label>
+                      <input
+                        type="password"
+                        value={newPassChange}
+                        onChange={(e) => setNewPassChange(e.target.value)}
+                        placeholder="Mínimo 3 caracteres"
+                        className="w-full bg-slate-900 border border-slate-700 text-white text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-purple-500 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Confirmar Nueva
+                      </label>
+                      <input
+                        type="password"
+                        value={confirmPassChange}
+                        onChange={(e) => setConfirmPassChange(e.target.value)}
+                        placeholder="Repite la nueva contraseña"
+                        className="w-full bg-slate-900 border border-slate-700 text-white text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-purple-500 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isChangingPass || !currentPassChange || !newPassChange || !confirmPassChange}
+                    className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>{isChangingPass ? 'Guardando contraseña...' : 'Actualizar Contraseña de Administrador'}</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Bloque 2: Enlaces Diferenciados (Modo Jugador vs Admin) */}
+              <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-5 space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Share2 className="w-4 h-4 text-emerald-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider m-0">
+                    Enlaces de Acceso y Modo Jugador
+                  </h3>
+                </div>
+
+                {/* Enlace para Jugadores */}
+                <div className="p-3.5 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Enlace Oficial para Jugadores</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-md border border-emerald-500/30">
+                      Recomendado para el Grupo
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Este enlace activa el <strong className="text-white">Modo Jugador</strong>: la pestaña de Administrador queda <strong className="text-emerald-400">totalmente oculta e inaccesible</strong> en la barra de navegación. Los participantes solo ven clasificaciones, campo táctico, draft, mercado, premios y fichajes.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyShareLink('player')}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    {copiedLinkType === 'player' ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLinkType === 'player' ? '¡Enlace de Jugadores Copiado!' : 'Copiar Enlace para Jugadores (Sin Admin)'}</span>
+                  </button>
+                </div>
+
+                {/* Enlace para Administrador */}
+                <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Enlace de Administrador</span>
+                    </span>
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-500/30">
+                      Solo Organizador
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Enlace completo que muestra la pestaña de Admin protegida por contraseña para configurar la competición.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyShareLink('admin')}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedLinkType === 'admin' ? <Check className="w-3.5 h-3.5 text-amber-300" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLinkType === 'admin' ? '¡Enlace de Admin Copiado!' : 'Copiar Enlace de Administrador'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ======================================================== */}
+          {/* NUEVA SECCIÓN: Personalización de Textos y Reglas Liga   */}
+          {/* ======================================================== */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Personalización de Textos y Reglas para Próximas Ediciones</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Modifica el nombre oficial de la liga, la temporada/edición, presupuestos y costes de fichaje para futuras ediciones
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveLeagueTexts} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Nombre de la Liga */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Nombre de la Liga
+                  </label>
+                  <input
+                    type="text"
+                    value={leagueTextsInput.leagueName || ''}
+                    onChange={(e) => setLeagueTextsInput({ ...leagueTextsInput, leagueName: e.target.value })}
+                    placeholder="Ej: Liga Fantástica de Amigos"
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-semibold text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                {/* Temporada / Edición */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Temporada / Edición
+                  </label>
+                  <input
+                    type="text"
+                    value={leagueTextsInput.season || ''}
+                    onChange={(e) => setLeagueTextsInput({ ...leagueTextsInput, season: e.target.value })}
+                    placeholder="Ej: Temporada 2026/27 o Edición 2027"
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-semibold text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                {/* Subtítulo Oficial */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Subtítulo Oficial
+                  </label>
+                  <input
+                    type="text"
+                    value={leagueTextsInput.subtitle || ''}
+                    onChange={(e) => setLeagueTextsInput({ ...leagueTextsInput, subtitle: e.target.value })}
+                    placeholder="Ej: Panel oficial de competición y estadísticas"
+                    className="w-full bg-slate-950 border border-slate-700 text-white text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-1">
+                {/* Presupuesto Máximo */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Presupuesto Máx. Equipo (M€)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="50"
+                    max="1000"
+                    value={leagueTextsInput.maxTeamValue ?? 200}
+                    onChange={(e) => setLeagueTextsInput({ ...leagueTextsInput, maxTeamValue: Number(e.target.value) || 200 })}
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-cyan-500"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Límite valor de plantilla (def: 200M)</span>
+                </div>
+
+                {/* Aportación Semanal */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Aportación Semanal (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.10"
+                    min="0"
+                    max="50"
+                    value={leagueTextsInput.weeklyContribution ?? 1.5}
+                    onChange={(e) => setLeagueTextsInput({ ...leagueTextsInput, weeklyContribution: Number(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-cyan-500"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Por equipo y jornada (def: 1.50€)</span>
+                </div>
+
+                {/* Coste Fichaje */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Coste por Fichaje (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.10"
+                    min="0"
+                    max="50"
+                    value={leagueTextsInput.transferCost ?? 2}
+                    onChange={(e) => setLeagueTextsInput({ ...leagueTextsInput, transferCost: Number(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-cyan-500"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Coste tras fichajes gratis (def: 2.00€)</span>
+                </div>
+
+                {/* Fichajes Gratis */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Fichajes Gratuitos
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="20"
+                    value={leagueTextsInput.freeTransfers ?? 3}
+                    onChange={(e) => setLeagueTextsInput({ ...leagueTextsInput, freeTransfers: Number(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 border border-slate-700 text-white font-mono text-xs py-2 px-3 rounded-xl focus:outline-none focus:border-cyan-500"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Fichajes sin coste por equipo (def: 3)</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={isSavingTexts}
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs py-2.5 px-5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSavingTexts ? 'Guardando textos...' : 'Guardar Textos y Reglas de la Liga'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* ======================================================== */}
+          {/* NUEVA SECCIÓN: Editor y Gestor Directo de Código.gs     */}
+          {/* ======================================================== */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <FileCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Gestor y Editor Directo de Código.gs (Google Apps Script)</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Modifica directamente el archivo Code.gs de la app, inyecta tokens de Telegram y sincronízalo con Google Sheets
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCodeGsEditor(!showCodeGsEditor)}
+                className="bg-slate-950 hover:bg-slate-800 text-amber-400 border border-amber-500/30 text-xs font-bold py-2 px-3 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                {showCodeGsEditor ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                <span>{showCodeGsEditor ? 'Ocultar Editor de Código' : 'Desplegar Editor de Código.gs'}</span>
+              </button>
+            </div>
+
+            {/* Resumen de configuración inyectada */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-xs">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Telegram Bot Token:</span>
+                <span className="font-mono text-slate-200 font-semibold truncate block">
+                  {notificationConfig.telegramBotToken ? `${notificationConfig.telegramBotToken.slice(0, 12)}...` : '(No configurado)'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Telegram Chat ID:</span>
+                <span className="font-mono text-slate-200 font-semibold block">
+                  {notificationConfig.telegramChatId || '(No configurado)'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Jornada 1ª Aportaciones:</span>
+                <span className="font-mono text-amber-400 font-bold block">
+                  Jornada {firstJornadaInput}
+                </span>
+              </div>
+            </div>
+
+            {/* Editor de Código Desplegable */}
+            {showCodeGsEditor && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                  <span className="font-mono text-slate-300">Archivo: Código.gs ({customCodeGsInput.length} caracteres)</span>
+                  <span>Edita cualquier línea o pulsa "Re-inyectar Tokens"</span>
+                </div>
+
+                <textarea
+                  value={customCodeGsInput}
+                  onChange={(e) => setCustomCodeGsInput(e.target.value)}
+                  rows={18}
+                  spellCheck={false}
+                  className="w-full bg-slate-950 border border-slate-700 text-slate-200 font-mono text-xs p-4 rounded-xl focus:outline-none focus:border-amber-500 selection:bg-amber-500 selection:text-slate-950 leading-relaxed resize-y"
+                  placeholder="// Código.gs completo para Google Apps Script..."
+                />
+              </div>
+            )}
+
+            {/* Toolbar de Acciones para Código.gs */}
+            <div className="pt-2 flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleSaveCustomCodeGs}
+                disabled={isSavingCodeGs}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 px-4 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingCodeGs ? 'Guardando en la App...' : 'Guardar Código.gs en la App'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRegenerateCodeWithTokens}
+                className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+                <span>Inyectar Tokens Actuales de Telegram</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyCustomGas}
+                className="bg-slate-950 hover:bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                {copiedGasCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
+                <span>{copiedGasCode ? '¡Código.gs Copiado!' : 'Copiar Código.gs'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetCustomCodeGs}
+                className="bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-800 text-xs py-2 px-3 rounded-xl transition cursor-pointer"
+              >
+                <span>Restablecer a Plantilla Base</span>
+              </button>
+            </div>
+
+            {/* Guía rápida de actualización en Google Sheets */}
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-4 text-xs text-slate-400 space-y-2">
+              <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                <Info className="w-4 h-4" />
+                <span>Cómo aplicar el nuevo Código.gs en tu Google Sheets:</span>
+              </span>
+              <ol className="list-decimal list-inside space-y-1 text-slate-300">
+                <li>Haz clic en <strong className="text-white">"Copiar Código.gs"</strong> en el botón superior.</li>
+                <li>Abre tu hoja de cálculo en <strong className="text-white">Google Sheets</strong> y en el menú superior ve a <strong className="text-white">Extensiones &gt; Apps Script</strong>.</li>
+                <li>Pega el código reemplazando todo el archivo <code className="text-amber-400">Código.gs</code> y pulsa <strong className="text-white">Guardar</strong> (icono de disquete).</li>
+                <li>Arriba a la derecha, pulsa <strong className="text-white">Implementar &gt; Gestionar implementaciones</strong>, haz clic en el icono del <strong className="text-white">lápiz (Editar)</strong>, en Versión selecciona <strong className="text-emerald-400">"Nueva versión"</strong> y pulsa <strong className="text-white">Implementar</strong>.</li>
+              </ol>
             </div>
           </div>
 

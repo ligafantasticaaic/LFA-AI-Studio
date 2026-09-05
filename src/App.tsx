@@ -57,7 +57,7 @@ export default function App() {
         {activeTab === 'mercado' && <MercadoView />}
         {activeTab === 'premios' && <PremiosView />}
         {activeTab === 'graficas' && <GraficasView />}
-        {activeTab === 'admin' && (
+        {activeTab === 'admin' && !gasEngine.isPlayerMode() && (
           <AdminView 
             onOpenConnectionModal={() => setIsConnectionOpen(true)}
             onOpenExportModal={() => setIsExportOpen(true)}
