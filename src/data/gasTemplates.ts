@@ -364,16 +364,19 @@ function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jo
 
   if (cleanTgToken && cleanTgChatId) {
     try {
-      var mensaje = "🚨 *¡NUEVO FICHAJE EN LA LIGA FANTÁSTICA!* ⚽\n" +
-                    "━━━━━━━━━━━━━━━━━━━━\n" +
-                    "🏟 *Equipo:* " + equipo + "\n" +
-                    "🟢 *Alta:* " + jugadorEntra + "\n" +
-                    "🔴 *Baja:* " + jugadorSale + "\n" +
-                    "💰 *Coste:* " + coste + " €\n" +
-                    "📅 *Jornada:* J" + jornada + "\n" +
-                    "📝 *Tipo:* " + (tipo || "Normal") + "\n" +
-                    "━━━━━━━━━━━━━━━━━━━━\n" +
-                    "🏆 _Liga Fantástica de Amigos_";
+      var lineas = [
+        "🚨 *¡NUEVO FICHAJE EN LA LIGA FANTÁSTICA!* ⚽",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🏟 *Equipo:* " + equipo,
+        "🟢 *Alta:* " + jugadorEntra,
+        "🔴 *Baja:* " + jugadorSale,
+        "💰 *Coste:* " + coste + " €",
+        "📅 *Jornada:* J" + jornada,
+        "📝 *Tipo:* " + (tipo || "Normal"),
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🏆 _Liga Fantástica de Amigos_"
+      ];
+      var mensaje = lineas.join(String.fromCharCode(10));
       var tgUrl = "https://api.telegram.org/bot" + cleanTgToken + "/sendMessage";
       var tgResp = UrlFetchApp.fetch(tgUrl, {
         method: "post",

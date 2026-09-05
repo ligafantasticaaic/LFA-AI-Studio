@@ -357,6 +357,11 @@ async function startServer() {
           error: `Telegram indica: "Chat no encontrado" (${cleanChatId}).\n\n¿Por qué ocurre esto?\n1. Si es un GRUPO: Debes añadir a tu bot como miembro del grupo en Telegram. Telegram no permite enviar mensajes a grupos donde el bot no está dentro.\n2. Si es un GRUPO o SUPERGRUPO: los IDs siempre empiezan por "-100" (ejemplo: "-100${cleanChatId.replace(/^-100/, '').replace(/^-/, '')}").\n3. Si es un CANAL: el bot debe ser Administrador con permisos de publicación.\n4. Si es un chat PRIVADO contigo: debes buscar a tu bot en Telegram y pulsar el botón "Iniciar" (/start).`
         });
       }
+      if (desc.includes('not enough rights') || desc.includes('restricted')) {
+        return res.status(400).json({
+          error: `Telegram indica: "El bot no tiene permisos suficientes para enviar mensajes en el grupo" (${desc}).\n\n¿Cómo solucionarlo?\n1. En Telegram, entra en tu grupo.\n2. Pulsa en el título del grupo > icono de editar (lápiz) > Administradores.\n3. Pulsa "Añadir administrador", selecciona a tu bot y activa el permiso "Enviar mensajes".\n¡Una vez hecho esto, el bot podrá publicar todos los avisos de fichajes!`
+        });
+      }
       if (desc.includes('bot was blocked') || desc.includes("bot can't initiate")) {
         return res.status(400).json({
           error: `El bot no tiene permiso para escribirte: abre tu Telegram, busca a tu bot y pulsa el botón "Iniciar" (/start).`
