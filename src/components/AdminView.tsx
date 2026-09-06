@@ -40,7 +40,9 @@ import {
   Save,
   Users,
   FileCode,
-  Bot
+  Bot,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { GAS_TEMPLATES, generateCustomGasCode } from '../data/gasTemplates';
 
@@ -83,6 +85,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   // 3. Sistema de Avisos de Fichajes State
   const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(gasEngine.getNotificationConfig());
   const [isTestingTelegram, setIsTestingTelegram] = useState<boolean>(false);
+  const [isTestingDraftTelegram, setIsTestingDraftTelegram] = useState<boolean>(false);
   const [isTestingGithub, setIsTestingGithub] = useState<boolean>(false);
   const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -108,10 +111,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   // 7. Enlaces de Acceso y Modo Jugador State
   const [copiedLinkType, setCopiedLinkType] = useState<'player' | 'admin' | null>(null);
+  const [isDraftHiddenAdmin, setIsDraftHiddenAdmin] = useState<boolean>(gasEngine.isDraftHidden());
 
   useEffect(() => {
     const unsub = gasEngine.subscribe(() => {
       setSyncVersion(v => v + 1);
+      setIsDraftHiddenAdmin(gasEngine.isDraftHidden());
       if (isUnlocked) {
         loadAdminData();
       }
@@ -256,6 +261,28 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setIsTestingTelegram(false);
     setTelegramTestResult(res);
     showAlert(res.message, res.success);
+  };
+
+  const handleTestDraftTelegram = async () => {
+    setIsTestingDraftTelegram(true);
+    const teams = gasEngine.getTeams();
+    const tName = teams[0] || 'Mi Equipo';
+    const nextTName = teams[1] || 'Siguiente Equipo';
+    await gasEngine.triggerDraftPickNotification({
+      team: tName,
+      player: 'Kylian Mbappé',
+      realTeam: 'RMA',
+      position: 'Delantero',
+      value: 28,
+      round: 1,
+      pickNumber: 1,
+      totalPicks: Math.max(11, teams.length * 11),
+      nextTeam: nextTName,
+      nextRound: 1,
+      isComplete: false
+    });
+    setIsTestingDraftTelegram(false);
+    showAlert('Aviso de prueba de elección del Draft enviado a Telegram.', true);
   };
 
   const handleDiagnoseTelegram = async () => {
@@ -909,21 +936,34 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </div>
               </div>
 
-              {/* Botón de visibilidad de la pestaña Draft */}
+              {/* Botón de visibilidad de la pestaña Draft (Solo visible en menú Admin) */}
               <button
                 type="button"
+                id="btn-admin-toggle-draft-hidden"
                 onClick={() => {
-                  const currentHidden = gasEngine.isDraftHidden();
-                  gasEngine.setDraftHidden(!currentHidden, true);
-                  showAlert(!currentHidden ? 'Pestaña de Draft ocultada' : 'Pestaña de Draft mostrada', true);
+                  const nextVal = !isDraftHiddenAdmin;
+                  gasEngine.setDraftHidden(nextVal, true);
+                  setIsDraftHiddenAdmin(nextVal);
+                  showAlert(nextVal ? 'Pestaña de Draft ocultada para los jugadores.' : 'Pestaña de Draft visible para los jugadores.', true);
                 }}
-                className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
-                  gasEngine.isDraftHidden()
-                    ? 'bg-amber-950/60 border-amber-500/40 text-amber-300 hover:bg-amber-900/60'
-                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-sm ${
+                  isDraftHiddenAdmin
+                    ? 'bg-amber-950/70 border-amber-500/50 text-amber-300 hover:bg-amber-900/70'
+                    : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                 }`}
+                title={isDraftHiddenAdmin ? 'Hacer visible la pestaña Draft en la barra de navegación' : 'Ocultar la pestaña Draft de la barra de navegación para los jugadores'}
               >
-                <span>{gasEngine.isDraftHidden() ? '🙈 Pestaña Oculta (Activar para mostrar)' : '👁️ Pestaña Visible (Click para ocultar)'}</span>
+                {isDraftHiddenAdmin ? (
+                  <>
+                    <Eye className="w-4 h-4 text-amber-400" />
+                    <span>Mostrar Pestaña Draft</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-4 h-4 text-slate-400" />
+                    <span>Ocultar Pestaña</span>
+                  </>
+                )}
               </button>
             </div>
 
@@ -1868,7 +1908,18 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
                     className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <Send className="w-3.5 h-3.5 text-blue-400" />
-                    <span>{isTestingTelegram ? 'Enviando prueba...' : 'Probar Aviso en Telegram'}</span>
+                    <span>{isTestingTelegram ? 'Enviando prueba...' : 'Probar Aviso Fichaje'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestDraftTelegram}
+                    disabled={isTestingDraftTelegram || !notificationConfig.telegramBotToken || !notificationConfig.telegramChatId}
+                    className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 font-bold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Envía un aviso simulando una elección en el Draft y anunciando el siguiente turno"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{isTestingDraftTelegram ? 'Enviando aviso...' : 'Probar Aviso Draft'}</span>
                   </button>
                 </div>
 

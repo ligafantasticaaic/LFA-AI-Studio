@@ -404,6 +404,56 @@ async function startServer() {
     }
   });
 
+  // Generic Telegram message sender (for draft picks, completion, alerts)
+  app.post('/api/send-telegram', async (req, res) => {
+    try {
+      const { telegramBotToken, telegramChatId, text } = req.body || {};
+      const config = getGasConfig();
+      const botToken = String(telegramBotToken || config.notificationConfig?.telegramBotToken || '').trim();
+      const chatId = String(telegramChatId || config.notificationConfig?.telegramChatId || '').trim();
+      const messageText = String(text || '').trim();
+
+      if (!botToken || !chatId || !messageText) {
+        return res.status(400).json({ error: 'Faltan parámetros: botToken, chatId o text' });
+      }
+
+      let tgResp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: messageText,
+          parse_mode: 'Markdown'
+        })
+      });
+
+      let rawText = await tgResp.text();
+      let tgData: any;
+      try { tgData = JSON.parse(rawText); } catch { tgData = null; }
+
+      if (!tgResp.ok && tgData?.description?.includes("can't parse entities")) {
+        tgResp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: messageText.replace(/[*_`]/g, '')
+          })
+        });
+        rawText = await tgResp.text();
+        try { tgData = JSON.parse(rawText); } catch {}
+      }
+
+      if (tgData?.ok) {
+        return res.json({ success: true, message: 'Mensaje enviado a Telegram correctamente' });
+      }
+
+      return res.status(400).json({ error: tgData?.description || 'Error al enviar mensaje a Telegram' });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Error en el servidor al contactar con Telegram' });
+    }
+  });
+
   // Vite middleware for development vs static build for production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

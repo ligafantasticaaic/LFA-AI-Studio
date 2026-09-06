@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { gasEngine } from '../services/gasEngine';
 import { Player, DraftRecord } from '../types/league';
 import confetti from 'canvas-confetti';
-import { Sparkles, Users, Key, Shield, Search, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, Users, Key, Shield, Search, CheckCircle2, AlertCircle, Send } from 'lucide-react';
 import { DraftOrderTable } from './DraftOrderTable';
 
 export const DraftView: React.FC = () => {
@@ -82,18 +82,26 @@ export const DraftView: React.FC = () => {
     <div className="space-y-6">
       {/* Title Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-        <div className="flex items-center gap-3 border-b border-slate-800 pb-4 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Sparkles className="w-5 h-5" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight m-0">
+                Draft Inicial de Jugadores
+              </h1>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Confecciona tu plantilla de 11 jugadores respetando el tope de 200M€
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight m-0">
-              Draft Inicial de Jugadores
-            </h1>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Confecciona tu plantilla de 11 jugadores respetando el tope de 200M€
-            </p>
-          </div>
+          {gasEngine.getNotificationConfig().telegramBotToken && gasEngine.getNotificationConfig().telegramChatId && (
+            <div className="flex items-center gap-1.5 self-start sm:self-auto bg-blue-950/50 border border-blue-500/40 px-3 py-1.5 rounded-xl text-xs text-blue-300 shadow-sm">
+              <Send className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span>Avisos en Telegram activos</span>
+            </div>
+          )}
         </div>
 
         {/* Tabla del Orden de Elección del Draft (11 Rondas) */}

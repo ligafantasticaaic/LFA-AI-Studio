@@ -900,6 +900,117 @@ class GasEngineService {
     }
   }
 
+  public async sendTelegramCustomMessage(text: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    const notif = this.notificationConfig;
+    const cleanBotToken = String(notif.telegramBotToken || '').trim();
+    const cleanChatId = String(notif.telegramChatId || '').trim();
+
+    if (!cleanBotToken || !cleanChatId) {
+      return { success: false, error: 'Telegram no configurado' };
+    }
+
+    // 1. Intento vía backend server proxy
+    try {
+      const resp = await fetch('/api/send-telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramBotToken: cleanBotToken,
+          telegramChatId: cleanChatId,
+          text
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json().catch(() => null);
+        if (data?.success) return { success: true };
+      }
+    } catch {}
+
+    // 2. Intento directo a Telegram Bot API (con fallback de texto plano)
+    try {
+      let tgResp = await fetch(`https://api.telegram.org/bot${cleanBotToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: cleanChatId,
+          text: text,
+          parse_mode: 'Markdown'
+        })
+      });
+      let tgData = await tgResp.json().catch(() => null);
+      if (!tgResp.ok && tgData?.description?.includes("can't parse entities")) {
+        tgResp = await fetch(`https://api.telegram.org/bot${cleanBotToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: cleanChatId,
+            text: text.replace(/[*_`]/g, '')
+          })
+        });
+        tgData = await tgResp.json().catch(() => null);
+      }
+      if (tgData?.ok) return { success: true };
+      return { success: false, error: tgData?.description };
+    } catch (e: any) {
+      return { success: false, error: e?.message };
+    }
+  }
+
+  public async triggerDraftPickNotification(payload: {
+    team: string;
+    player: string;
+    realTeam: string;
+    position: string;
+    value: number;
+    round: number;
+    pickNumber: number;
+    totalPicks: number;
+    nextTeam: string | null;
+    nextRound: number | null;
+    isComplete: boolean;
+  }): Promise<void> {
+    const nextLine = payload.isComplete
+      ? '🏁 *Estado:* ¡Última elección del Draft completada!'
+      : (payload.nextTeam
+          ? `👉 *Siguiente turno para elegir:* ⏳ *${payload.nextTeam}* (Ronda ${payload.nextRound || payload.round})`
+          : '👉 *Siguiente turno:* Esperando turno');
+
+    const msg = [
+      '🎯 *¡ELECCIÓN EN EL DRAFT INICIAL!* ⚽',
+      '━━━━━━━━━━━━━━━━━━━━',
+      `🏟 *Equipo:* ${payload.team}`,
+      `🟢 *Jugador elegido:* ${payload.player} (${payload.realTeam || 'LaLiga'} - ${payload.position})`,
+      `💰 *Valor:* ${payload.value} €`,
+      `🔢 *Ronda:* Ronda ${payload.round} de 11 (Elección ${payload.pickNumber}/${payload.totalPicks})`,
+      '━━━━━━━━━━━━━━━━━━━━',
+      nextLine,
+      '🏆 _Liga Fantástica de Amigos_'
+    ].join('\n');
+
+    this.sendTelegramCustomMessage(msg).catch(err => {
+      console.warn('[gasEngine] Fallo al enviar aviso de elección de draft a Telegram:', err);
+    });
+  }
+
+  public async triggerDraftCompletedNotification(payload: {
+    totalPicks: number;
+    teamsCount: number;
+  }): Promise<void> {
+    const msg = [
+      '🎉 *¡EL DRAFT INICIAL HA FINALIZADO CON ÉXITO!* 🏆',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '✅ Todos los equipos participantes han completado sus 11 futbolistas de plantilla.',
+      `📊 *Resumen:* ${payload.totalPicks} elecciones realizadas entre los ${payload.teamsCount} equipos.`,
+      '⚽ ¡Las plantillas quedan configuradas para la nueva temporada!',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '🏆 _Liga Fantástica de Amigos_'
+    ].join('\n');
+
+    this.sendTelegramCustomMessage(msg).catch(err => {
+      console.warn('[gasEngine] Fallo al enviar aviso de fin de draft a Telegram:', err);
+    });
+  }
+
   public getLastSyncTime(): string | null {
     if (!this.lastSyncTime) {
       this.lastSyncTime = localStorage.getItem('lfa_last_sync_time');
@@ -2079,6 +2190,8 @@ class GasEngineService {
       return { success: false, message: `La selección excede el valor máximo del equipo (${MAX_TEAM_VALUE}). Valor actual: ${currentTeamVal}, Jugador: ${playerVal}, Potencial: ${potentialNewVal}.` };
     }
 
+    const currentTurnBefore = this.getCurrentDraftTurn();
+
     this.lineups.push({
       team: teamName,
       jornada: JORNADA_DRAFT,
@@ -2105,6 +2218,35 @@ class GasEngineService {
 
     this.saveState();
     this.notify();
+
+    // Calcular el siguiente turno y estado de finalización del Draft
+    const nextTurn = this.getCurrentDraftTurn();
+    const teamsList = this.getTeams();
+    const maxTotalPicks = teamsList.length * 11;
+    const currentPickNumber = this.drafts.length;
+
+    // Disparar aviso a Telegram de la elección realizada y anunciar el siguiente turno
+    this.triggerDraftPickNotification({
+      team: teamName,
+      player: playerName,
+      realTeam: playerDetails.realTeam,
+      position: playerDetails.position,
+      value: playerVal,
+      round: currentTurnBefore.round,
+      pickNumber: currentPickNumber,
+      totalPicks: maxTotalPicks,
+      nextTeam: nextTurn.isComplete ? null : nextTurn.activeTeam,
+      nextRound: nextTurn.isComplete ? null : nextTurn.round,
+      isComplete: nextTurn.isComplete
+    });
+
+    // Si el Draft ha concluido con todas las 11 rondas, disparar aviso especial de finalización
+    if (nextTurn.isComplete) {
+      this.triggerDraftCompletedNotification({
+        totalPicks: currentPickNumber,
+        teamsCount: teamsList.length
+      });
+    }
 
     // Sincronizar en segundo plano con Google Sheets si hay URL configurada
     if (this.gasUrl) {

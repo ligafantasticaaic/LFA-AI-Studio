@@ -411,6 +411,88 @@ function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jo
 }
 
 /**
+ * Función para enviar avisos de elección de Draft a Telegram
+ */
+function enviarAvisoDraftTelegram(equipo, jugador, realTeam, pos, val, ronda, eleccionNum, totalElecciones, siguienteEquipo, siguienteRonda, esFinDraft) {
+  var cleanTgToken = (typeof TELEGRAM_BOT_TOKEN !== "undefined" && TELEGRAM_BOT_TOKEN) ? String(TELEGRAM_BOT_TOKEN).trim() : "";
+  var cleanTgChatId = (typeof TELEGRAM_CHAT_ID !== "undefined" && TELEGRAM_CHAT_ID) ? String(TELEGRAM_CHAT_ID).trim() : "";
+
+  if (!cleanTgToken || !cleanTgChatId) return;
+
+  try {
+    var nextLine = esFinDraft
+      ? "🏁 *Estado:* ¡Última elección del Draft completada!"
+      : (siguienteEquipo
+          ? "👉 *Siguiente turno para elegir:* ⏳ *" + siguienteEquipo + "* (Ronda " + (siguienteRonda || ronda) + ")"
+          : "👉 *Siguiente turno:* Esperando turno");
+
+    var lineas = [
+      "🎯 *¡ELECCIÓN EN EL DRAFT INICIAL!* ⚽",
+      "━━━━━━━━━━━━━━━━━━━━",
+      "🏟 *Equipo:* " + equipo,
+      "🟢 *Jugador elegido:* " + jugador + " (" + (realTeam || "LaLiga") + " - " + pos + ")",
+      "💰 *Valor:* " + val + " €",
+      "🔢 *Ronda:* Ronda " + ronda + " de 11 (Elección " + eleccionNum + "/" + totalElecciones + ")",
+      "━━━━━━━━━━━━━━━━━━━━",
+      nextLine,
+      "🏆 _Liga Fantástica de Amigos_"
+    ];
+
+    var mensaje = lineas.join(String.fromCharCode(10));
+    var tgUrl = "https://api.telegram.org/bot" + cleanTgToken + "/sendMessage";
+    var tgResp = UrlFetchApp.fetch(tgUrl, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify({
+        chat_id: cleanTgChatId,
+        text: mensaje,
+        parse_mode: "Markdown"
+      }),
+      muteHttpExceptions: true
+    });
+
+    var respCode = tgResp.getResponseCode();
+    var respText = tgResp.getContentText();
+
+    if (respCode >= 400 && respText.indexOf("parse") !== -1) {
+      UrlFetchApp.fetch(tgUrl, {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify({
+          chat_id: cleanTgChatId,
+          text: mensaje.replace(/[*_]/g, "")
+        }),
+        muteHttpExceptions: true
+      });
+    }
+
+    if (esFinDraft) {
+      var lineasFin = [
+        "🎉 *¡EL DRAFT INICIAL HA FINALIZADO CON ÉXITO!* 🏆",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "✅ Todos los equipos participantes han completado sus 11 futbolistas de plantilla.",
+        "📊 *Resumen:* " + totalElecciones + " elecciones realizadas.",
+        "⚽ ¡Las plantillas quedan configuradas para la nueva temporada!",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🏆 _Liga Fantástica de Amigos_"
+      ];
+      UrlFetchApp.fetch(tgUrl, {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify({
+          chat_id: cleanTgChatId,
+          text: lineasFin.join(String.fromCharCode(10)),
+          parse_mode: "Markdown"
+        }),
+        muteHttpExceptions: true
+      });
+    }
+  } catch(errTg) {
+    Logger.log("Error enviando aviso de Draft a Telegram: " + errTg.message);
+  }
+}
+
+/**
  * Enrutador principal de páginas HTML y API JSON para Web App y GitHub Pages
  */
 function doGet(e) {
@@ -1495,6 +1577,34 @@ function processDraftSelection(team, token, player) {
   
   if (sheetAl) {
     sheetAl.appendRow([team, 1, player, realTeam, pos, val]);
+  }
+
+  // Notificación automática a Telegram con la elección y el siguiente turno anunciado
+  try {
+    var totalEleccionesHechas = Math.max(1, sheetDraft.getLastRow() - 1);
+    var teamsList = getTeamNames();
+    var totalEquipos = teamsList.length || 6;
+    var totalMaxElecciones = totalEquipos * 11;
+    var rondaActual = Math.min(11, Math.floor((totalEleccionesHechas - 1) / totalEquipos) + 1);
+    var esFinDraft = totalEleccionesHechas >= totalMaxElecciones;
+    var siguienteEquipo = '';
+    var siguienteRonda = rondaActual;
+
+    if (!esFinDraft && totalEquipos > 0) {
+      var roundIdx = Math.min(10, Math.floor(totalEleccionesHechas / totalEquipos));
+      var teamIdx = totalEleccionesHechas % totalEquipos;
+      siguienteRonda = roundIdx + 1;
+      var orderData = getDraftOrderFromSheet();
+      if (orderData && orderData[roundIdx] && orderData[roundIdx].teams && orderData[roundIdx].teams[teamIdx]) {
+        siguienteEquipo = orderData[roundIdx].teams[teamIdx];
+      } else if (teamsList[teamIdx]) {
+        siguienteEquipo = teamsList[teamIdx];
+      }
+    }
+
+    enviarAvisoDraftTelegram(team, player, realTeam, pos, val, rondaActual, totalEleccionesHechas, totalMaxElecciones, siguienteEquipo, siguienteRonda, esFinDraft);
+  } catch(errAvisoDraft) {
+    Logger.log("Error al enviar aviso de draft a Telegram: " + errAvisoDraft);
   }
   
   return { success: true, message: '¡Selección registrada correctamente! ' + player + ' fichado por ' + team + '.' };

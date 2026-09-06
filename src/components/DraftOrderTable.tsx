@@ -4,8 +4,6 @@ import { DraftRoundOrder } from '../types/league';
 import { 
   Trophy, 
   Shuffle, 
-  Eye, 
-  EyeOff, 
   CheckCircle2, 
   Clock, 
   RefreshCw, 
@@ -24,14 +22,12 @@ export const DraftOrderTable: React.FC<DraftOrderTableProps> = ({
   selectedTeam 
 }) => {
   const [order, setOrder] = useState<DraftRoundOrder[]>(gasEngine.getDraftOrder());
-  const [isDraftHidden, setIsDraftHidden] = useState<boolean>(gasEngine.isDraftHidden());
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const isPlayerMode = gasEngine.isPlayerMode();
 
   const updateState = () => {
     setOrder(gasEngine.getDraftOrder());
-    setIsDraftHidden(gasEngine.isDraftHidden());
   };
 
   useEffect(() => {
@@ -84,20 +80,6 @@ export const DraftOrderTable: React.FC<DraftOrderTableProps> = ({
     }
   };
 
-  // Alternar visibilidad de la pestaña Draft
-  const handleToggleHideDraft = () => {
-    const nextState = !isDraftHidden;
-    gasEngine.setDraftHidden(nextState, true);
-    setIsDraftHidden(nextState);
-    setSaveFeedback({
-      type: 'success',
-      text: nextState
-        ? 'Pestaña de Draft ocultada de la barra de navegación.'
-        : 'Pestaña de Draft visible en la navegación.'
-    });
-    setTimeout(() => setSaveFeedback(null), 4000);
-  };
-
   // Encontrar el número máximo de filas entre todas las rondas
   const maxRows = Math.max(
     totalTeams,
@@ -129,9 +111,6 @@ export const DraftOrderTable: React.FC<DraftOrderTableProps> = ({
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-            Cada equipo elige 1 jugador por turno en estricto orden. Los nombres se van difuminando según se completan los fichajes.
-          </p>
         </div>
 
         {/* Acciones del Orden */}
@@ -162,31 +141,6 @@ export const DraftOrderTable: React.FC<DraftOrderTableProps> = ({
               <span>{isSaving ? 'Guardando...' : 'Subir a Sheets'}</span>
             </button>
           )}
-
-          {/* Botón para Ocultar / Mostrar Pestaña Draft */}
-          <button
-            type="button"
-            id="btn-toggle-draft-hidden"
-            onClick={handleToggleHideDraft}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-              isDraftHidden
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
-            }`}
-            title={isDraftHidden ? 'Hacer visible la pestaña Draft' : 'Ocultar pestaña Draft tras completar las 11 rondas'}
-          >
-            {isDraftHidden ? (
-              <>
-                <Eye className="w-3.5 h-3.5 text-amber-400" />
-                <span>Mostrar Pestaña</span>
-              </>
-            ) : (
-              <>
-                <EyeOff className="w-3.5 h-3.5 text-slate-400" />
-                <span>Ocultar Pestaña</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
 
