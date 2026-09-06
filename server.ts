@@ -52,6 +52,8 @@ async function startServer() {
         telegramChatId: '',
         directTelegram: false
       },
+      draftOrder: [],
+      isDraftHidden: false,
       updatedAt: null,
       updatedBy: 'system'
     };
@@ -69,6 +71,8 @@ async function startServer() {
               ...(parsed.leagueTexts || {})
             },
             customCodeGs: typeof parsed.customCodeGs === 'string' ? parsed.customCodeGs : defaults.customCodeGs,
+            draftOrder: Array.isArray(parsed.draftOrder) ? parsed.draftOrder : defaults.draftOrder,
+            isDraftHidden: typeof parsed.isDraftHidden === 'boolean' ? parsed.isDraftHidden : defaults.isDraftHidden,
             notificationConfig: {
               ...defaults.notificationConfig,
               ...(parsed.notificationConfig || {})
@@ -111,6 +115,12 @@ async function startServer() {
       tokens: Array.isArray(newValues.tokens)
         ? newValues.tokens
         : current.tokens || [],
+      draftOrder: Array.isArray(newValues.draftOrder)
+        ? newValues.draftOrder
+        : current.draftOrder || [],
+      isDraftHidden: typeof newValues.isDraftHidden === 'boolean'
+        ? newValues.isDraftHidden
+        : current.isDraftHidden ?? false,
       notificationConfig: {
         ...current.notificationConfig,
         ...(newValues.notificationConfig || {})
@@ -237,7 +247,27 @@ async function startServer() {
         }
       }
 
-      const detectedChats = Array.from(foundChatsMap.values());
+      const detectedChats = [];
+      for (const c of foundChatsMap.values()) {
+        let is_admin = false;
+        let member_status = 'member';
+        if (c.isGroup || c.isChannel) {
+          try {
+            const memberResp = await fetch(`https://api.telegram.org/bot${cleanToken}/getChatMember?chat_id=${c.id}&user_id=${bot.id}`);
+            const memberData = await memberResp.json().catch(() => null);
+            if (memberData?.ok && memberData.result) {
+              member_status = memberData.result.status;
+              is_admin = member_status === 'administrator' || member_status === 'creator';
+            }
+          } catch {}
+        }
+        detectedChats.push({
+          ...c,
+          member_status,
+          is_admin,
+          needs_admin: (c.isGroup || c.isChannel) && !is_admin
+        });
+      }
 
       return res.json({
         ok: true,

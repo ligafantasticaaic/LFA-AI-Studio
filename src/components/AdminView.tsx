@@ -560,6 +560,23 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
+  const handleCleanOldSeasonData = async () => {
+    const confirm = window.confirm(
+      '¿Deseas vaciar los datos antiguos de la temporada pasada (alineaciones, fichajes y draft) y sincronizar desde tu Google Sheet limpio para empezar la nueva temporada?'
+    );
+    if (!confirm) return;
+    setIsSyncingGas(true);
+    setGasFeedback(null);
+    const res = await gasEngine.resetSeasonDataAndSync();
+    setIsSyncingGas(false);
+    setGasFeedback({
+      isSuccess: res.success,
+      message: res.message
+    });
+    loadAdminData();
+    showAlert(res.message, res.success);
+  };
+
   const handleCopyGasCode = () => {
     const code = GAS_TEMPLATES['Código.gs'] || '';
     navigator.clipboard.writeText(code);
@@ -848,6 +865,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 {copiedGasCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
                 <span>{copiedGasCode ? '¡Código.gs Copiado!' : 'Copiar Código.gs Actualizado'}</span>
               </button>
+
+              <button
+                onClick={handleCleanOldSeasonData}
+                disabled={isSyncingGas}
+                className="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Vacía los fichajes y alineaciones antiguas de la temporada pasada y sincroniza desde Google Sheets limpio"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isSyncingGas ? 'animate-spin' : ''}`} />
+                <span>Reiniciar Temporada (Limpiar Datos Antiguos)</span>
+              </button>
             </div>
 
             {/* Google Sheets Tabs Info Card */}
@@ -858,8 +885,93 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <li><strong className="text-slate-300">Jugadores:</strong> Plantilla completa con valor, posición y puntos por jornada.</li>
                 <li><strong className="text-slate-300">Alineaciones:</strong> Los 11 futbolistas alineados por equipo y jornada.</li>
                 <li><strong className="text-slate-300">Fichajes:</strong> Historial de sustituciones y coste de mercado (se actualiza automáticamente).</li>
-                <li><strong className="text-slate-300">Draft:</strong> Historial de jugadores seleccionados durante el draft inicial.</li>
+                <li><strong className="text-slate-300">Draft:</strong> Historial de jugadores seleccionados durante el draft inicial y orden de elección de 11 rondas.</li>
               </ul>
+            </div>
+          </div>
+
+          {/* ======================================================== */}
+          {/* SECCIÓN: Gestión del Draft Inicial y Orden de Elección   */}
+          {/* ======================================================== */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Gestión del Draft Inicial (11 Rondas)</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Controla el orden aleatorio de elección por turnos y la visibilidad de la pestaña Draft
+                  </p>
+                </div>
+              </div>
+
+              {/* Botón de visibilidad de la pestaña Draft */}
+              <button
+                type="button"
+                onClick={() => {
+                  const currentHidden = gasEngine.isDraftHidden();
+                  gasEngine.setDraftHidden(!currentHidden, true);
+                  showAlert(!currentHidden ? 'Pestaña de Draft ocultada' : 'Pestaña de Draft mostrada', true);
+                }}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+                  gasEngine.isDraftHidden()
+                    ? 'bg-amber-950/60 border-amber-500/40 text-amber-300 hover:bg-amber-900/60'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <span>{gasEngine.isDraftHidden() ? '🙈 Pestaña Oculta (Activar para mostrar)' : '👁️ Pestaña Visible (Click para ocultar)'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 text-xs">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-extrabold block mb-1">Rondas Totales</span>
+                <span className="text-base font-black text-white">11 Rondas (11 fichajes/equipo)</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-extrabold block mb-1">Estado de Elección</span>
+                <span className="text-base font-black text-amber-400">
+                  {gasEngine.getCurrentDraftTurn().isComplete ? '✓ Completado' : `Ronda ${gasEngine.getCurrentDraftTurn().round} en curso`}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-extrabold block mb-1">Fichajes de Draft</span>
+                <span className="text-base font-black text-emerald-400 font-mono">
+                  {gasEngine.getDraftHistory().length} / {gasEngine.getTeamNames().length * 11}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  gasEngine.generateRandomDraftOrder(true);
+                  showAlert('¡Nuevo orden aleatorio sorteado para las 11 rondas de elección!', true);
+                }}
+                className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Sortear Nuevo Orden Aleatorio</span>
+              </button>
+
+              {gasEngine.getGasUrl() && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await gasEngine.syncDraftOrderToGoogleSheets();
+                    showAlert(res.message, res.success);
+                  }}
+                  className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Database className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Guardar Orden en Hoja 'Draft'</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1780,17 +1892,31 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
                         </div>
 
                         {telegramDiagnosisResult.detectedChats && telegramDiagnosisResult.detectedChats.length > 0 ? (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <span className="text-[11px] font-bold text-slate-300 block">
                               Grupos y chats detectados para tu bot (haz clic para asignar el ID):
                             </span>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="grid grid-cols-1 gap-2">
                               {telegramDiagnosisResult.detectedChats.map((c: any) => (
-                                <div key={c.id} className="p-2.5 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <span className="font-bold text-white text-xs truncate block">{c.title}</span>
-                                    <span className="text-[10px] font-mono text-slate-400 block truncate">
-                                      ID: <strong className="text-amber-400">{c.id}</strong> ({c.type})
+                                <div key={c.id} className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-bold text-white text-xs">{c.title}</span>
+                                      <span className="text-[10px] bg-slate-800 text-slate-300 font-mono px-1.5 py-0.5 rounded">
+                                        {c.type}
+                                      </span>
+                                      {c.is_admin ? (
+                                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-bold">
+                                          ✓ Administrador en grupo
+                                        </span>
+                                      ) : c.isGroup ? (
+                                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold">
+                                          ⚠️ Miembro normal (requiere ser Administrador)
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <span className="text-[11px] font-mono text-slate-400 block truncate">
+                                      ID: <strong className="text-amber-400">{c.id}</strong>
                                     </span>
                                   </div>
                                   <button
@@ -1799,13 +1925,26 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
                                       setNotificationConfig({ ...notificationConfig, telegramChatId: c.id });
                                       showAlert(`Chat ID "${c.id}" (${c.title}) seleccionado.`, true);
                                     }}
-                                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-2.5 py-1 rounded-md transition cursor-pointer shrink-0"
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-3 py-1.5 rounded-md transition cursor-pointer shrink-0 self-start sm:self-auto"
                                   >
                                     Usar este ID
                                   </button>
                                 </div>
                               ))}
                             </div>
+
+                            {telegramDiagnosisResult.detectedChats.some((c: any) => c.needs_admin) && (
+                              <div className="p-3 bg-amber-950/40 border border-amber-500/40 rounded-lg text-amber-200 text-[11px] space-y-1.5">
+                                <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                                  <AlertTriangle className="w-3.5 h-3.5" />
+                                  <span>Paso necesario en tu grupo de Telegram:</span>
+                                </span>
+                                <p className="m-0 text-slate-300 leading-relaxed">
+                                  Tu grupo tiene restringido el envío de mensajes a miembros estándar. Para que el bot pueda publicar avisos de fichajes:
+                                  Abre el grupo en Telegram &gt; pulsa el nombre del grupo &gt; Editar &gt; <strong>Administradores</strong> &gt; <strong>Añadir administrador</strong> &gt; selecciona a <strong>@{telegramDiagnosisResult.bot?.username}</strong> con el permiso <strong>"Enviar mensajes"</strong>.
+                                </p>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="p-3 bg-amber-950/40 border border-amber-500/40 rounded-lg space-y-2 text-amber-200">

@@ -15,7 +15,8 @@ import {
   ClubStyle,
   NotificationConfig,
   LeagueConfig,
-  LeagueTexts
+  LeagueTexts,
+  DraftRoundOrder
 } from '../types/league';
 import { generateCustomGasCode } from '../data/gasTemplates';
 
@@ -288,6 +289,8 @@ class GasEngineService {
   };
   private lastSyncTime: string | null = null;
   private serverUpdatedAt: string | null = null;
+  private draftOrder: DraftRoundOrder[] = [];
+  private isDraftHiddenState: boolean = false;
   private listeners: Array<() => void> = [];
 
   constructor() {
@@ -467,6 +470,22 @@ class GasEngineService {
           changed = true;
         }
 
+        // Orden de elección del Draft (11 rondas)
+        if (Array.isArray(data.draftOrder) && data.draftOrder.length > 0) {
+          this.draftOrder = data.draftOrder;
+          localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
+          changed = true;
+        }
+
+        // Estado de visibilidad de la pestaña Draft
+        if (typeof data.isDraftHidden === 'boolean') {
+          if (this.isDraftHiddenState !== data.isDraftHidden) {
+            this.isDraftHiddenState = data.isDraftHidden;
+            localStorage.setItem('lfa_is_draft_hidden', String(this.isDraftHiddenState));
+            changed = true;
+          }
+        }
+
         if (changed) {
           this.notify();
         }
@@ -492,6 +511,8 @@ class GasEngineService {
       notificationConfig: partial?.notificationConfig !== undefined ? partial.notificationConfig : this.notificationConfig,
       leagueTexts: partial?.leagueTexts !== undefined ? partial.leagueTexts : this.leagueTexts,
       customCodeGs: partial?.customCodeGs !== undefined ? partial.customCodeGs : this.customCodeGs,
+      draftOrder: partial?.draftOrder !== undefined ? partial.draftOrder : this.draftOrder,
+      isDraftHidden: partial?.isDraftHidden !== undefined ? partial.isDraftHidden : this.isDraftHiddenState,
       adminPassword: adminPassword || this.adminPassword
     };
 
@@ -1195,8 +1216,8 @@ class GasEngineService {
         updatedPlayersCount = this.players.length;
       }
 
-      // Actualizar alineaciones si vienen en la respuesta
-      if (Array.isArray(data.lineups) && data.lineups.length > 0) {
+      // Actualizar alineaciones si vienen en la respuesta (incluso si está vacío por inicio de temporada)
+      if (Array.isArray(data.lineups)) {
         this.lineups = data.lineups.map((l: any) => ({
           team: l.teamName || l.team || l.Equipo,
           jornada: Number(l.jornada || l.Jornada) || 1,
@@ -1217,7 +1238,7 @@ class GasEngineService {
                            (data.data && Array.isArray(data.data.transfers) ? data.data.transfers :
                            (data.data && Array.isArray(data.data.fichajes) ? data.data.fichajes : null))));
 
-      if (rawTransfers && rawTransfers.length > 0) {
+      if (rawTransfers !== null && Array.isArray(rawTransfers)) {
         this.transfers = rawTransfers.map((t: any) => ({
           timestamp: String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || t.Hora || '').trim(),
           team: String(t.team || t.Equipo || t.Team || t.Club || t['Nombre Equipo'] || '').trim(),
@@ -1230,28 +1251,6 @@ class GasEngineService {
         updatedTransfersCount = this.transfers.length;
       }
 
-      // Si no vinieron fichajes en getFullSync, consultar endpoint específico como salvaguarda
-      if (this.transfers.length === 0) {
-        try {
-          const tRes = await this.fetchGasData(targetUrl, { action: 'getTransferHistory' }, 10000);
-          const auxTransfers = Array.isArray(tRes) ? tRes : (tRes?.data || tRes?.transfers);
-          if (Array.isArray(auxTransfers) && auxTransfers.length > 0) {
-            this.transfers = auxTransfers.map((t: any) => ({
-              timestamp: String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || '').trim(),
-              team: String(t.team || t.Equipo || t.Team || t.Club || '').trim(),
-              jornada: Number(t.jornada || t.Jornada || t.Jor || 1) || 1,
-              playerOut: String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || t['Jugador que sale'] || t.Sale || t.Baja || '').trim(),
-              playerIn: String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || t['Jugador que entra'] || t.Entra || t.Alta || t.Fichaje || '').trim(),
-              cost: parseCleanNumber(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : 0)),
-              type: ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono')
-            })).filter(t => t.team || t.playerOut || t.playerIn);
-            updatedTransfersCount = this.transfers.length;
-          }
-        } catch {
-          // No bloqueante
-        }
-      }
-
       // Actualizar historial de draft si viene en la respuesta
       const rawDrafts = Array.isArray(data.drafts) ? data.drafts :
                         (Array.isArray(data.draftHistory) ? data.draftHistory :
@@ -1259,7 +1258,7 @@ class GasEngineService {
                         (data.data && Array.isArray(data.data.drafts) ? data.data.drafts :
                         (data.data && Array.isArray(data.data.draftHistory) ? data.data.draftHistory : null))));
 
-      if (rawDrafts && rawDrafts.length > 0) {
+      if (rawDrafts !== null && Array.isArray(rawDrafts)) {
         this.drafts = rawDrafts.map((d: any) => {
           const pName = String(d.playerName || d.Nombre_Jugador || d['Nombre del Jugador'] || d['Nombre Jugador'] || d.Jugador || d.Nombre || d.Futbolista || d.Player || '').trim();
           let pReal = String(d.realTeam || d.Equipo_Liga || d['Equipo Real'] || d['Equipo_Real'] || d.Club || d['Equipo de la Liga'] || '').trim();
@@ -1288,25 +1287,12 @@ class GasEngineService {
         updatedDraftsCount = this.drafts.length;
       }
 
-      // Si no vinieron drafts en getFullSync, consultar endpoint específico como salvaguarda
-      if (this.drafts.length === 0) {
-        try {
-          const dRes = await this.fetchGasData(targetUrl, { action: 'getDraftHistory' }, 10000);
-          const auxDrafts = Array.isArray(dRes) ? dRes : (dRes?.data || dRes?.drafts);
-          if (Array.isArray(auxDrafts) && auxDrafts.length > 0) {
-            this.drafts = auxDrafts.map((d: any) => ({
-              timestamp: String(d.timestamp || d.date || d['Marca temporal'] || d.Fecha || d['Fecha/Hora'] || '').trim(),
-              team: String(d.team || d.Equipo || d.Team || d.Club || '').trim(),
-              playerName: String(d.playerName || d.Nombre_Jugador || d['Nombre del Jugador'] || d.Jugador || d.Nombre || '').trim(),
-              realTeam: String(d.realTeam || d.Equipo_Liga || d['Equipo Real'] || d.Club || '').trim(),
-              position: String(d.position || d.Posicion || 'Medio').trim(),
-              value: Number(d.value !== undefined ? d.value : (d.Valor !== undefined ? d.Valor : 0)) || 0
-            })).filter(d => d.team || d.playerName);
-            updatedDraftsCount = this.drafts.length;
-          }
-        } catch {
-          // No bloqueante
-        }
+      // Actualizar orden del draft si viene en la respuesta de Google Sheets
+      const rawDraftOrder = Array.isArray(data.draftOrder) ? data.draftOrder :
+                            (data.data && Array.isArray(data.data.draftOrder) ? data.data.draftOrder : null);
+      if (Array.isArray(rawDraftOrder) && rawDraftOrder.length > 0) {
+        this.draftOrder = rawDraftOrder;
+        localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
       }
 
       const now = new Date();
@@ -1453,6 +1439,21 @@ class GasEngineService {
         this.customCodeGs = savedCustomCode;
       }
 
+      const savedDraftOrder = localStorage.getItem('lfa_draft_order');
+      if (savedDraftOrder) {
+        try {
+          const parsed = JSON.parse(savedDraftOrder);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.draftOrder = parsed;
+          }
+        } catch {}
+      }
+
+      const savedDraftHidden = localStorage.getItem('lfa_is_draft_hidden');
+      if (savedDraftHidden !== null) {
+        this.isDraftHiddenState = savedDraftHidden === 'true';
+      }
+
       // Comprobar si se ha entrado mediante enlace de jugador (?mode=player o ?player=1)
       if (typeof window !== 'undefined') {
         const p = new URLSearchParams(window.location.search);
@@ -1490,6 +1491,8 @@ class GasEngineService {
       localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
       localStorage.setItem('lfa_admin_password', this.adminPassword);
       localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
+      localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
+      localStorage.setItem('lfa_is_draft_hidden', String(this.isDraftHiddenState));
       if (this.customCodeGs) {
         localStorage.setItem('lfa_custom_code_gs', this.customCodeGs);
       } else {
@@ -1504,10 +1507,12 @@ class GasEngineService {
     this.teams = [...INITIAL_TEAMS];
     this.tokens = [...INITIAL_TOKENS];
     this.players = [...INITIAL_PLAYERS];
-    this.lineups = [...INITIAL_LINEUPS];
-    this.transfers = [...INITIAL_TRANSFERS];
-    this.drafts = [...INITIAL_DRAFTS];
+    this.lineups = [];
+    this.transfers = [];
+    this.drafts = [];
     this.schedules = [...INITIAL_SCHEDULES];
+    this.draftOrder = [];
+    this.isDraftHiddenState = false;
     this.saveState();
   }
 
@@ -1515,6 +1520,14 @@ class GasEngineService {
 
   public getTeamNames(): string[] {
     return [...this.teams].sort();
+  }
+
+  public getTeams(): string[] {
+    return this.getTeamNames();
+  }
+
+  public getTokens(): TeamToken[] {
+    return [...this.tokens];
   }
 
   public getNumberOfTeams(): number {
@@ -2028,6 +2041,15 @@ class GasEngineService {
       return { success: false, message: 'Datos incompletos. Selecciona equipo y jugador.' };
     }
 
+    // Comprobar orden de elección y turnos del Draft (si hay orden configurado)
+    const turnValidation = this.canTeamPickInDraft(teamName);
+    if (!turnValidation.allowed) {
+      return {
+        success: false,
+        message: turnValidation.reason || `No es el turno de "${teamName}" para elegir en el Draft.`
+      };
+    }
+
     const currentLineupsJ1 = this.lineups.filter(l => l.jornada === JORNADA_DRAFT);
     const isAlreadyDrafted = currentLineupsJ1.some(l => l.playerName.trim() === playerName);
 
@@ -2082,6 +2104,19 @@ class GasEngineService {
     });
 
     this.saveState();
+    this.notify();
+
+    // Sincronizar en segundo plano con Google Sheets si hay URL configurada
+    if (this.gasUrl) {
+      this.fetchGasData(this.gasUrl, {
+        action: 'draft',
+        team: teamName,
+        token: token,
+        player: playerName
+      }, 10000).catch(err => {
+        console.warn('[gasEngine] Envío de elección de draft a Google Sheets:', err);
+      });
+    }
 
     return {
       success: true,
@@ -2928,6 +2963,256 @@ class GasEngineService {
       teamName,
       jornadas: jornadasList,
       rows
+    };
+  }
+
+  // --- Funciones del Orden de Elección del Draft (11 Rondas) ---
+
+  /**
+   * Obtiene el orden de elección de las 11 rondas del Draft
+   */
+  public getDraftOrder(): DraftRoundOrder[] {
+    if (this.draftOrder && this.draftOrder.length > 0) {
+      return this.draftOrder;
+    }
+    return this.generateDefaultDraftOrder();
+  }
+
+  /**
+   * Genera el orden de 11 rondas por defecto a partir de los equipos participantes
+   */
+  public generateDefaultDraftOrder(): DraftRoundOrder[] {
+    const currentTeams = this.getTeams();
+    const order: DraftRoundOrder[] = [];
+    for (let r = 1; r <= 11; r++) {
+      order.push({
+        round: r,
+        roundName: `Ronda ${r}`,
+        teams: [...currentTeams]
+      });
+    }
+    return order;
+  }
+
+  /**
+   * Sortea un orden de elección aleatorio para las 11 rondas
+   * En cada ronda, cada equipo participante elige 1 jugador en orden aleatorio
+   * cumpliendo turnos por orden estricto (un equipo no vuelve a elegir hasta que todos los demás han elegido en ese turno).
+   */
+  public generateRandomDraftOrder(pushToServer: boolean = true): DraftRoundOrder[] {
+    const currentTeams = this.getTeams();
+    const order: DraftRoundOrder[] = [];
+    for (let r = 1; r <= 11; r++) {
+      const shuffled = [...currentTeams];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      order.push({
+        round: r,
+        roundName: `Ronda ${r}`,
+        teams: shuffled
+      });
+    }
+    this.setDraftOrder(order, pushToServer);
+    return order;
+  }
+
+  /**
+   * Guarda el orden de elección del Draft en memoria, localStorage y servidor central
+   */
+  public setDraftOrder(order: DraftRoundOrder[], pushToServer: boolean = true): void {
+    this.draftOrder = order;
+    localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
+    if (pushToServer) {
+      this.pushLeagueConfigToServer({ draftOrder: this.draftOrder });
+    }
+    this.notify();
+  }
+
+  /**
+   * Indica si la pestaña de Draft debe ocultarse (al completar las 11 rondas)
+   */
+  public isDraftHidden(): boolean {
+    return this.isDraftHiddenState;
+  }
+
+  /**
+   * Establece si la pestaña de Draft está oculta
+   */
+  public setDraftHidden(hidden: boolean, pushToServer: boolean = true): void {
+    this.isDraftHiddenState = hidden;
+    localStorage.setItem('lfa_is_draft_hidden', String(hidden));
+    if (pushToServer) {
+      this.pushLeagueConfigToServer({ isDraftHidden: hidden });
+    }
+    this.notify();
+  }
+
+  /**
+   * Conteo de elecciones de Draft completadas por cada equipo
+   */
+  public getDraftPicksCountByTeam(): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const t of this.getTeams()) {
+      counts[t] = 0;
+    }
+    for (const d of this.drafts) {
+      const tName = d.team?.trim();
+      if (tName) {
+        // Encontrar coincidencia case-insensitive
+        const matchedTeam = Object.keys(counts).find(k => k.toLowerCase() === tName.toLowerCase());
+        if (matchedTeam) {
+          counts[matchedTeam] = (counts[matchedTeam] || 0) + 1;
+        } else {
+          counts[tName] = (counts[tName] || 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }
+
+  /**
+   * Determina el turno actual del Draft basándose en el orden estipulado y las elecciones realizadas
+   */
+  public getCurrentDraftTurn(): {
+    round: number;
+    activeTeam: string;
+    roundIndex: number;
+    teamIndex: number;
+    isComplete: boolean;
+    totalPicks: number;
+    maxTotalPicks: number;
+  } {
+    const order = this.getDraftOrder();
+    const currentTeams = this.getTeams();
+    const totalTeams = currentTeams.length;
+    const maxTotalPicks = totalTeams * 11;
+    const totalPicks = this.drafts.length;
+
+    if (totalTeams === 0 || totalPicks >= maxTotalPicks) {
+      return {
+        round: 11,
+        activeTeam: '',
+        roundIndex: 10,
+        teamIndex: Math.max(0, totalTeams - 1),
+        isComplete: true,
+        totalPicks,
+        maxTotalPicks
+      };
+    }
+
+    const roundIndex = Math.min(10, Math.floor(totalPicks / totalTeams));
+    const teamIndex = totalPicks % totalTeams;
+    const currentRoundOrder = order[roundIndex];
+    const activeTeam = currentRoundOrder?.teams?.[teamIndex] || currentTeams[teamIndex] || '';
+
+    return {
+      round: roundIndex + 1,
+      activeTeam,
+      roundIndex,
+      teamIndex,
+      isComplete: false,
+      totalPicks,
+      maxTotalPicks
+    };
+  }
+
+  /**
+   * Valida si un equipo tiene permiso para elegir en el Draft en este instante
+   */
+  public canTeamPickInDraft(teamName: string): {
+    allowed: boolean;
+    reason?: string;
+    activeTeam?: string;
+    currentRound?: number;
+  } {
+    const turn = this.getCurrentDraftTurn();
+    if (turn.isComplete) {
+      return {
+        allowed: false,
+        reason: 'El Draft ya ha completado todas sus 11 rondas de elección.'
+      };
+    }
+
+    const counts = this.getDraftPicksCountByTeam();
+    const teamKey = Object.keys(counts).find(k => k.toLowerCase() === teamName.toLowerCase()) || teamName;
+    const teamPicks = counts[teamKey] || 0;
+    if (teamPicks >= 11) {
+      return {
+        allowed: false,
+        reason: `El equipo "${teamName}" ya ha completado sus 11 elecciones permitidas.`
+      };
+    }
+
+    if (turn.activeTeam && turn.activeTeam.toLowerCase() !== teamName.toLowerCase()) {
+      return {
+        allowed: false,
+        reason: `No es el turno de "${teamName}". Turno actual: "${turn.activeTeam}" (Ronda ${turn.round}).`,
+        activeTeam: turn.activeTeam,
+        currentRound: turn.round
+      };
+    }
+
+    return {
+      allowed: true,
+      activeTeam: turn.activeTeam,
+      currentRound: turn.round
+    };
+  }
+
+  /**
+   * Guarda el orden de elección directamente en la pestaña "Draft" de Google Sheets
+   */
+  public async syncDraftOrderToGoogleSheets(): Promise<{ success: boolean; message: string }> {
+    const targetUrl = this.getGasUrl();
+    if (!targetUrl) {
+      return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
+    }
+    const order = this.getDraftOrder();
+    try {
+      const resp = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'saveDraftOrder',
+          draftOrder: order
+        })
+      });
+      const data = await resp.json();
+      return {
+        success: data?.success || false,
+        message: data?.message || (data?.success ? 'Guardado en Google Sheets' : 'Error al guardar')
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: 'No se pudo conectar con Google Sheets: ' + (err?.message || err)
+      };
+    }
+  }
+
+  /**
+   * Restablece los datos de la temporada anterior (Alineaciones, Fichajes y Draft) a vacío
+   * y fuerza una sincronización limpia con Google Sheets
+   */
+  public async resetSeasonDataAndSync(): Promise<{ success: boolean; message: string }> {
+    this.lineups = [];
+    this.transfers = [];
+    this.drafts = [];
+    localStorage.setItem('lfa_lineups', '[]');
+    localStorage.setItem('lfa_transfers', '[]');
+    localStorage.setItem('lfa_drafts', '[]');
+    this.saveState();
+    this.notify();
+
+    // Sincronizar desde Google Sheets
+    const syncRes = await this.syncFromRemote();
+    return {
+      success: syncRes.success,
+      message: syncRes.success
+        ? '¡Datos de la temporada anterior limpiados! La aplicación está sincronizada y lista para la nueva temporada.'
+        : 'Datos locales reseteados. Comprueba la conexión con Google Sheets.'
     };
   }
 }

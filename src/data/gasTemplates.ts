@@ -449,6 +449,13 @@ function doGet(e) {
         result = { success: true, data: getPlayersForMercado() };
       } else if (action === 'getAccounting') {
         result = { success: true, data: getAccountingData() };
+      } else if (action === 'draft') {
+        result = processDraftSelection(e.parameter.team, e.parameter.token, e.parameter.player);
+      } else if (action === 'getDraftOrder') {
+        var sDraftOrder = ss.getSheetByName('Draft') || findSheet(ss, ['Orden_Draft', 'Orden Draft', 'Draft_Orden']);
+        result = { success: true, data: getDraftOrderFromSheet(sDraftOrder) };
+      } else if (action === 'saveDraftOrder') {
+        result = saveDraftOrderToSheet(e.parameter.draftOrder);
       } else {
         result = { error: 'Acción API no reconocida: ' + action };
       }
@@ -483,7 +490,7 @@ function doGet(e) {
 }
 
 /**
- * Enrutador POST para peticiones de mutación (Draft, Fichajes) desde la App
+ * Enrutador POST para peticiones de mutación (Draft, Fichajes, Orden Draft) desde la App
  */
 function doPost(e) {
   var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : '';
@@ -505,6 +512,8 @@ function doPost(e) {
       result = processDraftSelection(postData.team, postData.token, postData.player);
     } else if (action === 'transfer') {
       result = processMultipleTransfers(postData.team, postData.token, postData.jornada, postData.transfers);
+    } else if (action === 'saveDraftOrder') {
+      result = saveDraftOrderToSheet(postData.draftOrder);
     } else {
       result = { error: 'Acción POST no reconocida: ' + action };
     }
@@ -514,6 +523,63 @@ function doPost(e) {
 
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Helper para leer la pestaña Draft y parsear las 11 columnas con el orden de los equipos
+ */
+function getDraftOrderFromSheet(sheet) {
+  if (!sheet) return [];
+  var dOrderData = sheet.getDataRange().getValues();
+  var draftOrder = [];
+  if (dOrderData.length > 1) {
+    var headerRow = dOrderData[0];
+    var numCols = Math.min(11, headerRow.length);
+    for (var col = 0; col < numCols; col++) {
+      var rName = String(headerRow[col] || ('Ronda ' + (col + 1))).trim();
+      var roundTeams = [];
+      for (var row = 1; row < dOrderData.length; row++) {
+        var tVal = String(dOrderData[row][col] || '').trim();
+        if (tVal) roundTeams.push(tVal);
+      }
+      if (roundTeams.length > 0) {
+        draftOrder.push({ round: col + 1, roundName: rName, teams: roundTeams });
+      }
+    }
+  }
+  return draftOrder;
+}
+
+/**
+ * Guarda o actualiza el orden del draft en la pestaña Draft
+ */
+function saveDraftOrderToSheet(rawOrder) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Draft');
+  if (!sheet) {
+    sheet = ss.insertSheet('Draft');
+  }
+  var order = (typeof rawOrder === 'string') ? JSON.parse(rawOrder) : rawOrder;
+  if (!Array.isArray(order) || order.length === 0) {
+    return { success: false, message: 'Datos de orden no válidos' };
+  }
+  sheet.clear();
+  var headers = [];
+  for (var r = 0; r < 11; r++) {
+    headers.push(order[r] ? order[r].roundName || ('Ronda ' + (r + 1)) : ('Ronda ' + (r + 1)));
+  }
+  sheet.appendRow(headers);
+  var maxTeams = 0;
+  order.forEach(function(o) { if (o.teams && o.teams.length > maxTeams) maxTeams = o.teams.length; });
+  for (var row = 0; row < maxTeams; row++) {
+    var rowData = [];
+    for (var col = 0; col < 11; col++) {
+      var t = (order[col] && order[col].teams && order[col].teams[row]) ? order[col].teams[row] : '';
+      rowData.push(t);
+    }
+    sheet.appendRow(rowData);
+  }
+  return { success: true, message: 'Orden de elección del Draft guardado con éxito en la pestaña Draft.' };
 }
 
 /**
@@ -775,8 +841,7 @@ function getFullSyncData() {
     'Historial Draft',
     'Draft_Historial',
     'Elecciones Draft',
-    'Draft',
-    'Draft Inicial'
+    'Draft_Elecciones'
   ]);
   var drafts = [];
   if (sheetDraft) {
@@ -867,6 +932,34 @@ function getFullSyncData() {
     }
   }
 
+  // 6. Orden de Elección del Draft (Pestaña "Draft" de 11 columnas/rondas)
+  var sheetDraftOrder = ss.getSheetByName('Draft') || findSheet(ss, ['Orden_Draft', 'Orden Draft', 'Draft_Orden', 'Turnos_Draft', 'Turnos Draft']);
+  var draftOrder = [];
+  if (sheetDraftOrder) {
+    var dOrderData = sheetDraftOrder.getDataRange().getValues();
+    if (dOrderData.length > 1) {
+      var headerRow = dOrderData[0];
+      var numCols = Math.min(11, headerRow.length);
+      for (var col = 0; col < numCols; col++) {
+        var rName = String(headerRow[col] || ('Ronda ' + (col + 1))).trim();
+        var roundTeams = [];
+        for (var row = 1; row < dOrderData.length; row++) {
+          var tVal = String(dOrderData[row][col] || '').trim();
+          if (tVal) {
+            roundTeams.push(tVal);
+          }
+        }
+        if (roundTeams.length > 0) {
+          draftOrder.push({
+            round: col + 1,
+            roundName: rName,
+            teams: roundTeams
+          });
+        }
+      }
+    }
+  }
+
   return {
     success: true,
     maxJornada: maxJ,
@@ -876,6 +969,7 @@ function getFullSyncData() {
     lineups: lineups,
     transfers: transfers,
     drafts: drafts,
+    draftOrder: draftOrder,
     syncedAt: new Date().toISOString()
   };
 }

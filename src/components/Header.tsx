@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Trophy, 
   Users, 
@@ -36,10 +36,17 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenConnectionModal
 }) => {
   const [copiedLink, setCopiedLink] = useState<'player' | 'admin' | null>(null);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const unsub = gasEngine.subscribe(() => setTick(t => t + 1));
+    return unsub;
+  }, []);
 
   // Retrieve dynamic league texts and state
   const leagueTexts = gasEngine.getLeagueTexts();
   const isPlayerMode = gasEngine.isPlayerMode();
+  const isDraftHidden = gasEngine.isDraftHidden();
 
   // Determine stats if not passed
   const displayJornada = maxJornada ?? gasEngine.getMaxJornada();
@@ -73,9 +80,12 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   // Si estamos en modo jugador, OCULTAR completamente la pestaña y acceso de Admin
-  const visibleNavItems = isPlayerMode 
-    ? navItems.filter(item => item.id !== 'admin')
-    : navItems;
+  // Si la pestaña Draft está configurada como oculta (tras las 11 rondas), ocultarla de los tabs
+  const visibleNavItems = navItems.filter(item => {
+    if (isPlayerMode && item.id === 'admin') return false;
+    if (isDraftHidden && item.id === 'draft') return false;
+    return true;
+  });
 
   return (
     <header className="mb-6 space-y-4">

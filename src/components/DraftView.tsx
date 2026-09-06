@@ -3,6 +3,7 @@ import { gasEngine } from '../services/gasEngine';
 import { Player, DraftRecord } from '../types/league';
 import confetti from 'canvas-confetti';
 import { Sparkles, Users, Key, Shield, Search, CheckCircle2, AlertCircle } from 'lucide-react';
+import { DraftOrderTable } from './DraftOrderTable';
 
 export const DraftView: React.FC = () => {
   const [teams, setTeams] = useState<string[]>([]);
@@ -31,6 +32,16 @@ export const DraftView: React.FC = () => {
     setAvailablePlayers(gasEngine.getAvailablePlayersForDraft());
     setDraftHistory(gasEngine.getDraftHistory());
     setIsLoading(false);
+  };
+
+  const handleSelectTeamFromOrder = (teamName: string) => {
+    setSelectedTeam(teamName);
+    // Intentar autocompletar el token si se dispone en el motor
+    const tokens = gasEngine.getTokens();
+    const tMatch = tokens.find(t => t.team.toLowerCase() === teamName.toLowerCase());
+    if (tMatch && tMatch.token) {
+      setTeamToken(tMatch.token);
+    }
   };
 
   const handleDraftSubmit = (e: React.FormEvent) => {
@@ -84,6 +95,12 @@ export const DraftView: React.FC = () => {
             </p>
           </div>
         </div>
+
+        {/* Tabla del Orden de Elección del Draft (11 Rondas) */}
+        <DraftOrderTable
+          onSelectTeam={handleSelectTeamFromOrder}
+          selectedTeam={selectedTeam}
+        />
 
         {/* Form Grid */}
         <form onSubmit={handleDraftSubmit} className="space-y-6">

@@ -67,6 +67,12 @@ export interface DraftRecord {
   value: number | '';
 }
 
+export interface DraftRoundOrder {
+  round: number; // 1 to 11
+  roundName: string; // e.g. "Ronda 1"
+  teams: string[]; // Order of teams for this round
+}
+
 export interface ScheduleRecord {
   jornada: number;
   realTeam: string;
@@ -169,6 +175,8 @@ export interface LeagueConfig {
   notificationConfig: NotificationConfig;
   leagueTexts?: LeagueTexts;
   customCodeGs?: string;
+  draftOrder?: DraftRoundOrder[];
+  isDraftHidden?: boolean;
   updatedAt: string | null;
   updatedBy?: string;
 }
