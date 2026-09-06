@@ -587,19 +587,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handleCleanOldSeasonData = async () => {
+  const handleResetSeason = () => {
     const confirm = window.confirm(
-      '¿Deseas vaciar los datos antiguos de la temporada pasada (alineaciones, fichajes y draft) y sincronizar desde tu Google Sheet limpio para empezar la nueva temporada?'
+      '¿Deseas reiniciar la temporada?\n\n' +
+      '• Se vaciarán las plantillas y alineaciones de las jornadas.\n' +
+      '• Se vaciará el historial de fichajes y sustituciones.\n' +
+      '• Se vaciará el historial y elecciones del Draft.\n' +
+      '• Todos los futbolistas volverán al estado "Disponible".\n\n' +
+      'Este proceso es completamente independiente de Guardar y Sincronizar.'
     );
     if (!confirm) return;
-    setIsSyncingGas(true);
-    setGasFeedback(null);
-    const res = await gasEngine.resetSeasonDataAndSync();
-    setIsSyncingGas(false);
-    setGasFeedback({
-      isSuccess: res.success,
-      message: res.message
-    });
+    const res = gasEngine.resetSeasonData();
     loadAdminData();
     showAlert(res.message, res.success);
   };
@@ -891,16 +889,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
               >
                 {copiedGasCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
                 <span>{copiedGasCode ? '¡Código.gs Copiado!' : 'Copiar Código.gs Actualizado'}</span>
-              </button>
-
-              <button
-                onClick={handleCleanOldSeasonData}
-                disabled={isSyncingGas}
-                className="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 text-xs font-bold py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                title="Vacía los fichajes y alineaciones antiguas de la temporada pasada y sincroniza desde Google Sheets limpio"
-              >
-                <RotateCcw className={`w-3.5 h-3.5 ${isSyncingGas ? 'animate-spin' : ''}`} />
-                <span>Reiniciar Temporada (Limpiar Datos Antiguos)</span>
               </button>
             </div>
 
@@ -2475,6 +2463,50 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
                 </table>
               </div>
             )}
+          </div>
+
+          {/* Section 5: Gestión y Reinicio de Temporada (Completamente independiente de Guardar y Sincronizar) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
+                    <span>Gestión y Reinicio de Temporada</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Proceso independiente de Guardar y Sincronizar. Utilízalo exclusivamente al comenzar o cambiar de temporada deportiva.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-4 text-xs text-slate-300 space-y-2">
+              <p className="font-semibold text-slate-200">
+                ¿Qué hace el Reinicio de Temporada?
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-slate-400">
+                <li>Vacía todas las alineaciones de las jornadas anteriores.</li>
+                <li>Limpia el historial de sustituciones y fichajes.</li>
+                <li>Limpia el historial y selecciones del Draft inicial.</li>
+                <li>Devuelve a todos los futbolistas al estado <strong className="text-emerald-400 font-bold">Disponible</strong> para iniciar un nuevo Draft (excepto jugadores que hayan abandonado la liga).</li>
+              </ul>
+              <p className="text-[11px] text-amber-400/90 pt-1">
+                Importante: La función <strong>Guardar y Sincronizar</strong> (en la sección de Google Sheets) actualiza los datos remotos de forma segura sin borrar la temporada. El botón inferior es el único que reinicia la temporada de juego.
+              </p>
+            </div>
+
+            <div>
+              <button
+                onClick={handleResetSeason}
+                className="bg-rose-900/60 hover:bg-rose-800/80 text-rose-200 border border-rose-600/50 text-xs font-bold py-2.5 px-5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-rose-950/50"
+              >
+                <RotateCcw className="w-4 h-4 text-rose-400" />
+                <span>Reiniciar Temporada (Vaciar Alineaciones, Fichajes y Draft)</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

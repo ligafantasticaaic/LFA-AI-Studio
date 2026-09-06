@@ -1339,6 +1339,23 @@ class GasEngineService {
         }));
       }
 
+      // Sincronizar estado de los jugadores: si están en las alineaciones activas pasan a 'Fichado'
+      const assignedPlayerNames = new Set(
+        this.lineups
+          .filter(l => l.playerName && l.playerName.trim() !== '')
+          .map(l => l.playerName.trim().toLowerCase())
+      );
+      this.players.forEach(p => {
+        const lower = (p.name || '').trim().toLowerCase();
+        if (p.status !== 'Abandona Liga') {
+          if (assignedPlayerNames.has(lower)) {
+            p.status = 'Fichado';
+          } else if (p.status === 'Fichado' && !assignedPlayerNames.has(lower)) {
+            p.status = 'Disponible';
+          }
+        }
+      });
+
       let updatedTransfersCount = 0;
       let updatedDraftsCount = 0;
 
@@ -2085,21 +2102,27 @@ class GasEngineService {
         let cost = 0;
         let transferType: 'Normal' | 'Abandono' = 'Normal';
 
-        const pOutObj = this.players.find(p => p.name === pOut);
-        const pInObj = this.players.find(p => p.name === pIn);
+        const normOut = pOut.trim().toLowerCase();
+        const normIn = pIn.trim().toLowerCase();
+
+        this.players.forEach(p => {
+          const pNameLower = (p.name || '').trim().toLowerCase();
+          if (pNameLower === normIn) {
+            p.status = 'Fichado';
+          }
+          if (pNameLower === normOut) {
+            p.status = isAbandon ? 'Abandona Liga' : 'Disponible';
+          }
+        });
 
         if (isAbandon) {
-          if (pOutObj) pOutObj.status = 'Abandona Liga';
           transferType = 'Abandono';
         } else {
-          if (pOutObj) pOutObj.status = 'Disponible';
           if (normalTransfersCount >= FREE_TRANSFERS_PER_TEAM) {
             cost = TRANSFER_COST;
           }
           normalTransfersCount++;
         }
-
-        if (pInObj) pInObj.status = 'Fichado';
 
         const now = new Date();
         const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
@@ -2132,6 +2155,20 @@ class GasEngineService {
     });
 
     this.saveState();
+    this.notify();
+
+    // Sincronizar en segundo plano con Google Sheets si hay URL configurada
+    if (this.gasUrl) {
+      this.fetchGasData(this.gasUrl, {
+        action: 'transfer',
+        team: teamName,
+        token: token,
+        jornada: String(jornada),
+        transfers: JSON.stringify(transfers)
+      }, 10000).catch(err => {
+        console.warn('[gasEngine] Envío de fichajes a Google Sheets:', err);
+      });
+    }
 
     return {
       success: true,
@@ -2161,11 +2198,12 @@ class GasEngineService {
       };
     }
 
+    const normPlayer = playerName.trim().toLowerCase();
     const currentLineupsJ1 = this.lineups.filter(l => l.jornada === JORNADA_DRAFT);
-    const isAlreadyDrafted = currentLineupsJ1.some(l => l.playerName.trim() === playerName);
+    const isAlreadyDrafted = currentLineupsJ1.some(l => l.playerName.trim().toLowerCase() === normPlayer);
 
     if (isAlreadyDrafted) {
-      const draftingTeam = currentLineupsJ1.find(l => l.playerName.trim() === playerName)?.team || 'otro equipo';
+      const draftingTeam = currentLineupsJ1.find(l => l.playerName.trim().toLowerCase() === normPlayer)?.team || 'otro equipo';
       return { success: false, message: `El jugador "${playerName}" ya ha sido seleccionado por "${draftingTeam}".` };
     }
 
@@ -2174,7 +2212,7 @@ class GasEngineService {
       return { success: false, message: `El equipo "${teamName}" ya tiene ${MAX_DRAFT_PLAYERS_PER_TEAM} jugadores seleccionados para el Draft.` };
     }
 
-    const playerDetails = this.players.find(p => p.name === playerName);
+    const playerDetails = this.players.find(p => p.name.trim().toLowerCase() === normPlayer);
     if (!playerDetails) {
       return { success: false, message: `Error: No se encontraron detalles para "${playerName}".` };
     }
@@ -2192,17 +2230,24 @@ class GasEngineService {
 
     const currentTurnBefore = this.getCurrentDraftTurn();
 
+    // 1. Inscribir en alineaciones de la Jornada 1
     this.lineups.push({
       team: teamName,
       jornada: JORNADA_DRAFT,
-      playerName,
+      playerName: playerDetails.name,
       realTeam: playerDetails.realTeam,
       position: playerDetails.position,
       value: playerDetails.value
     });
 
-    playerDetails.status = 'Fichado';
+    // 2. Cambiar de Disponible a Fichado
+    this.players.forEach(p => {
+      if ((p.name || '').trim().toLowerCase() === normPlayer) {
+        p.status = 'Fichado';
+      }
+    });
 
+    // 3. Inscribir en Historial_Draft
     const now = new Date();
     const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
                     now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
@@ -2210,7 +2255,7 @@ class GasEngineService {
     this.drafts.unshift({
       timestamp: dateStr,
       team: teamName,
-      playerName,
+      playerName: playerDetails.name,
       realTeam: playerDetails.realTeam,
       position: playerDetails.position,
       value: playerDetails.value
@@ -3335,26 +3380,43 @@ class GasEngineService {
   }
 
   /**
-   * Restablece los datos de la temporada anterior (Alineaciones, Fichajes y Draft) a vacío
-   * y fuerza una sincronización limpia con Google Sheets
+   * Restablece los datos de la temporada: vacía alineaciones, historial de fichajes y elecciones de draft,
+   * y devuelve a todos los futbolistas al estado 'Disponible' (salvo los que hayan abandonado la liga).
+   * Este proceso es 100% independiente de la sincronización con Google Sheets.
    */
-  public async resetSeasonDataAndSync(): Promise<{ success: boolean; message: string }> {
+  public resetSeasonData(): { success: boolean; message: string } {
     this.lineups = [];
     this.transfers = [];
     this.drafts = [];
+    this.draftOrder = [];
+    this.players.forEach(p => {
+      if (p.status !== 'Abandona Liga') {
+        p.status = 'Disponible';
+      }
+    });
     localStorage.setItem('lfa_lineups', '[]');
     localStorage.setItem('lfa_transfers', '[]');
     localStorage.setItem('lfa_drafts', '[]');
+    localStorage.setItem('lfa_draft_order', '[]');
     this.saveState();
     this.notify();
+    return {
+      success: true,
+      message: '¡Temporada reiniciada con éxito! Se han vaciado las alineaciones, el historial de fichajes y el draft. Todos los futbolistas vuelven a estar Disponibles.'
+    };
+  }
 
-    // Sincronizar desde Google Sheets
+  /**
+   * Restablece los datos de la temporada anterior y sincroniza de forma explícita
+   */
+  public async resetSeasonDataAndSync(): Promise<{ success: boolean; message: string }> {
+    this.resetSeasonData();
     const syncRes = await this.syncFromRemote();
     return {
       success: syncRes.success,
       message: syncRes.success
-        ? '¡Datos de la temporada anterior limpiados! La aplicación está sincronizada y lista para la nueva temporada.'
-        : 'Datos locales reseteados. Comprueba la conexión con Google Sheets.'
+        ? '¡Datos de la temporada anterior limpiados y sincronizados desde Google Sheets!'
+        : 'Datos locales reseteados. Comprueba la conexión con Google Sheets si deseas actualizar.'
     };
   }
 }

@@ -533,6 +533,14 @@ function doGet(e) {
         result = { success: true, data: getAccountingData() };
       } else if (action === 'draft') {
         result = processDraftSelection(e.parameter.team, e.parameter.token, e.parameter.player);
+      } else if (action === 'transfer') {
+        var trList = [];
+        try {
+          trList = typeof e.parameter.transfers === 'string' ? JSON.parse(e.parameter.transfers) : (e.parameter.transfers || []);
+        } catch(eTr) {
+          trList = [];
+        }
+        result = processMultipleTransfers(e.parameter.team, e.parameter.token, Number(e.parameter.jornada), trList);
       } else if (action === 'getDraftOrder') {
         var sDraftOrder = ss.getSheetByName('Draft') || findSheet(ss, ['Orden_Draft', 'Orden Draft', 'Draft_Orden']);
         result = { success: true, data: getDraftOrderFromSheet(sDraftOrder) };
@@ -1555,7 +1563,7 @@ function processDraftSelection(team, token, player) {
   ]);
   
   if (!sheetDraft) {
-    sheetDraft = ss.insertSheet('Historial del Draft');
+    sheetDraft = ss.insertSheet('Historial_Draft');
     sheetDraft.appendRow(['Fecha/Hora', 'Equipo', 'Nombre_Jugador', 'Equipo_Liga', 'Posicion', 'Valor']);
   }
   
@@ -1577,6 +1585,18 @@ function processDraftSelection(team, token, player) {
   
   if (sheetAl) {
     sheetAl.appendRow([team, 1, player, realTeam, pos, val]);
+  }
+
+  // Actualizar estado del jugador a 'Fichado' en la hoja Jugadores
+  var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
+  if (sheetJug) {
+    var jugValues = sheetJug.getDataRange().getValues();
+    for (var jr = 1; jr < jugValues.length; jr++) {
+      if (String(jugValues[jr][0]).trim().toLowerCase() === String(player).trim().toLowerCase()) {
+        sheetJug.getRange(jr + 1, 5).setValue('Fichado');
+        break;
+      }
+    }
   }
 
   // Notificación automática a Telegram con la elección y el siguiente turno anunciado
@@ -1631,7 +1651,7 @@ function processMultipleTransfers(team, token, jornada, transfers) {
   ]);
   
   if (!sheetFichajes) {
-    sheetFichajes = ss.insertSheet('Historial de Fichajes');
+    sheetFichajes = ss.insertSheet('Historial_Fichajes');
     sheetFichajes.appendRow(['Fecha/Hora', 'Equipo', 'Jornada', 'Jugador Sale', 'Jugador Entra', 'Coste', 'Tipo']);
   }
   
@@ -1667,6 +1687,7 @@ function processMultipleTransfers(team, token, jornada, transfers) {
       Logger.log("Error al disparar aviso de fichaje: " + errAviso);
     }
     
+    // Actualizar alineación en la hoja Alineaciones
     if (sheetAl) {
       var alData = sheetAl.getDataRange().getValues();
       for (var r = 1; r < alData.length; r++) {
@@ -1677,6 +1698,21 @@ function processMultipleTransfers(team, token, jornada, transfers) {
           sheetAl.getRange(r + 1, 5).setValue(pInfo.position);
           sheetAl.getRange(r + 1, 6).setValue(pInfo.value);
           break;
+        }
+      }
+    }
+
+    // Actualizar estado en la hoja Jugadores: pIn pasa a 'Fichado', pOut pasa a 'Disponible' o 'Abandona Liga'
+    var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
+    if (sheetJug) {
+      var jugData = sheetJug.getDataRange().getValues();
+      for (var jr = 1; jr < jugData.length; jr++) {
+        var rowName = String(jugData[jr][0]).trim().toLowerCase();
+        if (rowName === String(pIn).trim().toLowerCase()) {
+          sheetJug.getRange(jr + 1, 5).setValue('Fichado');
+        }
+        if (rowName === String(pOut).trim().toLowerCase()) {
+          sheetJug.getRange(jr + 1, 5).setValue(isAbandon ? 'Abandona Liga' : 'Disponible');
         }
       }
     }
