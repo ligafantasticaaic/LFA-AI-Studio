@@ -1386,6 +1386,10 @@ function getAccountingData() {
         }
 
         if (matchedT) {
+          var isDraft = fType.toLowerCase().indexOf('draft') !== -1 || String(rowT[3] || '').trim() === '-' || String(rowT[3] || '').toLowerCase().indexOf('draft') !== -1;
+          if (isDraft) {
+            continue;
+          }
           var isAbandon = fType.toLowerCase().indexOf('abandono') !== -1;
           if (cost > 0) {
             teamBalance[matchedT].transferFees += cost;
@@ -1592,8 +1596,69 @@ function processDraftSelection(team, token, player) {
   var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
   sheetDraft.appendRow([nowStr, team, player, realTeam, pos, val]);
   
+  // Inscribir al jugador seleccionado en la Hoja Alineaciones en la Jornada 1
+  if (!sheetAl) {
+    sheetAl = ss.insertSheet('Alineaciones');
+    sheetAl.appendRow(['Equipo', 'Jornada', 'Jugador', 'Equipo_Liga', 'Posicion', 'Valor']);
+  }
+
   if (sheetAl) {
-    sheetAl.appendRow([team, 1, player, realTeam, pos, val]);
+    if (sheetAl.getLastRow() === 0) {
+      sheetAl.appendRow(['Equipo', 'Jornada', 'Jugador', 'Equipo_Liga', 'Posicion', 'Valor']);
+    }
+
+    var alHeaders = sheetAl.getRange(1, 1, 1, Math.max(6, sheetAl.getLastColumn())).getValues()[0];
+    var colAlTeam = -1, colAlJor = -1, colAlPlayer = -1, colAlReal = -1, colAlPos = -1, colAlVal = -1;
+
+    for (var ah = 0; ah < alHeaders.length; ah++) {
+      var hClean = String(alHeaders[ah] || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (hClean === 'equipo' || hClean === 'team' || hClean === 'club' || (hClean.indexOf('equipo') !== -1 && hClean.indexOf('liga') === -1 && hClean.indexOf('real') === -1)) {
+        if (colAlTeam === -1) colAlTeam = ah;
+      } else if (hClean.indexOf('jornada') !== -1 || hClean.indexOf('jor') !== -1 || hClean === 'j') {
+        if (colAlJor === -1) colAlJor = ah;
+      } else if (hClean.indexOf('jugador') !== -1 || hClean.indexOf('player') !== -1 || hClean.indexOf('futbolista') !== -1 || hClean === 'nombre') {
+        if (colAlPlayer === -1) colAlPlayer = ah;
+      } else if (hClean.indexOf('real') !== -1 || hClean.indexOf('liga') !== -1 || (hClean.indexOf('equipo') !== -1 && (hClean.indexOf('liga') !== -1 || hClean.indexOf('real') !== -1))) {
+        if (colAlReal === -1) colAlReal = ah;
+      } else if (hClean.indexOf('pos') !== -1 || hClean.indexOf('demarcacion') !== -1) {
+        if (colAlPos === -1) colAlPos = ah;
+      } else if (hClean.indexOf('valor') !== -1 || hClean.indexOf('precio') !== -1 || hClean.indexOf('val') !== -1) {
+        if (colAlVal === -1) colAlVal = ah;
+      }
+    }
+
+    if (colAlTeam === -1) colAlTeam = 0;
+    if (colAlJor === -1) colAlJor = 1;
+    if (colAlPlayer === -1) colAlPlayer = 2;
+    if (colAlReal === -1) colAlReal = 3;
+    if (colAlPos === -1) colAlPos = 4;
+    if (colAlVal === -1) colAlVal = 5;
+
+    // Verificar si ya está inscrito para no duplicar fila
+    var alData = sheetAl.getDataRange().getValues();
+    var alreadyInAl = false;
+    for (var ar = 1; ar < alData.length; ar++) {
+      var rowTeam = String(alData[ar][colAlTeam] || '').trim();
+      var rowJor = Number(alData[ar][colAlJor]);
+      var rowPlayer = String(alData[ar][colAlPlayer] || '').trim();
+      if (rowTeam.toLowerCase() === String(team).trim().toLowerCase() && rowJor === 1 && rowPlayer.toLowerCase() === String(player).trim().toLowerCase()) {
+        alreadyInAl = true;
+        break;
+      }
+    }
+
+    if (!alreadyInAl) {
+      var maxNeeded = Math.max(alHeaders.length, colAlTeam + 1, colAlJor + 1, colAlPlayer + 1, colAlReal + 1, colAlPos + 1, colAlVal + 1);
+      var alRowCells = new Array(maxNeeded);
+      for (var rc = 0; rc < maxNeeded; rc++) alRowCells[rc] = '';
+      alRowCells[colAlTeam] = team;
+      alRowCells[colAlJor] = 1;
+      alRowCells[colAlPlayer] = player;
+      alRowCells[colAlReal] = realTeam;
+      alRowCells[colAlPos] = pos;
+      alRowCells[colAlVal] = val;
+      sheetAl.appendRow(alRowCells);
+    }
   }
 
   // Actualizar estado del jugador a 'Fichado' en la hoja Jugadores

@@ -26,7 +26,7 @@ export const FichajesView: React.FC = () => {
   const [teams, setTeams] = useState<string[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>('');
   const [teamToken, setTeamToken] = useState<string>('');
-  const [selectedJornada, setSelectedJornada] = useState<number>(5);
+  const [selectedJornada, setSelectedJornada] = useState<number>(1);
 
   const [playersOutList, setPlayersOutList] = useState<string[]>([]);
   const [availablePlayersIn, setAvailablePlayersIn] = useState<Player[]>([]);
@@ -45,9 +45,8 @@ export const FichajesView: React.FC = () => {
   useEffect(() => {
     const refreshData = () => {
       const teamList = gasEngine.getTeamNames();
-      const maxJ = gasEngine.getMaxJornada();
       setTeams(teamList);
-      setSelectedJornada(prev => prev || maxJ || 5);
+      setSelectedJornada(prev => prev || 1);
       setTransferHistory(gasEngine.getTransferHistory());
     };
     refreshData();
@@ -480,13 +479,14 @@ export const FichajesView: React.FC = () => {
                 <th className="p-3 text-center">Jornada Fichaje</th>
                 <th className="p-3">Jugador Sale</th>
                 <th className="p-3">Jugador Entra</th>
+                <th className="p-3 text-center">Tipo</th>
                 <th className="p-3 text-right">Coste (€)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
               {transferHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-slate-500">
+                  <td colSpan={7} className="p-4 text-center text-slate-500">
                     No hay fichajes registrados.
                   </td>
                 </tr>
@@ -496,10 +496,27 @@ export const FichajesView: React.FC = () => {
                     <td className="p-3 text-slate-400 font-mono text-[11px]">{tr.timestamp}</td>
                     <td className="p-3 font-bold text-white">{tr.team}</td>
                     <td className="p-3 text-center font-mono font-bold text-slate-300">J{tr.jornada}</td>
-                    <td className="p-3 text-rose-400 font-medium">{tr.playerOut}</td>
+                    <td className="p-3 text-rose-400 font-medium">{tr.playerOut || '-'}</td>
                     <td className="p-3 text-emerald-400 font-bold">{tr.playerIn}</td>
+                    <td className="p-3 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        tr.type === 'Draft' 
+                          ? 'bg-purple-950/80 text-purple-300 border border-purple-500/40' 
+                          : tr.type === 'Abandono'
+                            ? 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
+                            : 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
+                      }`}>
+                        {tr.type || 'Normal'}
+                      </span>
+                    </td>
                     <td className="p-3 text-right font-mono font-extrabold text-amber-400">
-                      {tr.cost === 0 ? 'Gratis' : `${tr.cost.toFixed(2)} €`}
+                      {tr.type === 'Draft' ? (
+                        <span className="text-purple-400">Draft</span>
+                      ) : tr.cost === 0 ? (
+                        'Gratis'
+                      ) : (
+                        `${Number(tr.cost).toFixed(2)} €`
+                      )}
                     </td>
                   </tr>
                 ))

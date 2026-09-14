@@ -55,7 +55,7 @@ export interface TransferRecord {
   playerOut: string;
   playerIn: string;
   cost: number;
-  type?: 'Normal' | 'Abandono';
+  type?: 'Normal' | 'Abandono' | 'Draft' | string;
 }
 
 export interface DraftRecord {

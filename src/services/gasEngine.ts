@@ -1423,6 +1423,9 @@ class GasEngineService {
         localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
       }
 
+      // Asegurar que las elecciones del draft se inscriben para la Jornada 1 en la Hoja de Alineaciones
+      this.ensureDraftsInLineups();
+
       const now = new Date();
       this.lastSyncTime = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' +
                           now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -1512,6 +1515,9 @@ class GasEngineService {
       this.transfers = savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS];
       this.drafts = savedDrafts ? JSON.parse(savedDrafts) : [...INITIAL_DRAFTS];
       this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
+
+      // Asegurar que las elecciones del Draft se inscriben en la Hoja de Alineaciones para la Jornada 1
+      this.ensureDraftsInLineups();
 
       const savedJornada = localStorage.getItem('lfa_first_contribution_jornada');
       if (savedJornada) {
@@ -1662,6 +1668,40 @@ class GasEngineService {
     return this.getTeamNames().length;
   }
 
+  /**
+   * Asegura que todas las elecciones del Draft estén inscritas en la Hoja/Estado de Alineaciones para la Jornada 1
+   */
+  public ensureDraftsInLineups(): void {
+    if (this.drafts && this.drafts.length > 0) {
+      this.drafts.forEach(d => {
+        const pName = (d.playerName || '').trim();
+        const tName = (d.team || '').trim();
+        if (!pName || !tName) return;
+
+        const exists = this.lineups.some(
+          l => l.team.trim().toLowerCase() === tName.toLowerCase() &&
+               l.playerName.trim().toLowerCase() === pName.toLowerCase() &&
+               Number(l.jornada) === 1
+        );
+        if (!exists) {
+          this.lineups.push({
+            team: tName,
+            jornada: 1,
+            playerName: pName,
+            realTeam: d.realTeam || '',
+            position: d.position || 'Medio',
+            value: d.value || 0
+          });
+        }
+      });
+    }
+
+    // Limpiar cualquier registro erróneo de 'Draft' que hubiera quedado en this.transfers
+    this.transfers = this.transfers.filter(
+      tr => tr.type !== 'Draft' && (tr as any).type !== 'Draft Inicial' && tr.playerOut !== '-'
+    );
+  }
+
   public getMaxJornadaFromPlayersSheet(): number {
     let maxJ = 0;
     this.players.forEach(p => {
@@ -1684,7 +1724,8 @@ class GasEngineService {
   public getMaxJornada(): number {
     const pMax = this.getMaxJornadaFromPlayersSheet();
     const lMax = this.getMaxJornadaFromAlineacionesSheet();
-    return Math.min(pMax, lMax) || pMax || 5;
+    if (pMax > 0 && lMax > 0) return Math.max(pMax, lMax);
+    return lMax || pMax || 1;
   }
 
   public validateTeamToken(teamName: string, token: string): boolean {
@@ -1745,10 +1786,10 @@ class GasEngineService {
     }
 
     const teamLineups = this.lineups.filter(
-      l => l.team.trim() === teamName.trim() && l.jornada === jornada && l.playerName.trim() !== ''
+      l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.jornada === jornada && l.playerName.trim() !== ''
     );
 
-    const playerMap = new Map(this.players.map(p => [p.name, p]));
+    const playerMap = new Map(this.players.map(p => [p.name.toLowerCase(), p]));
     let teamTotalPoints = 0;
     let teamTotalValue = 0;
     let teamTotalGoals = 0;
@@ -1757,33 +1798,34 @@ class GasEngineService {
     const teamPlayers: LineupEntry[] = [];
 
     teamLineups.forEach(l => {
-      const pData = playerMap.get(l.playerName);
-      if (pData) {
-        const pts = pData.jornadasPoints?.[jornada] ?? '';
-        const g = pData.jornadasGoals?.[jornada] ?? '';
-        const def = pData.jornadasDef?.[jornada] ?? '';
+      const pData = playerMap.get(l.playerName.trim().toLowerCase());
+      const pts = pData?.jornadasPoints?.[jornada] ?? '';
+      const g = pData?.jornadasGoals?.[jornada] ?? '';
+      const def = pData?.jornadasDef?.[jornada] ?? '';
+      const pos = l.position || pData?.position || 'Medio';
+      const rTeam = l.realTeam || pData?.realTeam || '';
+      const val = typeof l.value === 'number' ? l.value : (pData?.value || 0);
 
-        teamPlayers.push({
-          playerName: l.playerName,
-          realTeam: l.realTeam || pData.realTeam,
-          position: pData.position,
-          value: pData.value,
-          team: l.team,
-          jornada: l.jornada
-        });
+      teamPlayers.push({
+        playerName: l.playerName,
+        realTeam: rTeam,
+        position: pos,
+        value: val,
+        team: l.team,
+        jornada: l.jornada
+      });
 
-        if (typeof pts === 'number') teamTotalPoints += pts;
-        if (typeof pData.value === 'number') teamTotalValue += pData.value;
-        if (typeof g === 'number') teamTotalGoals += g;
-        if (pData.position === 'Portero' || pData.position === 'Defensa') {
-          if (typeof def === 'number') teamTotalDefensivePoints += def;
-        }
+      if (typeof pts === 'number') teamTotalPoints += pts;
+      if (typeof val === 'number') teamTotalValue += val;
+      if (typeof g === 'number') teamTotalGoals += g;
+      if (pos === 'Portero' || pos === 'Defensa') {
+        if (typeof def === 'number') teamTotalDefensivePoints += def;
       }
     });
 
     const positionOrder: Record<string, number> = { 'Portero': 1, 'Defensa': 2, 'Medio': 3, 'Delantero': 4 };
     const playersDetailed: LineupPlayerDetail[] = teamPlayers.map((l): LineupPlayerDetail => {
-      const pData = playerMap.get(l.playerName);
+      const pData = playerMap.get(l.playerName.trim().toLowerCase());
       const pts = pData?.jornadasPoints?.[jornada];
       const gls = pData?.jornadasGoals?.[jornada];
       const pdf = pData?.jornadasDef?.[jornada];
@@ -1915,8 +1957,29 @@ class GasEngineService {
   public getTeamPlayersForJornada(teamName: string, jornada: number): string[] {
     if (!teamName || isNaN(jornada) || jornada <= 0) return [];
     const seen = new Set<string>();
-    return this.lineups
-      .filter(l => l.team.trim() === teamName.trim() && l.jornada === jornada && l.playerName.trim() !== '')
+    let matching = this.lineups
+      .filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.jornada === jornada && l.playerName.trim() !== '');
+
+    // Si para la jornada solicitada aún no hay alineación, heredar de la jornada previa disponible más reciente (ej: J1 del Draft)
+    if (matching.length === 0) {
+      const priorJornadas = this.lineups
+        .filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.playerName.trim() !== '' && l.jornada <= jornada)
+        .map(l => l.jornada);
+      if (priorJornadas.length > 0) {
+        const lastJ = Math.max(...priorJornadas);
+        matching = this.lineups.filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.jornada === lastJ && l.playerName.trim() !== '');
+      } else {
+        const anyJornadas = this.lineups
+          .filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.playerName.trim() !== '')
+          .map(l => l.jornada);
+        if (anyJornadas.length > 0) {
+          const firstJ = Math.min(...anyJornadas);
+          matching = this.lineups.filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.jornada === firstJ && l.playerName.trim() !== '');
+        }
+      }
+    }
+
+    return matching
       .map(l => l.playerName.trim())
       .filter(name => {
         const key = name.toLowerCase();
@@ -1996,6 +2059,28 @@ class GasEngineService {
 
     if (!teamName || isNaN(jornada) || jornada <= 0 || !Array.isArray(transfers) || transfers.length === 0) {
       return { success: false, message: 'Datos incompletos o lista de fichajes vacía.' };
+    }
+
+    // Si para esta jornada el equipo aún no tiene alineaciones cargadas, heredar de la jornada previa disponible más reciente
+    let teamLineupsForJ = this.lineups.filter(l => l.jornada === jornada && l.team.trim().toLowerCase() === teamName.toLowerCase());
+    if (teamLineupsForJ.length === 0) {
+      const prevJornadas = this.lineups
+        .filter(l => l.team.trim().toLowerCase() === teamName.toLowerCase() && l.jornada < jornada)
+        .map(l => l.jornada);
+      if (prevJornadas.length > 0) {
+        const lastJ = Math.max(...prevJornadas);
+        const lastLineups = this.lineups.filter(l => l.team.trim().toLowerCase() === teamName.toLowerCase() && l.jornada === lastJ);
+        lastLineups.forEach(l => {
+          this.lineups.push({
+            team: l.team,
+            jornada: jornada,
+            playerName: l.playerName,
+            realTeam: l.realTeam,
+            position: l.position,
+            value: l.value
+          });
+        });
+      }
     }
 
     const playerMap = new Map(this.players.map(p => [p.name, p]));
@@ -2394,6 +2479,9 @@ class GasEngineService {
       let teamFees = 0;
 
       trList.forEach(tr => {
+        const isDraft = tr.type === 'Draft' || (tr as any).type === 'Draft Inicial' || tr.playerOut === '-' || tr.playerOut === 'Draft Inicial';
+        if (isDraft) return;
+
         const cost = parseCleanNumber(tr.cost);
         const isAbandon = tr.type === 'Abandono' || (tr as any).motivo === 'Abandono';
 

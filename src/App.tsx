@@ -89,12 +89,14 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Connection and Deployment Setup Modal */}
-      <ConnectionModal
-        isOpen={isConnectionOpen}
-        onClose={() => setIsConnectionOpen(false)}
-        onSyncComplete={() => setTick(prev => prev + 1)}
-      />
+      {/* Connection and Deployment Setup Modal (Solo accesible para Administrador) */}
+      {!gasEngine.isPlayerMode() && (
+        <ConnectionModal
+          isOpen={isConnectionOpen}
+          onClose={() => setIsConnectionOpen(false)}
+          onSyncComplete={() => setTick(prev => prev + 1)}
+        />
+      )}
 
       {/* Export Source Code Modal for GAS & Google Sites */}
       <ExportModal isOpen={isExportOpen} onClose={() => setIsExportOpen(false)} />
