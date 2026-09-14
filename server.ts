@@ -179,6 +179,167 @@ async function startServer() {
     res.json({ success: true, message: '¡Contraseña de administrador actualizada correctamente!', config: saved });
   });
 
+  // GET /api/gas-diagnostics - Comprueba si el script desplegado en Apps Script soporta tiempo real
+  app.get('/api/gas-diagnostics', async (req, res) => {
+    const config = getGasConfig();
+    const targetUrl = (req.query.gasUrl ? String(req.query.gasUrl) : config.gasUrl || '').trim();
+
+    if (!targetUrl) {
+      return res.json({
+        configured: false,
+        connected: false,
+        realtimeReady: false,
+        message: 'No hay URL de Google Apps Script configurada.'
+      });
+    }
+
+    try {
+      // 1. Probar ping
+      const pingUrl = new URL(targetUrl);
+      pingUrl.searchParams.set('action', 'ping');
+      pingUrl.searchParams.set('_t', String(Date.now()));
+
+      const pingRes = await fetch(pingUrl.toString(), { redirect: 'follow', signal: AbortSignal.timeout(8000) });
+      const pingText = await pingRes.text();
+      let pingData: any = {};
+      try { pingData = JSON.parse(pingText); } catch {}
+
+      if (!pingData || !pingData.success) {
+        return res.json({
+          configured: true,
+          connected: false,
+          realtimeReady: false,
+          message: 'La Web App responde pero no devolvió el formato esperado.',
+          details: pingText.substring(0, 200)
+        });
+      }
+
+      // 2. Probar si reconoce acción 'draft'
+      const testDraftUrl = new URL(targetUrl);
+      testDraftUrl.searchParams.set('action', 'draft');
+      testDraftUrl.searchParams.set('team', 'TEST_DIAGNOSTIC');
+      testDraftUrl.searchParams.set('token', 'invalid_token_diag');
+      testDraftUrl.searchParams.set('player', 'TestPlayer');
+      testDraftUrl.searchParams.set('_t', String(Date.now()));
+
+      const draftRes = await fetch(testDraftUrl.toString(), { redirect: 'follow', signal: AbortSignal.timeout(8000) });
+      const draftText = await draftRes.text();
+      let draftData: any = {};
+      try { draftData = JSON.parse(draftText); } catch {}
+
+      const isUnrecognized = draftData?.error && String(draftData.error).includes('Acción API no reconocida');
+
+      if (isUnrecognized) {
+        return res.json({
+          configured: true,
+          connected: true,
+          realtimeReady: false,
+          outdatedScript: true,
+          message: '⚠️ La Web App está conectada, pero tiene desplegada una versión antigua de Código.gs que no reconoce la acción "draft" ni "transfer" en tiempo real.',
+          instruction: 'En Google Apps Script: 1. Pega el Código.gs actualizado. 2. Haz clic en Implementar > Administrar implementaciones > Editar (lápiz) > Nueva versión > Implementar.'
+        });
+      }
+
+      // Soporta tiempo real
+      return res.json({
+        configured: true,
+        connected: true,
+        realtimeReady: true,
+        outdatedScript: false,
+        message: '✅ Conexión perfecta: Tu Web App de Google Apps Script soporta sincronización en tiempo real para Draft y Fichajes.'
+      });
+    } catch (err: any) {
+      return res.json({
+        configured: true,
+        connected: false,
+        realtimeReady: false,
+        message: 'Error al conectar con Google Apps Script: ' + (err?.message || 'Error de red')
+      });
+    }
+  });
+
+  // POST /api/gas-action - Ejecuta mutaciones en tiempo real en Google Sheets (Draft, Fichajes, Orden Draft)
+  app.post('/api/gas-action', async (req, res) => {
+    const { action, team, token, player, jornada, transfers, draftOrder, customGasUrl } = req.body || {};
+    const config = getGasConfig();
+    const targetUrl = (customGasUrl || config.gasUrl || '').trim();
+
+    if (!targetUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'NO_GAS_URL',
+        message: 'No hay URL de Google Apps Script configurada.'
+      });
+    }
+
+    try {
+      const url = new URL(targetUrl);
+      url.searchParams.set('action', String(action || ''));
+      if (team) url.searchParams.set('team', String(team));
+      if (token) url.searchParams.set('token', String(token));
+      if (player) url.searchParams.set('player', String(player));
+      if (jornada !== undefined) url.searchParams.set('jornada', String(jornada));
+      if (transfers !== undefined) {
+        url.searchParams.set('transfers', typeof transfers === 'string' ? transfers : JSON.stringify(transfers));
+      }
+      if (draftOrder !== undefined) {
+        url.searchParams.set('draftOrder', typeof draftOrder === 'string' ? draftOrder : JSON.stringify(draftOrder));
+      }
+      url.searchParams.set('_t', String(Date.now()));
+
+      console.log(`[gas-action] Enviando acción "${action}" a Apps Script: ${targetUrl}`);
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        redirect: 'follow',
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      const rawText = await response.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        console.warn('[gas-action] Respuesta no JSON de Apps Script:', rawText.substring(0, 200));
+        return res.status(502).json({
+          success: false,
+          error: 'INVALID_GAS_RESPONSE',
+          message: 'Google Apps Script no devolvió un JSON válido. Comprueba la URL de la Web App.',
+          raw: rawText.substring(0, 300)
+        });
+      }
+
+      if (data && data.error) {
+        const isOutdated = String(data.error).includes('Acción API no reconocida');
+        return res.status(200).json({
+          success: false,
+          outdatedScript: isOutdated,
+          error: data.error,
+          message: isOutdated
+            ? `⚠️ Tu Web App de Google Apps Script necesita actualizarse: No reconoce la acción "${action}". Copia el nuevo "Código.gs" desde Admin y en Apps Script despliega una "Nueva versión".`
+            : `Error de Google Sheets: ${data.error}`
+        });
+      }
+
+      return res.json({
+        success: data?.success !== false,
+        message: data?.message || 'Actualizado en tiempo real en Google Sheets',
+        data
+      });
+    } catch (err: any) {
+      console.error('[gas-action] Error al comunicar con Google Apps Script:', err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || 'NETWORK_ERROR',
+        message: 'No se pudo conectar con la Web App de Google Apps Script: ' + (err?.message || 'Error de red')
+      });
+    }
+  });
+
   // Endpoint de diagnóstico para Bot de Telegram y detección automática de chats
   app.post('/api/telegram-diagnose', async (req, res) => {
     const { telegramBotToken } = req.body || {};

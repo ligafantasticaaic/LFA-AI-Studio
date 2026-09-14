@@ -502,11 +502,20 @@ function doGet(e) {
   if (action) {
     var result = {};
     try {
-      if (action === 'ping') {
+      if (action === 'ping' || action === 'test') {
         result = {
           success: true,
           message: 'Conexión con Google Sheets verificada correctamente',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          realtimeReady: true,
+          version: '2026.09.realtime'
+        };
+      } else if (action === 'checkRealtime' || action === 'pingRealtime') {
+        result = {
+          success: true,
+          realtimeReady: true,
+          message: 'Sincronización en tiempo real activa para Draft y Fichajes.',
+          version: '2026.09.realtime'
         };
       } else if (action === 'getFullSync') {
         result = getFullSyncData();
@@ -1134,7 +1143,7 @@ function getMaxJornada() {
 function validateTeamToken(teamName, token) {
   if (!teamName || !token) return false;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('Tokens');
+  var sheet = findSheet(ss, ['Tokens', 'Equipos', 'Teams', 'Clubs', 'Equipos_Tokens']);
   if (!sheet) return false;
   
   var data = sheet.getDataRange().getValues();
@@ -1558,7 +1567,7 @@ function processDraftSelection(team, token, player) {
     'Historial Draft',
     'Draft_Historial',
     'Elecciones Draft',
-    'Draft',
+    'Draft_Elecciones',
     'Draft Inicial'
   ]);
   
@@ -1591,9 +1600,19 @@ function processDraftSelection(team, token, player) {
   var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
   if (sheetJug) {
     var jugValues = sheetJug.getDataRange().getValues();
+    var estadoCol = 5;
+    if (jugValues.length > 0) {
+      for (var hc = 0; hc < jugValues[0].length; hc++) {
+        var hName = String(jugValues[0][hc]).trim().toLowerCase();
+        if (hName === 'estado' || hName === 'status' || hName === 'situacion') {
+          estadoCol = hc + 1;
+          break;
+        }
+      }
+    }
     for (var jr = 1; jr < jugValues.length; jr++) {
       if (String(jugValues[jr][0]).trim().toLowerCase() === String(player).trim().toLowerCase()) {
-        sheetJug.getRange(jr + 1, 5).setValue('Fichado');
+        sheetJug.getRange(jr + 1, estadoCol).setValue('Fichado');
         break;
       }
     }
@@ -1706,13 +1725,23 @@ function processMultipleTransfers(team, token, jornada, transfers) {
     var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
     if (sheetJug) {
       var jugData = sheetJug.getDataRange().getValues();
+      var estadoCol = 5;
+      if (jugData.length > 0) {
+        for (var hc = 0; hc < jugData[0].length; hc++) {
+          var hName = String(jugData[0][hc]).trim().toLowerCase();
+          if (hName === 'estado' || hName === 'status' || hName === 'situacion') {
+            estadoCol = hc + 1;
+            break;
+          }
+        }
+      }
       for (var jr = 1; jr < jugData.length; jr++) {
         var rowName = String(jugData[jr][0]).trim().toLowerCase();
         if (rowName === String(pIn).trim().toLowerCase()) {
-          sheetJug.getRange(jr + 1, 5).setValue('Fichado');
+          sheetJug.getRange(jr + 1, estadoCol).setValue('Fichado');
         }
         if (rowName === String(pOut).trim().toLowerCase()) {
-          sheetJug.getRange(jr + 1, 5).setValue(isAbandon ? 'Abandona Liga' : 'Disponible');
+          sheetJug.getRange(jr + 1, estadoCol).setValue(isAbandon ? 'Abandona Liga' : 'Disponible');
         }
       }
     }

@@ -1957,36 +1957,36 @@ class GasEngineService {
     return this.getAvailablePlayersForJornada(1);
   }
 
-  public processTransfer(
+  public async processTransfer(
     teamName: string,
     token: string,
     jornada: number,
     playerOut: string | string[],
     playerIn: string | string[],
     isAbandonment: boolean | boolean[]
-  ): { success: boolean; message: string } {
+  ): Promise<{ success: boolean; message: string; outdatedScript?: boolean }> {
     if (Array.isArray(playerOut) && Array.isArray(playerIn)) {
       const transfers = playerOut.map((pOut, idx) => ({
         playerOut: pOut,
         playerIn: playerIn[idx],
         isAbandonment: Array.isArray(isAbandonment) ? isAbandonment[idx] : !!isAbandonment
       }));
-      return this.processMultipleTransfers(teamName, token, jornada, transfers);
+      return await this.processMultipleTransfers(teamName, token, jornada, transfers);
     }
 
-    return this.processMultipleTransfers(teamName, token, jornada, [{
+    return await this.processMultipleTransfers(teamName, token, jornada, [{
       playerOut: String(playerOut),
       playerIn: String(playerIn),
       isAbandonment: !!isAbandonment
     }]);
   }
 
-  public processMultipleTransfers(
+  public async processMultipleTransfers(
     teamName: string,
     token: string,
     jornada: number,
     transfers: Array<{ playerOut: string; playerIn: string; isAbandonment?: boolean }>
-  ): { success: boolean; message: string } {
+  ): Promise<{ success: boolean; message: string; outdatedScript?: boolean }> {
     if (!this.validateTeamToken(teamName, token)) {
       return { success: false, message: 'Error de autenticación: Token inválido o equipo incorrecto.' };
     }
@@ -2157,26 +2157,40 @@ class GasEngineService {
     this.saveState();
     this.notify();
 
-    // Sincronizar en segundo plano con Google Sheets si hay URL configurada
-    if (this.gasUrl) {
-      this.fetchGasData(this.gasUrl, {
-        action: 'transfer',
-        team: teamName,
-        token: token,
-        jornada: String(jornada),
-        transfers: JSON.stringify(transfers)
-      }, 10000).catch(err => {
-        console.warn('[gasEngine] Envío de fichajes a Google Sheets:', err);
-      });
+    // Sincronizar en tiempo real con Google Sheets
+    let gasMessage = '';
+    let isOutdated = false;
+    const targetGasUrl = this.getGasUrl();
+    if (targetGasUrl) {
+      try {
+        const gasRes = await this.executeGasAction({
+          action: 'transfer',
+          team: teamName,
+          token: token,
+          jornada: Number(jornada),
+          transfers: transfers
+        });
+        if (gasRes.outdatedScript) {
+          isOutdated = true;
+          gasMessage = ' ⚠️ Google Sheets no se actualizó en tiempo real porque tu Apps Script necesita una "Nueva versión" de Código.gs.';
+        } else if (gasRes.success) {
+          gasMessage = ' ✅ Sincronizado en tiempo real en Google Sheets.';
+        } else {
+          gasMessage = ` ⚠️ Aviso de Google Sheets: ${gasRes.message}`;
+        }
+      } catch (e: any) {
+        gasMessage = ' ⚠️ No se pudo enviar a Google Sheets en este momento.';
+      }
     }
 
     return {
       success: true,
-      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.`
+      outdatedScript: isOutdated,
+      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.${gasMessage}`
     };
   }
 
-  public processDraftSelection(teamName: string, token: string, playerName: string): { success: boolean; message: string } {
+  public async processDraftSelection(teamName: string, token: string, playerName: string): Promise<{ success: boolean; message: string; outdatedScript?: boolean }> {
     const JORNADA_DRAFT = 1;
     if (!this.validateTeamToken(teamName, token)) {
       return { success: false, message: 'Error de autenticación: Token inválido o equipo incorrecto.' };
@@ -2293,21 +2307,35 @@ class GasEngineService {
       });
     }
 
-    // Sincronizar en segundo plano con Google Sheets si hay URL configurada
-    if (this.gasUrl) {
-      this.fetchGasData(this.gasUrl, {
-        action: 'draft',
-        team: teamName,
-        token: token,
-        player: playerName
-      }, 10000).catch(err => {
-        console.warn('[gasEngine] Envío de elección de draft a Google Sheets:', err);
-      });
+    // Sincronizar en tiempo real con Google Sheets
+    let gasMessage = '';
+    let isOutdated = false;
+    const targetGasUrl = this.getGasUrl();
+    if (targetGasUrl) {
+      try {
+        const gasRes = await this.executeGasAction({
+          action: 'draft',
+          team: teamName,
+          token: token,
+          player: playerName
+        });
+        if (gasRes.outdatedScript) {
+          isOutdated = true;
+          gasMessage = ' ⚠️ Google Sheets no se actualizó en tiempo real porque tu Apps Script necesita una "Nueva versión" de Código.gs.';
+        } else if (gasRes.success) {
+          gasMessage = ' ✅ Sincronizado en tiempo real en Google Sheets.';
+        } else {
+          gasMessage = ` ⚠️ Aviso de Google Sheets: ${gasRes.message}`;
+        }
+      } catch (e: any) {
+        gasMessage = ' ⚠️ No se pudo enviar a Google Sheets en este momento.';
+      }
     }
 
     return {
       success: true,
-      message: `¡Selección completada! "${playerName}" se une a "${teamName}". Valor actual del equipo: ${potentialNewVal}. Jugadores: ${playersInTeam.length + 1}/${MAX_DRAFT_PLAYERS_PER_TEAM}.`
+      outdatedScript: isOutdated,
+      message: `¡Selección completada! "${playerName}" se une a "${teamName}". Valor actual del equipo: ${potentialNewVal}. Jugadores: ${playersInTeam.length + 1}/${MAX_DRAFT_PLAYERS_PER_TEAM}.${gasMessage}`
     };
   }
 
@@ -3349,6 +3377,164 @@ class GasEngineService {
   }
 
   /**
+   * Ejecuta una acción de escritura en Google Sheets en tiempo real (Draft, Fichajes, Orden Draft).
+   * Prioriza el backend /api/gas-action (inmune a CORS y redirecciones) y recurre a fetchGasData como respaldo.
+   */
+  public async executeGasAction(payload: {
+    action: 'draft' | 'transfer' | 'saveDraftOrder' | 'ping';
+    team?: string;
+    token?: string;
+    player?: string;
+    jornada?: number;
+    transfers?: any[];
+    draftOrder?: any;
+  }): Promise<{ success: boolean; message: string; outdatedScript?: boolean; data?: any }> {
+    const targetUrl = this.getGasUrl();
+    if (!targetUrl) {
+      return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
+    }
+
+    // 1. Enviar a través del servidor backend /api/gas-action
+    try {
+      const resp = await fetch('/api/gas-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          customGasUrl: targetUrl
+        })
+      });
+
+      if (resp.ok) {
+        const resJson = await resp.json();
+        return resJson;
+      }
+    } catch (e) {
+      console.warn('[gasEngine] Falló /api/gas-action, recurriendo a cliente directo:', e);
+    }
+
+    // 2. Respaldo directo en el cliente (JSONP o fetch)
+    try {
+      const params: Record<string, string> = { action: payload.action };
+      if (payload.team) params.team = payload.team;
+      if (payload.token) params.token = payload.token;
+      if (payload.player) params.player = payload.player;
+      if (payload.jornada !== undefined) params.jornada = String(payload.jornada);
+      if (payload.transfers !== undefined) {
+        params.transfers = typeof payload.transfers === 'string' ? payload.transfers : JSON.stringify(payload.transfers);
+      }
+      if (payload.draftOrder !== undefined) {
+        params.draftOrder = typeof payload.draftOrder === 'string' ? payload.draftOrder : JSON.stringify(payload.draftOrder);
+      }
+
+      const res = await this.fetchGasData(targetUrl, params, 15000);
+      if (res && res.error) {
+        const isOutdated = String(res.error).includes('Acción API no reconocida');
+        return {
+          success: false,
+          outdatedScript: isOutdated,
+          message: isOutdated
+            ? `⚠️ Google Sheets no se actualizó en tiempo real: La Web App de Apps Script necesita desplegar una "Nueva versión" para la acción "${payload.action}".`
+            : res.error
+        };
+      }
+      return {
+        success: res?.success !== false,
+        message: res?.message || 'Actualizado en tiempo real en Google Sheets'
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: 'No se pudo contactar con Google Sheets: ' + (err?.message || err)
+      };
+    }
+  }
+
+  /**
+   * Comprueba si la Web App de Apps Script desplegada soporta tiempo real para Draft y Fichajes
+   */
+  public async checkRealtimeStatus(targetUrl?: string): Promise<{
+    configured: boolean;
+    connected: boolean;
+    realtimeReady: boolean;
+    outdatedScript?: boolean;
+    message: string;
+    instruction?: string;
+  }> {
+    const effectiveUrl = (targetUrl || this.getGasUrl()).trim();
+    if (!effectiveUrl) {
+      return {
+        configured: false,
+        connected: false,
+        realtimeReady: false,
+        message: 'No hay URL de Google Apps Script configurada.'
+      };
+    }
+
+    try {
+      const resp = await fetch(`/api/gas-diagnostics?gasUrl=${encodeURIComponent(effectiveUrl)}`, { cache: 'no-store' });
+      if (resp.ok) {
+        return await resp.json();
+      }
+    } catch (e) {
+      console.warn('[gasEngine] Falló /api/gas-diagnostics:', e);
+    }
+
+    return {
+      configured: true,
+      connected: false,
+      realtimeReady: false,
+      message: 'No se pudo contactar con el servicio de diagnóstico.'
+    };
+  }
+
+  /**
+   * Sincroniza todas las elecciones de Draft registradas en el historial local con Google Sheets.
+   */
+  public async syncAllPendingDraftsToGoogleSheets(): Promise<{ success: boolean; message: string; syncedCount: number }> {
+    const drafts = this.getDraftHistory();
+    if (!drafts.length) {
+      return { success: true, message: 'No hay elecciones de draft registradas en el historial local.', syncedCount: 0 };
+    }
+    const tokenMap = new Map<string, string>();
+    this.getTokens().forEach(t => tokenMap.set(t.team.toLowerCase().trim(), t.token));
+
+    let successCount = 0;
+    let lastError = '';
+
+    // Enviar en orden cronológico (las más antiguas primero)
+    const chronologicalDrafts = [...drafts].reverse();
+    for (const d of chronologicalDrafts) {
+      const token = tokenMap.get(d.team.toLowerCase().trim()) || '';
+      const res = await this.executeGasAction({
+        action: 'draft',
+        team: d.team,
+        token: token,
+        player: d.playerName
+      });
+      if (res.success) {
+        successCount++;
+      } else {
+        lastError = res.message;
+      }
+    }
+
+    if (successCount === drafts.length) {
+      return {
+        success: true,
+        message: `¡Sincronización completa! Se han registrado las ${successCount} elecciones de Draft en Google Sheets.`,
+        syncedCount: successCount
+      };
+    }
+
+    return {
+      success: successCount > 0,
+      message: `Se sincronizaron ${successCount} de ${drafts.length} elecciones. ${lastError ? 'Detalle: ' + lastError : ''}`,
+      syncedCount: successCount
+    };
+  }
+
+  /**
    * Guarda el orden de elección directamente en la pestaña "Draft" de Google Sheets
    */
   public async syncDraftOrderToGoogleSheets(): Promise<{ success: boolean; message: string }> {
@@ -3357,26 +3543,14 @@ class GasEngineService {
       return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
     }
     const order = this.getDraftOrder();
-    try {
-      const resp = await fetch(targetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'saveDraftOrder',
-          draftOrder: order
-        })
-      });
-      const data = await resp.json();
-      return {
-        success: data?.success || false,
-        message: data?.message || (data?.success ? 'Guardado en Google Sheets' : 'Error al guardar')
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: 'No se pudo conectar con Google Sheets: ' + (err?.message || err)
-      };
-    }
+    const res = await this.executeGasAction({
+      action: 'saveDraftOrder',
+      draftOrder: order
+    });
+    return {
+      success: res.success,
+      message: res.message
+    };
   }
 
   /**

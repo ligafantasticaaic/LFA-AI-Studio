@@ -108,7 +108,7 @@ export const FichajesView: React.FC = () => {
     return matchesSearch && matchesPos;
   });
 
-  const handleTransferSubmit = (e: React.FormEvent) => {
+  const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTeam || !teamToken.trim() || !selectedJornada) {
       setStatusMessage({
@@ -135,7 +135,7 @@ export const FichajesView: React.FC = () => {
     }
 
     setIsLoading(true);
-    const res = gasEngine.processMultipleTransfers(selectedTeam, teamToken.trim(), selectedJornada, transfersPayload);
+    const res = await gasEngine.processMultipleTransfers(selectedTeam, teamToken.trim(), selectedJornada, transfersPayload);
     setIsLoading(false);
 
     setStatusMessage({ text: res.message, isSuccess: res.success });

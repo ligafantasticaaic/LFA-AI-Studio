@@ -44,7 +44,7 @@ export const DraftView: React.FC = () => {
     }
   };
 
-  const handleDraftSubmit = (e: React.FormEvent) => {
+  const handleDraftSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTeam || !teamToken.trim() || !selectedPlayer) {
       setStatusMessage({
@@ -55,7 +55,7 @@ export const DraftView: React.FC = () => {
     }
 
     setIsLoading(true);
-    const res = gasEngine.processDraftSelection(selectedTeam, teamToken.trim(), selectedPlayer);
+    const res = await gasEngine.processDraftSelection(selectedTeam, teamToken.trim(), selectedPlayer);
     setIsLoading(false);
 
     setStatusMessage({ text: res.message, isSuccess: res.success });

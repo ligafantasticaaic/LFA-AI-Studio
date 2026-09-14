@@ -66,6 +66,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [isTestingGas, setIsTestingGas] = useState<boolean>(false);
   const [isSyncingGas, setIsSyncingGas] = useState<boolean>(false);
   const [gasFeedback, setGasFeedback] = useState<{ isSuccess: boolean; message: string; stats?: any; latency?: number } | null>(null);
+  const [realtimeDiagnosis, setRealtimeDiagnosis] = useState<{
+    configured: boolean;
+    connected: boolean;
+    realtimeReady: boolean;
+    outdatedScript?: boolean;
+    message: string;
+    instruction?: string;
+  } | null>(null);
+  const [isDiagnosingRealtime, setIsDiagnosingRealtime] = useState<boolean>(false);
+  const [isSyncingPendingDrafts, setIsSyncingPendingDrafts] = useState<boolean>(false);
   const [copiedGasCode, setCopiedGasCode] = useState<boolean>(false);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [, setSyncVersion] = useState<number>(0);
@@ -555,6 +565,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
     setIsTestingGas(true);
     setGasFeedback(null);
+    setRealtimeDiagnosis(null);
     const res = await gasEngine.testConnection(gasUrlInput.trim());
     setIsTestingGas(false);
     setGasFeedback({
@@ -564,6 +575,30 @@ export const AdminView: React.FC<AdminViewProps> = ({
     });
     if (res.success) {
       gasEngine.setGasUrl(gasUrlInput.trim());
+      // Ejecutar también diagnóstico en tiempo real en segundo plano
+      handleDiagnoseRealtimeGas();
+    }
+  };
+
+  const handleDiagnoseRealtimeGas = async () => {
+    const targetUrl = gasUrlInput.trim() || gasEngine.getGasUrl();
+    if (!targetUrl) {
+      showAlert('Introduce la URL de la Web App de Google Apps Script para diagnosticar.', false);
+      return;
+    }
+    setIsDiagnosingRealtime(true);
+    const diag = await gasEngine.checkRealtimeStatus(targetUrl);
+    setIsDiagnosingRealtime(false);
+    setRealtimeDiagnosis(diag);
+  };
+
+  const handleSyncPendingDrafts = async () => {
+    setIsSyncingPendingDrafts(true);
+    const res = await gasEngine.syncAllPendingDraftsToGoogleSheets();
+    setIsSyncingPendingDrafts(false);
+    showAlert(res.message, res.success);
+    if (res.success) {
+      loadAdminData();
     }
   };
 
@@ -860,6 +895,97 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 )}
               </div>
             )}
+
+            {/* Diagnóstico y Estado en Tiempo Real (Draft & Fichajes) */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${
+                    realtimeDiagnosis?.realtimeReady
+                      ? 'bg-emerald-400 animate-pulse'
+                      : realtimeDiagnosis?.outdatedScript
+                      ? 'bg-amber-400 animate-ping'
+                      : 'bg-slate-500'
+                  }`} />
+                  <span className="text-xs font-black uppercase text-slate-200 tracking-wider">
+                    Sincronización en Tiempo Real (Draft & Fichajes)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDiagnoseRealtimeGas}
+                    disabled={isDiagnosingRealtime}
+                    className="text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 transition cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isDiagnosingRealtime ? 'animate-spin text-amber-400' : 'text-slate-400'}`} />
+                    <span>{isDiagnosingRealtime ? 'Diagnosticando...' : 'Diagnosticar Tiempo Real'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSyncPendingDrafts}
+                    disabled={isSyncingPendingDrafts}
+                    className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-950/50 hover:bg-emerald-900/50 border border-emerald-800 transition cursor-pointer disabled:opacity-50"
+                    title="Registra todas las elecciones locales del Draft en Google Sheets"
+                  >
+                    <Database className={`w-3.5 h-3.5 ${isSyncingPendingDrafts ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingPendingDrafts ? 'Volcando...' : 'Volcar Elecciones a Sheets'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Resultado del diagnóstico si se ha ejecutado */}
+              {realtimeDiagnosis && (
+                <div className={`p-3.5 rounded-xl text-xs space-y-2 border ${
+                  realtimeDiagnosis.realtimeReady
+                    ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200'
+                    : realtimeDiagnosis.outdatedScript
+                    ? 'bg-amber-950/60 border-amber-500/50 text-amber-200'
+                    : 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {realtimeDiagnosis.realtimeReady ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <p className="font-bold m-0">{realtimeDiagnosis.message}</p>
+                      {realtimeDiagnosis.outdatedScript && (
+                        <div className="mt-2 space-y-2 text-slate-300 text-[11px] bg-slate-900/80 p-3 rounded-lg border border-amber-500/30">
+                          <p className="font-extrabold text-amber-400 m-0 uppercase tracking-wide">
+                            Pasos para activar la actualización en tiempo real en Google Sheets:
+                          </p>
+                          <ol className="list-decimal list-inside space-y-1 text-slate-300">
+                            <li>Haz clic en el botón <strong className="text-white">"Copiar Código.gs Actualizado"</strong> aquí abajo.</li>
+                            <li>Abre tu proyecto de <strong className="text-white">Google Apps Script</strong> y pega el código sustituyendo el archivo <code className="bg-slate-950 px-1 py-0.5 rounded text-amber-400">Código.gs</code>. Guarda con <kbd className="font-mono bg-slate-800 px-1 rounded">Ctrl+S</kbd>.</li>
+                            <li>Arriba a la derecha, haz clic en <strong className="text-white">Implementar &gt; Administrar implementaciones</strong>, pulsa el icono del <strong>Lápiz (Editar)</strong>, en <em>Versión</em> selecciona <strong className="text-amber-400">"Nueva versión"</strong> y pulsa <strong>Implementar</strong>.</li>
+                          </ol>
+                          <div className="pt-1 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleCopyGasCode}
+                              className="text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            >
+                              {copiedGasCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{copiedGasCode ? '¡Código.gs Copiado!' : 'Copiar Código.gs Actualizado'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDiagnoseRealtimeGas}
+                              className="text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-600 transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Comprobar de Nuevo</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Quick Action Tools */}
             <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-3">
