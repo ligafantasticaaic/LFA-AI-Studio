@@ -3471,10 +3471,72 @@ class GasEngineService {
       };
     }
 
+    // 1. Diagnóstico directo en el cliente con fetchGasData (inmune a proxies, caídas de servidor o bloqueos de red)
+    try {
+      const pingData = await this.fetchGasData(effectiveUrl, { action: 'ping' }, 12000);
+      if (pingData && (pingData.success || pingData.realtimeReady !== undefined)) {
+        // Conexión básica con Google Sheets confirmada
+        if (pingData.realtimeReady) {
+          return {
+            configured: true,
+            connected: true,
+            realtimeReady: true,
+            outdatedScript: false,
+            message: '✅ Conexión verificada: Tu Web App de Google Apps Script soporta sincronización en tiempo real para Draft y Fichajes.'
+          };
+        }
+
+        // Probar si reconoce la acción 'draft'
+        try {
+          const draftTest = await this.fetchGasData(effectiveUrl, {
+            action: 'draft',
+            team: 'TEST_DIAGNOSTIC',
+            token: 'invalid_token_diag',
+            player: 'TestPlayer'
+          }, 12000);
+
+          if (draftTest?.error && String(draftTest.error).includes('Acción API no reconocida')) {
+            return {
+              configured: true,
+              connected: true,
+              realtimeReady: false,
+              outdatedScript: true,
+              message: '⚠️ Google Sheets está conectado correctamente, pero la Web App de Apps Script necesita desplegar una "Nueva versión" para activar el tiempo real de Draft y Fichajes.',
+              instruction: 'En Google Apps Script: 1. Pega el Código.gs actualizado. 2. Haz clic en Implementar > Administrar implementaciones > Editar (lápiz) > Nueva versión > Implementar.'
+            };
+          }
+
+          // Si respondió sin "Acción API no reconocida", soporta tiempo real
+          return {
+            configured: true,
+            connected: true,
+            realtimeReady: true,
+            outdatedScript: false,
+            message: '✅ Conexión verificada: Tu Web App de Google Apps Script soporta sincronización en tiempo real para Draft y Fichajes.'
+          };
+        } catch {
+          return {
+            configured: true,
+            connected: true,
+            realtimeReady: false,
+            outdatedScript: true,
+            message: '⚠️ Google Sheets está conectado, pero la Web App requiere actualizarse a una "Nueva versión" para habilitar el tiempo real.',
+            instruction: 'En Google Apps Script: 1. Pega el Código.gs actualizado. 2. Haz clic en Implementar > Administrar implementaciones > Editar (lápiz) > Nueva versión > Implementar.'
+          };
+        }
+      }
+    } catch (directErr) {
+      console.warn('[gasEngine] Diagnóstico directo con fetchGasData falló, probando ruta /api/gas-diagnostics...', directErr);
+    }
+
+    // 2. Respaldo a través de la ruta del servidor
     try {
       const resp = await fetch(`/api/gas-diagnostics?gasUrl=${encodeURIComponent(effectiveUrl)}`, { cache: 'no-store' });
       if (resp.ok) {
-        return await resp.json();
+        const json = await resp.json();
+        if (json && (json.connected !== undefined || json.realtimeReady !== undefined)) {
+          return json;
+        }
       }
     } catch (e) {
       console.warn('[gasEngine] Falló /api/gas-diagnostics:', e);
@@ -3484,7 +3546,7 @@ class GasEngineService {
       configured: true,
       connected: false,
       realtimeReady: false,
-      message: 'No se pudo contactar con el servicio de diagnóstico.'
+      message: 'No se pudo conectar con la Web App. Comprueba que la URL termine en "/exec" y tenga permisos para "Cualquiera" (Anyone).'
     };
   }
 

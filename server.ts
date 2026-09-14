@@ -194,12 +194,23 @@ async function startServer() {
     }
 
     try {
+      let pingUrl: URL;
+      try {
+        pingUrl = new URL(targetUrl);
+      } catch {
+        return res.json({
+          configured: false,
+          connected: false,
+          realtimeReady: false,
+          message: 'La URL de Google Apps Script no tiene un formato válido.'
+        });
+      }
+
       // 1. Probar ping
-      const pingUrl = new URL(targetUrl);
       pingUrl.searchParams.set('action', 'ping');
       pingUrl.searchParams.set('_t', String(Date.now()));
 
-      const pingRes = await fetch(pingUrl.toString(), { redirect: 'follow', signal: AbortSignal.timeout(8000) });
+      const pingRes = await fetch(pingUrl.toString(), { redirect: 'follow', signal: AbortSignal.timeout(12000) });
       const pingText = await pingRes.text();
       let pingData: any = {};
       try { pingData = JSON.parse(pingText); } catch {}
@@ -209,8 +220,19 @@ async function startServer() {
           configured: true,
           connected: false,
           realtimeReady: false,
-          message: 'La Web App responde pero no devolvió el formato esperado.',
+          message: 'La Web App responde pero no devolvió el formato esperado de Google Sheets.',
           details: pingText.substring(0, 200)
+        });
+      }
+
+      // Si ping ya incluye realtimeReady: true
+      if (pingData.realtimeReady) {
+        return res.json({
+          configured: true,
+          connected: true,
+          realtimeReady: true,
+          outdatedScript: false,
+          message: '✅ Conexión verificada: Tu Web App de Google Apps Script soporta sincronización en tiempo real para Draft y Fichajes.'
         });
       }
 
@@ -222,7 +244,7 @@ async function startServer() {
       testDraftUrl.searchParams.set('player', 'TestPlayer');
       testDraftUrl.searchParams.set('_t', String(Date.now()));
 
-      const draftRes = await fetch(testDraftUrl.toString(), { redirect: 'follow', signal: AbortSignal.timeout(8000) });
+      const draftRes = await fetch(testDraftUrl.toString(), { redirect: 'follow', signal: AbortSignal.timeout(12000) });
       const draftText = await draftRes.text();
       let draftData: any = {};
       try { draftData = JSON.parse(draftText); } catch {}
@@ -235,7 +257,7 @@ async function startServer() {
           connected: true,
           realtimeReady: false,
           outdatedScript: true,
-          message: '⚠️ La Web App está conectada, pero tiene desplegada una versión antigua de Código.gs que no reconoce la acción "draft" ni "transfer" en tiempo real.',
+          message: '⚠️ Google Sheets está conectado correctamente, pero la Web App tiene desplegada una versión antigua de Código.gs que no reconoce la acción "draft" en tiempo real.',
           instruction: 'En Google Apps Script: 1. Pega el Código.gs actualizado. 2. Haz clic en Implementar > Administrar implementaciones > Editar (lápiz) > Nueva versión > Implementar.'
         });
       }
@@ -246,14 +268,14 @@ async function startServer() {
         connected: true,
         realtimeReady: true,
         outdatedScript: false,
-        message: '✅ Conexión perfecta: Tu Web App de Google Apps Script soporta sincronización en tiempo real para Draft y Fichajes.'
+        message: '✅ Conexión verificada: Tu Web App de Google Apps Script soporta sincronización en tiempo real para Draft y Fichajes.'
       });
     } catch (err: any) {
       return res.json({
         configured: true,
         connected: false,
         realtimeReady: false,
-        message: 'Error al conectar con Google Apps Script: ' + (err?.message || 'Error de red')
+        message: 'Error al conectar con Google Apps Script: ' + (err?.message || 'Error de red o tiempo de espera agotado')
       });
     }
   });

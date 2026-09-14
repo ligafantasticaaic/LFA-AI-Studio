@@ -936,36 +936,73 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
               {/* Resultado del diagnóstico si se ha ejecutado */}
               {realtimeDiagnosis && (
-                <div className={`p-3.5 rounded-xl text-xs space-y-2 border ${
+                <div className={`p-4 rounded-xl text-xs space-y-3 border ${
                   realtimeDiagnosis.realtimeReady
                     ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200'
-                    : realtimeDiagnosis.outdatedScript
-                    ? 'bg-amber-950/60 border-amber-500/50 text-amber-200'
+                    : realtimeDiagnosis.connected
+                    ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
                     : 'bg-rose-950/60 border-rose-500/40 text-rose-200'
                 }`}>
-                  <div className="flex items-start gap-2">
+                  {/* Badges de Estado */}
+                  <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-white/10">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900/90 border border-slate-700">
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase">Google Sheets:</span>
+                      {realtimeDiagnosis.connected ? (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Conectado
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-rose-400">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Desconectado
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900/90 border border-slate-700">
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase">Tiempo Real (Draft & Fichajes):</span>
+                      {realtimeDiagnosis.realtimeReady ? (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Activo en Directo
+                        </span>
+                      ) : realtimeDiagnosis.outdatedScript ? (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-amber-400">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Requiere "Nueva Versión"
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-slate-400">
+                          No disponible
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
                     {realtimeDiagnosis.realtimeReady ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : realtimeDiagnosis.connected ? (
+                      <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                     ) : (
-                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
                     )}
-                    <div>
-                      <p className="font-bold m-0">{realtimeDiagnosis.message}</p>
+                    <div className="space-y-2 flex-1">
+                      <p className="font-bold text-sm m-0 leading-snug">{realtimeDiagnosis.message}</p>
+
                       {realtimeDiagnosis.outdatedScript && (
-                        <div className="mt-2 space-y-2 text-slate-300 text-[11px] bg-slate-900/80 p-3 rounded-lg border border-amber-500/30">
-                          <p className="font-extrabold text-amber-400 m-0 uppercase tracking-wide">
-                            Pasos para activar la actualización en tiempo real en Google Sheets:
+                        <div className="mt-2 space-y-2.5 text-slate-300 text-[11px] bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/30">
+                          <p className="font-extrabold text-amber-400 m-0 uppercase tracking-wide flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            ¿Cómo activar la escritura en directo en tu Google Sheets?
                           </p>
-                          <ol className="list-decimal list-inside space-y-1 text-slate-300">
-                            <li>Haz clic en el botón <strong className="text-white">"Copiar Código.gs Actualizado"</strong> aquí abajo.</li>
-                            <li>Abre tu proyecto de <strong className="text-white">Google Apps Script</strong> y pega el código sustituyendo el archivo <code className="bg-slate-950 px-1 py-0.5 rounded text-amber-400">Código.gs</code>. Guarda con <kbd className="font-mono bg-slate-800 px-1 rounded">Ctrl+S</kbd>.</li>
+                          <ol className="list-decimal list-inside space-y-1.5 text-slate-200">
+                            <li>Haz clic en el botón amarillo <strong className="text-amber-300">"Copiar Código.gs Actualizado"</strong> aquí abajo.</li>
+                            <li>En tu hoja de cálculo, abre <strong className="text-white">Extensiones &gt; Apps Script</strong>, pega el código en el archivo <code className="bg-slate-950 px-1.5 py-0.5 rounded text-amber-400 font-mono">Código.gs</code> y guarda con <kbd className="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-white">Ctrl+S</kbd>.</li>
                             <li>Arriba a la derecha, haz clic en <strong className="text-white">Implementar &gt; Administrar implementaciones</strong>, pulsa el icono del <strong>Lápiz (Editar)</strong>, en <em>Versión</em> selecciona <strong className="text-amber-400">"Nueva versión"</strong> y pulsa <strong>Implementar</strong>.</li>
                           </ol>
-                          <div className="pt-1 flex items-center gap-2">
+                          <div className="pt-1 flex flex-wrap items-center gap-2">
                             <button
                               type="button"
                               onClick={handleCopyGasCode}
-                              className="text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                              className="text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                             >
                               {copiedGasCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                               <span>{copiedGasCode ? '¡Código.gs Copiado!' : 'Copiar Código.gs Actualizado'}</span>
@@ -973,7 +1010,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             <button
                               type="button"
                               onClick={handleDiagnoseRealtimeGas}
-                              className="text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-600 transition flex items-center gap-1.5 cursor-pointer"
+                              className="text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 px-3.5 py-1.5 rounded-lg border border-slate-600 transition flex items-center gap-1.5 cursor-pointer"
                             >
                               <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
                               <span>Comprobar de Nuevo</span>
