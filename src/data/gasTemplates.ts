@@ -637,9 +637,14 @@ function getDraftOrderFromSheet(sheet) {
     for (var col = 0; col < numCols; col++) {
       var rName = String(headerRow[col] || ('Ronda ' + (col + 1))).trim();
       var roundTeams = [];
+      var seenTeamsInCol = {};
       for (var row = 1; row < dOrderData.length; row++) {
         var tVal = String(dOrderData[row][col] || '').trim();
-        if (tVal) roundTeams.push(tVal);
+        var tLower = tVal.toLowerCase();
+        if (tVal && !seenTeamsInCol[tLower]) {
+          seenTeamsInCol[tLower] = true;
+          roundTeams.push(tVal);
+        }
       }
       if (roundTeams.length > 0) {
         draftOrder.push({ round: col + 1, roundName: rName, teams: roundTeams });
@@ -668,12 +673,30 @@ function saveDraftOrderToSheet(rawOrder) {
     headers.push(order[r] ? order[r].roundName || ('Ronda ' + (r + 1)) : ('Ronda ' + (r + 1)));
   }
   sheet.appendRow(headers);
+
+  // Asegurar que cada ronda solo tenga cada equipo 1 sola vez
+  var cleanedRounds = [];
   var maxTeams = 0;
-  order.forEach(function(o) { if (o.teams && o.teams.length > maxTeams) maxTeams = o.teams.length; });
+  for (var c = 0; c < 11; c++) {
+    var rTeams = order[c] && order[c].teams ? order[c].teams : [];
+    var seenT = {};
+    var uniqueT = [];
+    for (var ti = 0; ti < rTeams.length; ti++) {
+      var tName = String(rTeams[ti] || '').trim();
+      var tLower = tName.toLowerCase();
+      if (tName && !seenT[tLower]) {
+        seenT[tLower] = true;
+        uniqueT.push(tName);
+      }
+    }
+    cleanedRounds.push(uniqueT);
+    if (uniqueT.length > maxTeams) maxTeams = uniqueT.length;
+  }
+
   for (var row = 0; row < maxTeams; row++) {
     var rowData = [];
     for (var col = 0; col < 11; col++) {
-      var t = (order[col] && order[col].teams && order[col].teams[row]) ? order[col].teams[row] : '';
+      var t = (cleanedRounds[col] && cleanedRounds[col][row]) ? cleanedRounds[col][row] : '';
       rowData.push(t);
     }
     sheet.appendRow(rowData);
@@ -724,15 +747,18 @@ function findSheet(ss, candidates) {
 function getFullSyncData() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 1. Equipos y Tokens (1 sola lectura de rango)
+  // 1. Equipos y Tokens (1 sola lectura de rango, deduplicando por si hay filas repetidas)
   var sheetTeams = findSheet(ss, ['Equipos', 'Tokens', 'Teams', 'Clubs', 'Equipos_Tokens']);
   var teams = [];
   var tokens = [];
+  var seenTeamsMap = {};
   if (sheetTeams) {
     var tData = sheetTeams.getDataRange().getValues();
     for (var i = 1; i < tData.length; i++) {
       var tName = tData[i][0] ? String(tData[i][0]).trim() : '';
-      if (tName !== '') {
+      var tLower = tName.toLowerCase();
+      if (tName !== '' && !seenTeamsMap[tLower]) {
+        seenTeamsMap[tLower] = true;
         teams.push(tName);
         var tToken = tData[i][1] ? String(tData[i][1]).trim() : '';
         if (tToken) {
@@ -1012,12 +1038,15 @@ function getFullSyncData() {
       var pCatalogMap = {};
       players.forEach(function(pl) { pCatalogMap[pl.name.toLowerCase()] = pl; });
 
+      var seenDraftKeys = {};
       for (var dr = dHeaderRowIdx + 1; dr < dData.length; dr++) {
         var dRow = dData[dr];
         var dTeam = colDTeam !== -1 && dRow[colDTeam] !== undefined ? String(dRow[colDTeam]).trim() : '';
         var dPlayer = colDPlayer !== -1 && dRow[colDPlayer] !== undefined ? String(dRow[colDPlayer]).trim() : '';
+        var dKey = (dTeam + ':::' + dPlayer).toLowerCase();
         
-        if (dTeam || dPlayer) {
+        if ((dTeam || dPlayer) && !seenDraftKeys[dKey]) {
+          seenDraftKeys[dKey] = true;
           var rawDDate = colDDate !== -1 ? dRow[colDDate] : '';
           var dDateStr = '';
           if (rawDDate instanceof Date) {
@@ -1065,9 +1094,12 @@ function getFullSyncData() {
       for (var col = 0; col < numCols; col++) {
         var rName = String(headerRow[col] || ('Ronda ' + (col + 1))).trim();
         var roundTeams = [];
+        var seenInCol = {};
         for (var row = 1; row < dOrderData.length; row++) {
           var tVal = String(dOrderData[row][col] || '').trim();
-          if (tVal) {
+          var tLower = tVal.toLowerCase();
+          if (tVal && !seenInCol[tLower]) {
+            seenInCol[tLower] = true;
             roundTeams.push(tVal);
           }
         }
@@ -1672,8 +1704,31 @@ function processDraftSelection(team, token, player) {
   }
   if (!pos) pos = 'Medio';
   
-  var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
-  sheetDraft.appendRow([nowStr, team, player, realTeam, pos, val]);
+  // INSCRIBIR EN HISTORIAL_DRAFT (SOLO UNA VEZ, EVITANDO DUPLICADOS POR REINTENTOS O LLAMADAS SIMULTÁNEAS)
+  var dData = sheetDraft.getDataRange().getValues();
+  var draftHeaders = dData.length > 0 ? dData[0] : [];
+  var colDTeam = -1, colDPlay = -1;
+  for (var dh = 0; dh < draftHeaders.length; dh++) {
+    var dHeader = String(draftHeaders[dh] || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (dHeader.indexOf('equipo') !== -1 && dHeader.indexOf('liga') === -1 && dHeader.indexOf('real') === -1) colDTeam = dh;
+    else if (dHeader.indexOf('jugador') !== -1 || dHeader.indexOf('player') !== -1 || dHeader.indexOf('nombre') !== -1) colDPlay = dh;
+  }
+  if (colDTeam === -1) colDTeam = 1;
+  if (colDPlay === -1) colDPlay = 2;
+
+  var alreadyInDraft = false;
+  for (var dr = 1; dr < dData.length; dr++) {
+    var exPlay = String(dData[dr][colDPlay] || '').trim().toLowerCase();
+    if (exPlay === normPlayer) {
+      alreadyInDraft = true;
+      break;
+    }
+  }
+
+  if (!alreadyInDraft) {
+    var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
+    sheetDraft.appendRow([nowStr, team, player, realTeam, pos, val]);
+  }
   
   // INSCRIBIR EN ALINEACIONES (JORNADA 1)
   var alHeaders = sheetAl.getRange(1, 1, 1, Math.max(sheetAl.getLastColumn(), 6)).getValues()[0];

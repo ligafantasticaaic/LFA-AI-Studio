@@ -413,9 +413,18 @@ class GasEngineService {
           changed = true;
         }
 
-        // Equipos y tokens desde el servidor central
+        // Equipos y tokens desde el servidor central (deduplicados)
         if (Array.isArray(data.teams) && data.teams.length > 0) {
-          const validTeams = data.teams.map((t: any) => String(t || '').trim()).filter(Boolean);
+          const seenT = new Set<string>();
+          const validTeams: string[] = [];
+          for (const t of data.teams) {
+            const trimmed = String(t || '').trim();
+            const lower = trimmed.toLowerCase();
+            if (trimmed && !seenT.has(lower)) {
+              seenT.add(lower);
+              validTeams.push(trimmed);
+            }
+          }
           if (validTeams.length > 0) {
             this.teams = validTeams;
             localStorage.setItem('lfa_teams', JSON.stringify(this.teams));
@@ -1271,9 +1280,18 @@ class GasEngineService {
       let updatedTeamsCount = 0;
       let updatedPlayersCount = 0;
 
-      // Actualizar lista de equipos si viene en la respuesta
+      // Actualizar lista de equipos si viene en la respuesta (deduplicada)
       if (Array.isArray(data.teams) && data.teams.length > 0) {
-        const remoteTeams = data.teams.map((t: any) => String(t || '').trim()).filter(Boolean);
+        const seenTeams = new Set<string>();
+        const remoteTeams: string[] = [];
+        data.teams.forEach((t: any) => {
+          const trimmed = String(t || '').trim();
+          const lower = trimmed.toLowerCase();
+          if (trimmed && !seenTeams.has(lower)) {
+            seenTeams.add(lower);
+            remoteTeams.push(trimmed);
+          }
+        });
         if (remoteTeams.length > 0) {
           this.teams = remoteTeams;
           updatedTeamsCount = this.teams.length;
@@ -1387,7 +1405,9 @@ class GasEngineService {
                         (data.data && Array.isArray(data.data.draftHistory) ? data.data.draftHistory : null))));
 
       if (rawDrafts !== null && Array.isArray(rawDrafts)) {
-        this.drafts = rawDrafts.map((d: any) => {
+        const seenDrafts = new Set<string>();
+        const parsedDrafts: DraftRecord[] = [];
+        rawDrafts.forEach((d: any) => {
           const pName = String(d.playerName || d.Nombre_Jugador || d['Nombre del Jugador'] || d['Nombre Jugador'] || d.Jugador || d.Nombre || d.Futbolista || d.Player || '').trim();
           let pReal = String(d.realTeam || d.Equipo_Liga || d['Equipo Real'] || d['Equipo_Real'] || d.Club || d['Equipo de la Liga'] || '').trim();
           let pPos = String(d.position || d.Posicion || d['Posición'] || '').trim();
@@ -1403,15 +1423,22 @@ class GasEngineService {
             }
           }
 
-          return {
-            timestamp: String(d.timestamp || d.date || d['Marca temporal'] || d.Fecha || d['Fecha/Hora'] || '').trim(),
-            team: String(d.team || d.Equipo || d.Team || d.Club || d['Nombre Equipo'] || '').trim(),
-            playerName: pName,
-            realTeam: pReal,
-            position: pPos || 'Medio',
-            value: pVal
-          };
-        }).filter(d => d.team || d.playerName);
+          const tName = String(d.team || d.Equipo || d.Team || d.Club || d['Nombre Equipo'] || '').trim();
+          const dKey = `${tName.toLowerCase()}:::${pName.toLowerCase()}`;
+
+          if ((tName || pName) && !seenDrafts.has(dKey)) {
+            seenDrafts.add(dKey);
+            parsedDrafts.push({
+              timestamp: String(d.timestamp || d.date || d['Marca temporal'] || d.Fecha || d['Fecha/Hora'] || '').trim(),
+              team: tName,
+              playerName: pName,
+              realTeam: pReal,
+              position: pPos || 'Medio',
+              value: pVal
+            });
+          }
+        });
+        this.drafts = parsedDrafts;
         updatedDraftsCount = this.drafts.length;
 
         // Reconciliación automática: asegurar que todas las elecciones del Draft estén inscritas en las alineaciones de la Jornada 1
@@ -1440,8 +1467,7 @@ class GasEngineService {
       const rawDraftOrder = Array.isArray(data.draftOrder) ? data.draftOrder :
                             (data.data && Array.isArray(data.data.draftOrder) ? data.data.draftOrder : null);
       if (Array.isArray(rawDraftOrder) && rawDraftOrder.length > 0) {
-        this.draftOrder = rawDraftOrder;
-        localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
+        this.setDraftOrder(rawDraftOrder, false);
       }
 
       const now = new Date();
@@ -1496,6 +1522,19 @@ class GasEngineService {
       const savedSchedules = localStorage.getItem('lfa_schedules');
 
       this.teams = savedTeams ? JSON.parse(savedTeams) : [...INITIAL_TEAMS];
+      if (Array.isArray(this.teams)) {
+        const seenTeams = new Set<string>();
+        const deduped: string[] = [];
+        for (const t of this.teams) {
+          const trimmed = String(t || '').trim();
+          const lower = trimmed.toLowerCase();
+          if (trimmed && !seenTeams.has(lower)) {
+            seenTeams.add(lower);
+            deduped.push(trimmed);
+          }
+        }
+        this.teams = deduped.length > 0 ? deduped : [...INITIAL_TEAMS];
+      }
       this.tokens = savedTokens ? JSON.parse(savedTokens) : [...INITIAL_TOKENS];
 
       // Purge old demo teams if they were saved in localStorage
@@ -1531,7 +1570,31 @@ class GasEngineService {
       }
       this.lineups = savedLineups ? JSON.parse(savedLineups) : [...INITIAL_LINEUPS];
       this.transfers = savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS];
-      this.drafts = savedDrafts ? JSON.parse(savedDrafts) : [...INITIAL_DRAFTS];
+      if (savedDrafts) {
+        try {
+          const parsed = JSON.parse(savedDrafts);
+          if (Array.isArray(parsed)) {
+            const seenD = new Set<string>();
+            const uniqueD: DraftRecord[] = [];
+            for (const d of parsed) {
+              const pNorm = String(d.playerName || '').trim().toLowerCase();
+              const tNorm = String(d.team || '').trim().toLowerCase();
+              const key = `${tNorm}:::${pNorm}`;
+              if (pNorm && !seenD.has(key)) {
+                seenD.add(key);
+                uniqueD.push(d);
+              }
+            }
+            this.drafts = uniqueD;
+          } else {
+            this.drafts = [...INITIAL_DRAFTS];
+          }
+        } catch {
+          this.drafts = [...INITIAL_DRAFTS];
+        }
+      } else {
+        this.drafts = [...INITIAL_DRAFTS];
+      }
       this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
 
       // Reconciliar automáticamente las elecciones del draft con las alineaciones de Jornada 1
@@ -1616,7 +1679,22 @@ class GasEngineService {
         try {
           const parsed = JSON.parse(savedDraftOrder);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            this.draftOrder = parsed;
+            this.draftOrder = parsed.map((ro: any) => {
+              const seenInRound = new Set<string>();
+              const uniqueTeams: string[] = [];
+              for (const t of (ro.teams || [])) {
+                const trimmed = String(t || '').trim();
+                const lower = trimmed.toLowerCase();
+                if (trimmed && !seenInRound.has(lower)) {
+                  seenInRound.add(lower);
+                  uniqueTeams.push(trimmed);
+                }
+              }
+              return {
+                ...ro,
+                teams: uniqueTeams
+              };
+            });
           }
         } catch {}
       }
@@ -1691,7 +1769,17 @@ class GasEngineService {
   // --- Identical GAS Backend Functions ---
 
   public getTeamNames(): string[] {
-    return [...this.teams].sort();
+    const seen = new Set<string>();
+    const cleanTeams: string[] = [];
+    for (const t of this.teams) {
+      const trimmed = String(t || '').trim();
+      const lower = trimmed.toLowerCase();
+      if (trimmed && !seen.has(lower)) {
+        seen.add(lower);
+        cleanTeams.push(trimmed);
+      }
+    }
+    return cleanTeams.sort();
   }
 
   public getTeams(): string[] {
@@ -2315,19 +2403,25 @@ class GasEngineService {
       }
     });
 
-    // 3. Inscribir en Historial_Draft
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
-                    now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+    // 3. Inscribir en Historial_Draft (solo si no existe ya para este jugador)
+    const alreadyInDrafts = this.drafts.some(
+      d => (d.playerName || '').trim().toLowerCase() === normPlayer
+    );
 
-    this.drafts.unshift({
-      timestamp: dateStr,
-      team: teamName,
-      playerName: playerDetails.name,
-      realTeam: playerDetails.realTeam,
-      position: playerDetails.position,
-      value: playerDetails.value
-    });
+    if (!alreadyInDrafts) {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                      now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+
+      this.drafts.unshift({
+        timestamp: dateStr,
+        team: teamName,
+        playerName: playerDetails.name,
+        realTeam: playerDetails.realTeam,
+        position: playerDetails.position,
+        value: playerDetails.value
+      });
+    }
 
     this.saveState();
     this.notify();
@@ -2398,7 +2492,18 @@ class GasEngineService {
   }
 
   public getDraftHistory(): DraftRecord[] {
-    return [...this.drafts];
+    const seen = new Set<string>();
+    const uniqueDrafts: DraftRecord[] = [];
+    for (const d of this.drafts) {
+      const pNorm = String(d.playerName || '').trim().toLowerCase();
+      const tNorm = String(d.team || '').trim().toLowerCase();
+      const key = `${tNorm}:::${pNorm}`;
+      if (pNorm && !seen.has(key)) {
+        seen.add(key);
+        uniqueDrafts.push(d);
+      }
+    }
+    return uniqueDrafts;
   }
 
   public getAccountingData(): AccountingData {
@@ -3017,9 +3122,17 @@ class GasEngineService {
     }
 
     let modified = false;
+    const uniqueTeams = Array.from(currentTeamsMap.values());
+    if (uniqueTeams.length !== this.teams.length) {
+      this.teams = uniqueTeams;
+      modified = true;
+    }
+
     if (JSON.stringify(this.tokens) !== JSON.stringify(cleanTokens)) {
       this.tokens = cleanTokens;
       modified = true;
+    }
+    if (modified) {
       this.saveState();
     }
     return modified;
@@ -3242,7 +3355,22 @@ class GasEngineService {
    */
   public getDraftOrder(): DraftRoundOrder[] {
     if (this.draftOrder && this.draftOrder.length > 0) {
-      return this.draftOrder;
+      return this.draftOrder.map(ro => {
+        const seenInRound = new Set<string>();
+        const uniqueTeams: string[] = [];
+        for (const t of (ro.teams || [])) {
+          const trimmed = String(t || '').trim();
+          const lower = trimmed.toLowerCase();
+          if (trimmed && !seenInRound.has(lower)) {
+            seenInRound.add(lower);
+            uniqueTeams.push(trimmed);
+          }
+        }
+        return {
+          ...ro,
+          teams: uniqueTeams
+        };
+      });
     }
     return this.generateDefaultDraftOrder();
   }
@@ -3269,7 +3397,22 @@ class GasEngineService {
    * cumpliendo turnos por orden estricto (un equipo no vuelve a elegir hasta que todos los demás han elegido en ese turno).
    */
   public generateRandomDraftOrder(pushToServer: boolean = true): DraftRoundOrder[] {
-    const currentTeams = this.getTeams();
+    const seenTeams = new Set<string>();
+    const currentTeams: string[] = [];
+    for (const t of this.getTeams()) {
+      const trimmed = String(t || '').trim();
+      const lower = trimmed.toLowerCase();
+      if (trimmed && !seenTeams.has(lower)) {
+        seenTeams.add(lower);
+        currentTeams.push(trimmed);
+      }
+    }
+
+    if (this.teams.length !== currentTeams.length) {
+      this.teams = [...currentTeams];
+      this.saveState();
+    }
+
     const order: DraftRoundOrder[] = [];
     for (let r = 1; r <= 11; r++) {
       const shuffled = [...currentTeams];
@@ -3291,7 +3434,23 @@ class GasEngineService {
    * Guarda el orden de elección del Draft en memoria, localStorage y servidor central
    */
   public setDraftOrder(order: DraftRoundOrder[], pushToServer: boolean = true): void {
-    this.draftOrder = order;
+    const cleanOrder = (order || []).map(ro => {
+      const seenInRound = new Set<string>();
+      const uniqueTeams: string[] = [];
+      for (const t of (ro.teams || [])) {
+        const trimmed = String(t || '').trim();
+        const lower = trimmed.toLowerCase();
+        if (trimmed && !seenInRound.has(lower)) {
+          seenInRound.add(lower);
+          uniqueTeams.push(trimmed);
+        }
+      }
+      return {
+        ...ro,
+        teams: uniqueTeams
+      };
+    });
+    this.draftOrder = cleanOrder;
     localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
     if (pushToServer) {
       this.pushLeagueConfigToServer({ draftOrder: this.draftOrder });
