@@ -1413,6 +1413,27 @@ class GasEngineService {
           };
         }).filter(d => d.team || d.playerName);
         updatedDraftsCount = this.drafts.length;
+
+        // Reconciliación automática: asegurar que todas las elecciones del Draft estén inscritas en las alineaciones de la Jornada 1
+        this.drafts.forEach(d => {
+          if (d.team && d.playerName) {
+            const normP = d.playerName.trim().toLowerCase();
+            const normT = d.team.trim().toLowerCase();
+            const existsInJ1 = this.lineups.some(
+              l => l.jornada === 1 && l.team.trim().toLowerCase() === normT && l.playerName.trim().toLowerCase() === normP
+            );
+            if (!existsInJ1) {
+              this.lineups.push({
+                team: d.team,
+                jornada: 1,
+                playerName: d.playerName,
+                realTeam: d.realTeam,
+                position: d.position,
+                value: d.value
+              });
+            }
+          }
+        });
       }
 
       // Actualizar orden del draft si viene en la respuesta de Google Sheets
@@ -1422,9 +1443,6 @@ class GasEngineService {
         this.draftOrder = rawDraftOrder;
         localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
       }
-
-      // Asegurar que las elecciones del draft se inscriben para la Jornada 1 en la Hoja de Alineaciones
-      this.ensureDraftsInLineups();
 
       const now = new Date();
       this.lastSyncTime = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' +
@@ -1516,8 +1534,28 @@ class GasEngineService {
       this.drafts = savedDrafts ? JSON.parse(savedDrafts) : [...INITIAL_DRAFTS];
       this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
 
-      // Asegurar que las elecciones del Draft se inscriben en la Hoja de Alineaciones para la Jornada 1
-      this.ensureDraftsInLineups();
+      // Reconciliar automáticamente las elecciones del draft con las alineaciones de Jornada 1
+      if (Array.isArray(this.drafts) && this.drafts.length > 0) {
+        this.drafts.forEach(d => {
+          if (d.team && d.playerName) {
+            const normP = d.playerName.trim().toLowerCase();
+            const normT = d.team.trim().toLowerCase();
+            const existsInJ1 = this.lineups.some(
+              l => l.jornada === 1 && l.team.trim().toLowerCase() === normT && l.playerName.trim().toLowerCase() === normP
+            );
+            if (!existsInJ1) {
+              this.lineups.push({
+                team: d.team,
+                jornada: 1,
+                playerName: d.playerName,
+                realTeam: d.realTeam,
+                position: d.position,
+                value: d.value
+              });
+            }
+          }
+        });
+      }
 
       const savedJornada = localStorage.getItem('lfa_first_contribution_jornada');
       if (savedJornada) {
@@ -1668,40 +1706,6 @@ class GasEngineService {
     return this.getTeamNames().length;
   }
 
-  /**
-   * Asegura que todas las elecciones del Draft estén inscritas en la Hoja/Estado de Alineaciones para la Jornada 1
-   */
-  public ensureDraftsInLineups(): void {
-    if (this.drafts && this.drafts.length > 0) {
-      this.drafts.forEach(d => {
-        const pName = (d.playerName || '').trim();
-        const tName = (d.team || '').trim();
-        if (!pName || !tName) return;
-
-        const exists = this.lineups.some(
-          l => l.team.trim().toLowerCase() === tName.toLowerCase() &&
-               l.playerName.trim().toLowerCase() === pName.toLowerCase() &&
-               Number(l.jornada) === 1
-        );
-        if (!exists) {
-          this.lineups.push({
-            team: tName,
-            jornada: 1,
-            playerName: pName,
-            realTeam: d.realTeam || '',
-            position: d.position || 'Medio',
-            value: d.value || 0
-          });
-        }
-      });
-    }
-
-    // Limpiar cualquier registro erróneo de 'Draft' que hubiera quedado en this.transfers
-    this.transfers = this.transfers.filter(
-      tr => tr.type !== 'Draft' && (tr as any).type !== 'Draft Inicial' && tr.playerOut !== '-'
-    );
-  }
-
   public getMaxJornadaFromPlayersSheet(): number {
     let maxJ = 0;
     this.players.forEach(p => {
@@ -1724,8 +1728,7 @@ class GasEngineService {
   public getMaxJornada(): number {
     const pMax = this.getMaxJornadaFromPlayersSheet();
     const lMax = this.getMaxJornadaFromAlineacionesSheet();
-    if (pMax > 0 && lMax > 0) return Math.max(pMax, lMax);
-    return lMax || pMax || 1;
+    return Math.min(pMax, lMax) || pMax || 5;
   }
 
   public validateTeamToken(teamName: string, token: string): boolean {
@@ -1745,14 +1748,15 @@ class GasEngineService {
   }
 
   public calculateTeamValue(teamName: string, jornada: number): number {
+    const normT = teamName.trim().toLowerCase();
     const playersInLineup = this.lineups
-      .filter(l => l.team.trim() === teamName.trim() && l.jornada === jornada && l.playerName.trim() !== '')
+      .filter(l => l.team.trim().toLowerCase() === normT && l.jornada === jornada && l.playerName.trim() !== '')
       .map(l => l.playerName.trim());
 
     if (playersInLineup.length === 0) return 0;
 
-    const pMap = new Map(this.players.map(p => [p.name, typeof p.value === 'number' ? p.value : 0]));
-    return playersInLineup.reduce((acc, name) => acc + (pMap.get(name) || 0), 0);
+    const pMap = new Map(this.players.map(p => [p.name.toLowerCase(), typeof p.value === 'number' ? p.value : 0]));
+    return playersInLineup.reduce((acc, name) => acc + (pMap.get(name.toLowerCase()) || 0), 0);
   }
 
   public getRealTeamOfPlayer(playerName: string): string | null {
@@ -1785,47 +1789,55 @@ class GasEngineService {
       return { players: [], totalPoints: '0.00', totalValue: '0', totalGoals: 0, totalDefensivePoints: 0, error: 'Selecciona un equipo y jornada válida.' };
     }
 
+    const normT = teamName.trim().toLowerCase();
     const teamLineups = this.lineups.filter(
-      l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.jornada === jornada && l.playerName.trim() !== ''
+      l => l.team.trim().toLowerCase() === normT && l.jornada === jornada && l.playerName.trim() !== ''
     );
 
-    const playerMap = new Map(this.players.map(p => [p.name.toLowerCase(), p]));
+    const norm = (s: string) => (s || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     let teamTotalPoints = 0;
     let teamTotalValue = 0;
     let teamTotalGoals = 0;
     let teamTotalDefensivePoints = 0;
 
-    const teamPlayers: LineupEntry[] = [];
+    const teamPlayers: {
+      entry: LineupEntry;
+      pData?: Player;
+    }[] = [];
 
     teamLineups.forEach(l => {
-      const pData = playerMap.get(l.playerName.trim().toLowerCase());
+      const targetNorm = norm(l.playerName);
+      const pData = this.players.find(p => norm(p.name) === targetNorm);
+
+      const pPos = pData?.position || l.position || 'Medio';
+      const pReal = l.realTeam || pData?.realTeam || '';
+      const pVal = pData?.value ?? (typeof l.value === 'number' ? l.value : parseCleanNumber(l.value));
       const pts = pData?.jornadasPoints?.[jornada] ?? '';
       const g = pData?.jornadasGoals?.[jornada] ?? '';
       const def = pData?.jornadasDef?.[jornada] ?? '';
-      const pos = l.position || pData?.position || 'Medio';
-      const rTeam = l.realTeam || pData?.realTeam || '';
-      const val = typeof l.value === 'number' ? l.value : (pData?.value || 0);
 
       teamPlayers.push({
-        playerName: l.playerName,
-        realTeam: rTeam,
-        position: pos,
-        value: val,
-        team: l.team,
-        jornada: l.jornada
+        entry: {
+          playerName: l.playerName,
+          realTeam: pReal,
+          position: pPos,
+          value: pVal,
+          team: l.team,
+          jornada: l.jornada
+        },
+        pData
       });
 
       if (typeof pts === 'number') teamTotalPoints += pts;
-      if (typeof val === 'number') teamTotalValue += val;
+      if (typeof pVal === 'number') teamTotalValue += pVal;
       if (typeof g === 'number') teamTotalGoals += g;
-      if (pos === 'Portero' || pos === 'Defensa') {
-        if (typeof def === 'number') teamTotalDefensivePoints += def;
+      if ((pPos === 'Portero' || pPos === 'Defensa') && typeof def === 'number') {
+        teamTotalDefensivePoints += def;
       }
     });
 
     const positionOrder: Record<string, number> = { 'Portero': 1, 'Defensa': 2, 'Medio': 3, 'Delantero': 4 };
-    const playersDetailed: LineupPlayerDetail[] = teamPlayers.map((l): LineupPlayerDetail => {
-      const pData = playerMap.get(l.playerName.trim().toLowerCase());
+    const playersDetailed: LineupPlayerDetail[] = teamPlayers.map(({ entry: l, pData }): LineupPlayerDetail => {
       const pts = pData?.jornadasPoints?.[jornada];
       const gls = pData?.jornadasGoals?.[jornada];
       const pdf = pData?.jornadasDef?.[jornada];
@@ -1957,29 +1969,8 @@ class GasEngineService {
   public getTeamPlayersForJornada(teamName: string, jornada: number): string[] {
     if (!teamName || isNaN(jornada) || jornada <= 0) return [];
     const seen = new Set<string>();
-    let matching = this.lineups
-      .filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.jornada === jornada && l.playerName.trim() !== '');
-
-    // Si para la jornada solicitada aún no hay alineación, heredar de la jornada previa disponible más reciente (ej: J1 del Draft)
-    if (matching.length === 0) {
-      const priorJornadas = this.lineups
-        .filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.playerName.trim() !== '' && l.jornada <= jornada)
-        .map(l => l.jornada);
-      if (priorJornadas.length > 0) {
-        const lastJ = Math.max(...priorJornadas);
-        matching = this.lineups.filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.jornada === lastJ && l.playerName.trim() !== '');
-      } else {
-        const anyJornadas = this.lineups
-          .filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.playerName.trim() !== '')
-          .map(l => l.jornada);
-        if (anyJornadas.length > 0) {
-          const firstJ = Math.min(...anyJornadas);
-          matching = this.lineups.filter(l => l.team.trim().toLowerCase() === teamName.trim().toLowerCase() && l.jornada === firstJ && l.playerName.trim() !== '');
-        }
-      }
-    }
-
-    return matching
+    return this.lineups
+      .filter(l => l.team.trim() === teamName.trim() && l.jornada === jornada && l.playerName.trim() !== '')
       .map(l => l.playerName.trim())
       .filter(name => {
         const key = name.toLowerCase();
@@ -2059,28 +2050,6 @@ class GasEngineService {
 
     if (!teamName || isNaN(jornada) || jornada <= 0 || !Array.isArray(transfers) || transfers.length === 0) {
       return { success: false, message: 'Datos incompletos o lista de fichajes vacía.' };
-    }
-
-    // Si para esta jornada el equipo aún no tiene alineaciones cargadas, heredar de la jornada previa disponible más reciente
-    let teamLineupsForJ = this.lineups.filter(l => l.jornada === jornada && l.team.trim().toLowerCase() === teamName.toLowerCase());
-    if (teamLineupsForJ.length === 0) {
-      const prevJornadas = this.lineups
-        .filter(l => l.team.trim().toLowerCase() === teamName.toLowerCase() && l.jornada < jornada)
-        .map(l => l.jornada);
-      if (prevJornadas.length > 0) {
-        const lastJ = Math.max(...prevJornadas);
-        const lastLineups = this.lineups.filter(l => l.team.trim().toLowerCase() === teamName.toLowerCase() && l.jornada === lastJ);
-        lastLineups.forEach(l => {
-          this.lineups.push({
-            team: l.team,
-            jornada: jornada,
-            playerName: l.playerName,
-            realTeam: l.realTeam,
-            position: l.position,
-            value: l.value
-          });
-        });
-      }
     }
 
     const playerMap = new Map(this.players.map(p => [p.name, p]));
@@ -2479,9 +2448,6 @@ class GasEngineService {
       let teamFees = 0;
 
       trList.forEach(tr => {
-        const isDraft = tr.type === 'Draft' || (tr as any).type === 'Draft Inicial' || tr.playerOut === '-' || tr.playerOut === 'Draft Inicial';
-        if (isDraft) return;
-
         const cost = parseCleanNumber(tr.cost);
         const isAbandon = tr.type === 'Abandono' || (tr as any).motivo === 'Abandono';
 

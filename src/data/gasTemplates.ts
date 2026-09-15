@@ -820,23 +820,46 @@ function getFullSyncData() {
     }
   }
   
-  // 3. Alineaciones (1 sola lectura de rango)
-  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas', 'Alineaciones_Equipos']);
+  // 3. Alineaciones (1 sola lectura de rango con cabeceras flexibles)
+  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Alineación', 'Lineups', 'Lineup', 'Plantillas', 'Plantilla', 'Alineaciones_Equipos', 'Alineaciones Equipos']);
   var lineups = [];
   if (sheetAl) {
     var alData = sheetAl.getDataRange().getValues();
-    for (var a = 1; a < alData.length; a++) {
-      if (alData[a][0] && alData[a][2]) {
-        var aJornada = Number(alData[a][1]) || 1;
-        if (aJornada > maxJ) maxJ = aJornada;
-        lineups.push({
-          teamName: String(alData[a][0]).trim(),
-          jornada: aJornada,
-          playerName: String(alData[a][2]).trim(),
-          realTeam: String(alData[a][3] || '').trim(),
-          position: String(alData[a][4] || '').trim(),
-          value: Number(alData[a][5]) || 0
-        });
+    if (alData.length > 1) {
+      var hRow = alData[0];
+      var cTeam = -1, cJor = -1, cPlayer = -1, cReal = -1, cPos = -1, cVal = -1;
+      for (var hi = 0; hi < hRow.length; hi++) {
+        var hn = String(hRow[hi] || '').trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        if (hn.indexOf('equipo') !== -1 && hn.indexOf('liga') === -1 && hn.indexOf('real') === -1) cTeam = hi;
+        else if (hn.indexOf('jornada') !== -1 || hn === 'jor' || hn === 'j') cJor = hi;
+        else if (hn.indexOf('jugador') !== -1 || hn.indexOf('player') !== -1 || hn.indexOf('nombre') !== -1) cPlayer = hi;
+        else if (hn.indexOf('liga') !== -1 || hn.indexOf('real') !== -1 || hn === 'club') cReal = hi;
+        else if (hn.indexOf('posic') !== -1 || hn === 'pos') cPos = hi;
+        else if (hn.indexOf('val') !== -1 || hn.indexOf('precio') !== -1) cVal = hi;
+      }
+      if (cTeam === -1) cTeam = 0;
+      if (cJor === -1) cJor = 1;
+      if (cPlayer === -1) cPlayer = 2;
+      if (cReal === -1) cReal = 3;
+      if (cPos === -1) cPos = 4;
+      if (cVal === -1) cVal = 5;
+
+      for (var a = 1; a < alData.length; a++) {
+        var rowA = alData[a];
+        var tName = String(rowA[cTeam] || '').trim();
+        var pName = String(rowA[cPlayer] || '').trim();
+        if (tName && pName) {
+          var aJornada = Number(rowA[cJor]) || 1;
+          if (aJornada > maxJ) maxJ = aJornada;
+          lineups.push({
+            teamName: tName,
+            jornada: aJornada,
+            playerName: pName,
+            realTeam: String(rowA[cReal] || '').trim(),
+            position: String(rowA[cPos] || '').trim(),
+            value: Number(rowA[cVal]) || 0
+          });
+        }
       }
     }
   }
@@ -1057,6 +1080,33 @@ function getFullSyncData() {
         }
       }
     }
+  }
+
+  // Reconciliación: asegurar que cualquier elección del draft esté también en las alineaciones devueltas de J1
+  if (drafts.length > 0) {
+    drafts.forEach(function(d) {
+      if (d.team && d.playerName) {
+        var found = false;
+        for (var li = 0; li < lineups.length; li++) {
+          if (lineups[li].jornada === 1 &&
+              String(lineups[li].teamName || '').toLowerCase() === String(d.team).toLowerCase() &&
+              String(lineups[li].playerName || '').toLowerCase() === String(d.playerName).toLowerCase()) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          lineups.push({
+            teamName: d.team,
+            jornada: 1,
+            playerName: d.playerName,
+            realTeam: d.realTeam || '',
+            position: d.position || 'Medio',
+            value: d.value || 0
+          });
+        }
+      }
+    });
   }
 
   return {
@@ -1386,10 +1436,6 @@ function getAccountingData() {
         }
 
         if (matchedT) {
-          var isDraft = fType.toLowerCase().indexOf('draft') !== -1 || String(rowT[3] || '').trim() === '-' || String(rowT[3] || '').toLowerCase().indexOf('draft') !== -1;
-          if (isDraft) {
-            continue;
-          }
           var isAbandon = fType.toLowerCase().indexOf('abandono') !== -1;
           if (cost > 0) {
             teamBalance[matchedT].transferFees += cost;
@@ -1563,7 +1609,23 @@ function processDraftSelection(team, token, player) {
     return { success: false, message: 'Token incorrecto o no autorizado para el equipo ' + team };
   }
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas']);
+  var sheetAl = findSheet(ss, [
+    'Alineaciones',
+    'Alineacion',
+    'Alineación',
+    'Lineups',
+    'Lineup',
+    'Plantillas',
+    'Plantilla',
+    'Alineaciones_Equipos',
+    'Alineaciones Equipos'
+  ]);
+
+  if (!sheetAl) {
+    sheetAl = ss.getSheetByName('Alineaciones') || ss.insertSheet('Alineaciones');
+    sheetAl.appendRow(['Equipo', 'Jornada', 'Nombre_Jugador', 'Equipo_Liga', 'Posicion', 'Valor']);
+  }
+
   var sheetDraft = findSheet(ss, [
     'Historial_Draft',
     'Historial del Draft',
@@ -1582,82 +1644,87 @@ function processDraftSelection(team, token, player) {
   
   var market = getPlayersForMercado();
   var pData = null;
+  var normPlayer = String(player).trim().toLowerCase();
   for (var i = 0; i < market.length; i++) {
-    if (market[i].name.toLowerCase() === String(player).trim().toLowerCase()) {
+    if (market[i].name.toLowerCase() === normPlayer) {
       pData = market[i];
       break;
     }
   }
   
   var realTeam = pData ? pData.realTeam : '';
-  var pos = pData ? pData.position : 'Medio';
+  var pos = pData ? pData.position : '';
   var val = pData ? pData.value : 0;
+
+  if (!realTeam || !pos) {
+    var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
+    if (sheetJug) {
+      var jVals = sheetJug.getDataRange().getValues();
+      for (var j = 1; j < jVals.length; j++) {
+        if (String(jVals[j][0]).trim().toLowerCase() === normPlayer) {
+          if (!realTeam) realTeam = String(jVals[j][1] || '').trim();
+          if (!pos) pos = String(jVals[j][2] || 'Medio').trim();
+          if (!val) val = Number(jVals[j][3]) || 0;
+          break;
+        }
+      }
+    }
+  }
+  if (!pos) pos = 'Medio';
   
   var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
   sheetDraft.appendRow([nowStr, team, player, realTeam, pos, val]);
   
-  // Inscribir al jugador seleccionado en la Hoja Alineaciones en la Jornada 1
-  if (!sheetAl) {
-    sheetAl = ss.insertSheet('Alineaciones');
-    sheetAl.appendRow(['Equipo', 'Jornada', 'Jugador', 'Equipo_Liga', 'Posicion', 'Valor']);
+  // INSCRIBIR EN ALINEACIONES (JORNADA 1)
+  var alHeaders = sheetAl.getRange(1, 1, 1, Math.max(sheetAl.getLastColumn(), 6)).getValues()[0];
+  var colTeam = -1, colJor = -1, colPlay = -1, colReal = -1, colPos = -1, colVal = -1;
+  for (var c = 0; c < alHeaders.length; c++) {
+    var h = String(alHeaders[c] || '').trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    if (h.indexOf('equipo') !== -1 && h.indexOf('liga') === -1 && h.indexOf('real') === -1) colTeam = c;
+    else if (h.indexOf('jornada') !== -1 || h === 'jor' || h === 'j') colJor = c;
+    else if (h.indexOf('jugador') !== -1 || h.indexOf('player') !== -1 || h.indexOf('nombre') !== -1) colPlay = c;
+    else if (h.indexOf('liga') !== -1 || h.indexOf('real') !== -1 || h === 'club') colReal = c;
+    else if (h.indexOf('posic') !== -1 || h === 'pos') colPos = c;
+    else if (h.indexOf('val') !== -1 || h.indexOf('precio') !== -1) colVal = c;
+  }
+  if (colTeam === -1) colTeam = 0;
+  if (colJor === -1) colJor = 1;
+  if (colPlay === -1) colPlay = 2;
+  if (colReal === -1) colReal = 3;
+  if (colPos === -1) colPos = 4;
+  if (colVal === -1) colVal = 5;
+
+  var alData = sheetAl.getDataRange().getValues();
+  var alreadyInscribed = false;
+  var targetRowIdx = -1;
+  for (var r = 1; r < alData.length; r++) {
+    var rTeam = String(alData[r][colTeam] || '').trim();
+    var rJor = Number(alData[r][colJor]) || 1;
+    var rPlay = String(alData[r][colPlay] || '').trim();
+    if (rTeam.toLowerCase() === String(team).trim().toLowerCase() && rJor === 1 && rPlay.toLowerCase() === normPlayer) {
+      alreadyInscribed = true;
+      break;
+    }
+    if (!rTeam && !rPlay && targetRowIdx === -1) {
+      targetRowIdx = r + 1;
+    }
   }
 
-  if (sheetAl) {
-    if (sheetAl.getLastRow() === 0) {
-      sheetAl.appendRow(['Equipo', 'Jornada', 'Jugador', 'Equipo_Liga', 'Posicion', 'Valor']);
-    }
+  if (!alreadyInscribed) {
+    var newRow = [];
+    var maxCol = Math.max(6, colTeam + 1, colJor + 1, colPlay + 1, colReal + 1, colPos + 1, colVal + 1);
+    for (var k = 0; k < maxCol; k++) newRow.push('');
+    newRow[colTeam] = team;
+    newRow[colJor] = 1;
+    newRow[colPlay] = player;
+    newRow[colReal] = realTeam;
+    newRow[colPos] = pos;
+    newRow[colVal] = val;
 
-    var alHeaders = sheetAl.getRange(1, 1, 1, Math.max(6, sheetAl.getLastColumn())).getValues()[0];
-    var colAlTeam = -1, colAlJor = -1, colAlPlayer = -1, colAlReal = -1, colAlPos = -1, colAlVal = -1;
-
-    for (var ah = 0; ah < alHeaders.length; ah++) {
-      var hClean = String(alHeaders[ah] || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (hClean === 'equipo' || hClean === 'team' || hClean === 'club' || (hClean.indexOf('equipo') !== -1 && hClean.indexOf('liga') === -1 && hClean.indexOf('real') === -1)) {
-        if (colAlTeam === -1) colAlTeam = ah;
-      } else if (hClean.indexOf('jornada') !== -1 || hClean.indexOf('jor') !== -1 || hClean === 'j') {
-        if (colAlJor === -1) colAlJor = ah;
-      } else if (hClean.indexOf('jugador') !== -1 || hClean.indexOf('player') !== -1 || hClean.indexOf('futbolista') !== -1 || hClean === 'nombre') {
-        if (colAlPlayer === -1) colAlPlayer = ah;
-      } else if (hClean.indexOf('real') !== -1 || hClean.indexOf('liga') !== -1 || (hClean.indexOf('equipo') !== -1 && (hClean.indexOf('liga') !== -1 || hClean.indexOf('real') !== -1))) {
-        if (colAlReal === -1) colAlReal = ah;
-      } else if (hClean.indexOf('pos') !== -1 || hClean.indexOf('demarcacion') !== -1) {
-        if (colAlPos === -1) colAlPos = ah;
-      } else if (hClean.indexOf('valor') !== -1 || hClean.indexOf('precio') !== -1 || hClean.indexOf('val') !== -1) {
-        if (colAlVal === -1) colAlVal = ah;
-      }
-    }
-
-    if (colAlTeam === -1) colAlTeam = 0;
-    if (colAlJor === -1) colAlJor = 1;
-    if (colAlPlayer === -1) colAlPlayer = 2;
-    if (colAlReal === -1) colAlReal = 3;
-    if (colAlPos === -1) colAlPos = 4;
-    if (colAlVal === -1) colAlVal = 5;
-
-    // Verificar si ya está inscrito para no duplicar fila
-    var alData = sheetAl.getDataRange().getValues();
-    var alreadyInAl = false;
-    for (var ar = 1; ar < alData.length; ar++) {
-      var rowTeam = String(alData[ar][colAlTeam] || '').trim();
-      var rowJor = Number(alData[ar][colAlJor]);
-      var rowPlayer = String(alData[ar][colAlPlayer] || '').trim();
-      if (rowTeam.toLowerCase() === String(team).trim().toLowerCase() && rowJor === 1 && rowPlayer.toLowerCase() === String(player).trim().toLowerCase()) {
-        alreadyInAl = true;
-        break;
-      }
-    }
-
-    if (!alreadyInAl) {
-      var maxNeeded = Math.max(alHeaders.length, colAlTeam + 1, colAlJor + 1, colAlPlayer + 1, colAlReal + 1, colAlPos + 1, colAlVal + 1);
-      var alRowCells = new Array(maxNeeded);
-      for (var rc = 0; rc < maxNeeded; rc++) alRowCells[rc] = '';
-      alRowCells[colAlTeam] = team;
-      alRowCells[colAlJor] = 1;
-      alRowCells[colAlPlayer] = player;
-      alRowCells[colAlReal] = realTeam;
-      alRowCells[colAlPos] = pos;
-      alRowCells[colAlVal] = val;
-      sheetAl.appendRow(alRowCells);
+    if (targetRowIdx > 0 && targetRowIdx <= alData.length) {
+      sheetAl.getRange(targetRowIdx, 1, 1, newRow.length).setValues([newRow]);
+    } else {
+      sheetAl.appendRow(newRow);
     }
   }
 

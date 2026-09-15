@@ -15,25 +15,38 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
   const [teams, setTeams] = useState<string[]>([]);
   const [maxJornada, setMaxJornada] = useState<number>(5);
   const [selectedTeam, setSelectedTeam] = useState<string>(initialTeam || '');
-  const [selectedJornada, setSelectedJornada] = useState<number>(initialJornada || 5);
+  const [selectedJornada, setSelectedJornada] = useState<number>(initialJornada || 1);
   const [lineupData, setLineupData] = useState<TeamLineupResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    const teamList = gasEngine.getTeamNames();
-    const maxJ = gasEngine.getMaxJornada();
-    setTeams(teamList);
-    setMaxJornada(maxJ);
+    const refreshData = () => {
+      const teamList = gasEngine.getTeamNames();
+      const maxJ = gasEngine.getMaxJornada();
+      setTeams(teamList);
+      setMaxJornada(maxJ);
 
-    const team = initialTeam || teamList[0] || '';
-    const j = initialJornada || maxJ || 1;
-    setSelectedTeam(team);
-    setSelectedJornada(j);
+      const team = selectedTeam || initialTeam || teamList[0] || '';
+      const j = selectedJornada || initialJornada || 1;
 
-    if (team && j) {
-      setLineupData(gasEngine.getTeamLineupData(team, j));
-    }
-  }, [initialTeam, initialJornada]);
+      if (!selectedTeam && team) {
+        setSelectedTeam(team);
+      }
+      if (!selectedJornada && j) {
+        setSelectedJornada(j);
+      }
+
+      if (team && j) {
+        setLineupData(gasEngine.getTeamLineupData(team, j));
+      }
+    };
+
+    refreshData();
+    const unsubscribe = gasEngine.subscribe(() => {
+      refreshData();
+    });
+    return () => unsubscribe();
+  }, [initialTeam, initialJornada, selectedTeam, selectedJornada]);
 
   const handleTeamChange = (t: string) => {
     setSelectedTeam(t);

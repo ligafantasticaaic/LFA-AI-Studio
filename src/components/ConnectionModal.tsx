@@ -53,7 +53,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     }
   }, [isOpen, currentUrl]);
 
-  if (!isOpen) return null;
+  if (!isOpen || gasEngine.isPlayerMode()) return null;
 
   const handleCopy = (text: string, sectionId: string) => {
     navigator.clipboard.writeText(text);

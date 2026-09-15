@@ -147,12 +147,11 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* Solo visible para Administrador: Configuración de Conexión Sheets */}
           {!isPlayerMode && (
             gasEngine.isRemoteConnected() ? (
               <button
                 onClick={onOpenConnectionModal}
-                title="Google Sheets conectado (solo configurable por Administrador)"
+                title="Google Sheets conectado centralizadamente"
                 className="bg-slate-950 hover:bg-slate-900 border border-emerald-500/30 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-inner transition cursor-pointer text-[11px] text-emerald-400 font-semibold"
               >
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
