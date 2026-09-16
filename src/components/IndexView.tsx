@@ -33,6 +33,10 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
 
   useEffect(() => {
     loadInitialData();
+    const unsubscribe = gasEngine.subscribe(() => {
+      loadInitialData();
+    });
+    return () => unsubscribe();
   }, []);
 
   const loadInitialData = () => {
@@ -43,31 +47,32 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
     setTeams(teamList);
     setMaxJornada(maxJ);
     
-    const defaultTeam = teamList[0] || '';
-    const defaultJ = maxJ || 1;
+    const team = selectedTeam || teamList[0] || '';
+    const j = selectedJornada && selectedJornada <= maxJ ? selectedJornada : (maxJ || 1);
     
-    setSelectedTeam(defaultTeam);
-    setSelectedJornada(defaultJ);
+    if (!selectedTeam) setSelectedTeam(team);
+    if (selectedJornada !== j) setSelectedJornada(j);
 
     // Load standings
     setGeneralScores(gasEngine.calculateGeneralScores(maxJ));
     setMostGoalsTeams(gasEngine.calculateMostGoalsTeams(maxJ));
     setLeastConcededTeams(gasEngine.calculateLeastConcededTeams(maxJ));
-    setWeeklyScores(gasEngine.calculateWeeklyScores(defaultJ));
+    setWeeklyScores(gasEngine.calculateWeeklyScores(j));
 
-    if (defaultTeam && defaultJ) {
-      const data = gasEngine.getTeamLineupData(defaultTeam, defaultJ);
+    if (team && j) {
+      const data = gasEngine.getTeamLineupData(team, j);
       setLineupData(data);
     }
     setIsLoading(false);
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsLoading(true);
-    setTimeout(() => {
-      loadInitialData();
-      setIsLoading(false);
-    }, 250);
+    try {
+      await gasEngine.syncFromRemote();
+    } catch {}
+    loadInitialData();
+    setIsLoading(false);
   };
 
   const handleTeamChange = (teamName: string) => {

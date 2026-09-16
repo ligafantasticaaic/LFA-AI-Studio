@@ -291,6 +291,9 @@ class GasEngineService {
   private serverUpdatedAt: string | null = null;
   private draftOrder: DraftRoundOrder[] = [];
   private isDraftHiddenState: boolean = false;
+  private remoteMaxJornada: number = 0;
+  private isSyncingRemote: boolean = false;
+  private lastRemoteDataSig: string = '';
   private listeners: Array<() => void> = [];
 
   constructor() {
@@ -318,20 +321,44 @@ class GasEngineService {
       }
     } catch {}
 
-    // 2. Comprobación inicial contra el servidor central (/api/gas-config)
+    // 2. Comprobación inicial contra el servidor central (/api/gas-config) y sincronización inmediata de datos
     setTimeout(() => {
-      this.fetchServerGasConfig(true).catch(() => {});
+      this.fetchServerGasConfig(true)
+        .then(() => {
+          if (this.getGasUrl()) {
+            this.syncFromRemote().catch(() => {});
+          }
+        })
+        .catch(() => {});
     }, 150);
 
-    // 3. Comprobación al volver a enfocar la ventana/pestaña
+    // 3. Sincronización al volver a enfocar la ventana o pestaña (tiempo real)
     window.addEventListener('focus', () => {
       this.fetchServerGasConfig(true).catch(() => {});
+      if (this.getGasUrl()) {
+        this.syncFromRemote().catch(() => {});
+      }
     });
 
-    // 4. Sondeo periódico de fondo (cada 60 segundos) para detectar si el administrador cambió la URL
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.getGasUrl()) {
+          this.syncFromRemote().catch(() => {});
+        }
+      });
+    }
+
+    // 4. Sondeo periódico de URL en servidor (cada 60 segundos)
     setInterval(() => {
       this.fetchServerGasConfig(true).catch(() => {});
     }, 60000);
+
+    // 5. Sondeo en tiempo real de Google Sheets (cada 12 segundos) para reflejar cambios en vivo
+    setInterval(() => {
+      if (this.getGasUrl() && (typeof document === 'undefined' || !document.hidden)) {
+        this.syncFromRemote().catch(() => {});
+      }
+    }, 12000);
   }
 
   public subscribe(listener: () => void) {
@@ -1257,24 +1284,56 @@ class GasEngineService {
   }
 
   public async syncFromRemote(customUrl?: string): Promise<{ success: boolean; message: string; stats?: any }> {
+    if (this.isSyncingRemote) {
+      return { success: true, message: 'Sincronización en curso...' };
+    }
+    this.isSyncingRemote = true;
+
     const targetUrl = (customUrl !== undefined ? customUrl : this.getGasUrl()).trim();
     if (!targetUrl) {
+      this.isSyncingRemote = false;
       return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
     }
 
     try {
-      let data: any;
+      let data: any = null;
+
+      // 1. Intento prioritario a través del servidor backend (/api/gas-sync) para evitar CORS y acelerar respuesta
       try {
-        data = await this.fetchGasData(targetUrl, { action: 'getFullSync' }, 25000);
-      } catch (firstErr: any) {
-        if (firstErr.message === 'TIMEOUT_GAS' || firstErr.message === 'TIMEOUT_JSONP' || firstErr.name === 'AbortError') {
-          throw new Error('TIMEOUT_GAS');
+        const proxyUrl = `/api/gas-sync?customGasUrl=${encodeURIComponent(targetUrl)}&_t=${Date.now()}`;
+        const proxyRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(28000) });
+        if (proxyRes.ok) {
+          const proxyJson = await proxyRes.json();
+          if (proxyJson && proxyJson.success !== false && !proxyJson.error) {
+            data = proxyJson;
+          }
         }
-        throw firstErr;
+      } catch {
+        // Si el proxy falla, recurrir al método de conexión directa de gasEngine
+      }
+
+      // 2. Método de contingencia: Fetch directo / JSONP
+      if (!data) {
+        try {
+          data = await this.fetchGasData(targetUrl, { action: 'getFullSync' }, 25000);
+        } catch (firstErr: any) {
+          if (firstErr.message === 'TIMEOUT_GAS' || firstErr.message === 'TIMEOUT_JSONP' || firstErr.name === 'AbortError') {
+            throw new Error('TIMEOUT_GAS');
+          }
+          throw firstErr;
+        }
       }
 
       if (data && data.error) {
         return { success: false, message: 'Error de Google Apps Script: ' + data.error };
+      }
+
+      // Guardar jornada máxima remota si la proporciona Google Sheets
+      if (data && data.maxJornada !== undefined) {
+        const parsedMax = Number(data.maxJornada);
+        if (!isNaN(parsedMax) && parsedMax > 0) {
+          this.remoteMaxJornada = parsedMax;
+        }
       }
 
       let updatedTeamsCount = 0;
@@ -1345,16 +1404,21 @@ class GasEngineService {
         updatedPlayersCount = this.players.length;
       }
 
-      // Actualizar alineaciones si vienen en la respuesta (incluso si está vacío por inicio de temporada)
+      // Actualizar alineaciones si vienen en la respuesta (procesamiento flexible de jornadas)
       if (Array.isArray(data.lineups)) {
-        this.lineups = data.lineups.map((l: any) => ({
-          team: l.teamName || l.team || l.Equipo,
-          jornada: Number(l.jornada || l.Jornada) || 1,
-          playerName: l.playerName || l.player || l.Jugador,
-          realTeam: l.realTeam || l.Equipo_Liga,
-          position: l.position || l.Posicion,
-          value: l.value !== undefined ? Number(l.value) : undefined
-        }));
+        this.lineups = data.lineups.map((l: any) => {
+          const rawJ = l.jornada !== undefined ? l.jornada : (l.Jornada !== undefined ? l.Jornada : 1);
+          const parsedJ = typeof rawJ === 'number' ? rawJ : parseInt(String(rawJ || '').replace(/[^0-9]/g, ''), 10);
+          const finalJ = (!isNaN(parsedJ) && parsedJ > 0) ? parsedJ : 1;
+          return {
+            team: String(l.teamName || l.team || l.Equipo || '').trim(),
+            jornada: finalJ,
+            playerName: String(l.playerName || l.player || l.Jugador || '').trim(),
+            realTeam: String(l.realTeam || l.Equipo_Liga || '').trim(),
+            position: String(l.position || l.Posicion || 'Medio').trim(),
+            value: l.value !== undefined ? Number(l.value) : undefined
+          };
+        }).filter((l: any) => l.team && l.playerName);
       }
 
       // Sincronizar estado de los jugadores: si están en las alineaciones activas pasan a 'Fichado', si no a 'Disponible'
@@ -1504,6 +1568,8 @@ class GasEngineService {
         success: false,
         message: 'Fallo al sincronizar con Google Sheets: ' + (err.message || 'Verifica la URL y permisos.')
       };
+    } finally {
+      this.isSyncingRemote = false;
     }
   }
 
@@ -1812,7 +1878,9 @@ class GasEngineService {
   public getMaxJornada(): number {
     const pMax = this.getMaxJornadaFromPlayersSheet();
     const lMax = this.getMaxJornadaFromAlineacionesSheet();
-    return Math.min(pMax, lMax) || pMax || 5;
+    const rMax = this.remoteMaxJornada || 0;
+    const overall = Math.max(pMax, lMax, rMax);
+    return overall > 0 ? overall : 5;
   }
 
   public validateTeamToken(teamName: string, token: string): boolean {
@@ -2518,7 +2586,7 @@ class GasEngineService {
   }
 
   public getAccountingData(): AccountingData {
-    const maxJornada = this.getMaxJornadaFromPlayersSheet();
+    const maxJornada = this.getMaxJornada();
     const numTeams = this.getNumberOfTeams();
     const teamNames = this.getTeamNames();
     const transferHistory = this.getTransferHistory();

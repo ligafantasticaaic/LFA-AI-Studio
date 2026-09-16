@@ -280,6 +280,58 @@ async function startServer() {
     }
   });
 
+  // GET /api/gas-sync - Obtiene la sincronización completa desde Google Sheets sin bloqueos de CORS
+  app.get('/api/gas-sync', async (req, res) => {
+    const config = getGasConfig();
+    const targetUrl = (req.query.customGasUrl ? String(req.query.customGasUrl) : config.gasUrl || '').trim();
+
+    if (!targetUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'NO_GAS_URL',
+        message: 'No hay URL de Google Apps Script configurada.'
+      });
+    }
+
+    try {
+      const url = new URL(targetUrl);
+      url.searchParams.set('action', 'getFullSync');
+      url.searchParams.set('_t', String(Date.now()));
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 35000);
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        redirect: 'follow',
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      const text = await response.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return res.status(502).json({
+          success: false,
+          error: 'INVALID_JSON',
+          message: 'Google Apps Script no devolvió un JSON válido.',
+          raw: text.substring(0, 300)
+        });
+      }
+
+      return res.json(data);
+    } catch (err: any) {
+      console.error('[gas-sync] Error al obtener datos de Google Apps Script:', err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || 'NETWORK_ERROR',
+        message: 'Error al conectar con Google Sheets: ' + (err?.message || 'Error de red')
+      });
+    }
+  });
+
   // POST /api/gas-action - Ejecuta mutaciones en tiempo real en Google Sheets (Draft, Fichajes, Orden Draft)
   app.post('/api/gas-action', async (req, res) => {
     const { action, team, token, player, jornada, transfers, draftOrder, customGasUrl } = req.body || {};
