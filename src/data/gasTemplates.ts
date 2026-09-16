@@ -555,6 +555,8 @@ function doGet(e) {
         result = { success: true, data: getDraftOrderFromSheet(sDraftOrder) };
       } else if (action === 'saveDraftOrder') {
         result = saveDraftOrderToSheet(e.parameter.draftOrder);
+      } else if (action === 'resetSeason') {
+        result = resetSeasonInSheets();
       } else {
         result = { error: 'Acción API no reconocida: ' + action };
       }
@@ -589,7 +591,7 @@ function doGet(e) {
 }
 
 /**
- * Enrutador POST para peticiones de mutación (Draft, Fichajes, Orden Draft) desde la App
+ * Enrutador POST para peticiones de mutación (Draft, Fichajes, Orden Draft, Reiniciar Temporada) desde la App
  */
 function doPost(e) {
   var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : '';
@@ -613,6 +615,8 @@ function doPost(e) {
       result = processMultipleTransfers(postData.team, postData.token, postData.jornada, postData.transfers);
     } else if (action === 'saveDraftOrder') {
       result = saveDraftOrderToSheet(postData.draftOrder);
+    } else if (action === 'resetSeason') {
+      result = resetSeasonInSheets();
     } else {
       result = { error: 'Acción POST no reconocida: ' + action };
     }
@@ -667,41 +671,140 @@ function saveDraftOrderToSheet(rawOrder) {
   if (!Array.isArray(order) || order.length === 0) {
     return { success: false, message: 'Datos de orden no válidos' };
   }
-  sheet.clear();
-  var headers = [];
-  for (var r = 0; r < 11; r++) {
-    headers.push(order[r] ? order[r].roundName || ('Ronda ' + (r + 1)) : ('Ronda ' + (r + 1)));
-  }
-  sheet.appendRow(headers);
 
-  // Asegurar que cada ronda solo tenga cada equipo 1 sola vez
-  var cleanedRounds = [];
-  var maxTeams = 0;
-  for (var c = 0; c < 11; c++) {
-    var rTeams = order[c] && order[c].teams ? order[c].teams : [];
-    var seenT = {};
-    var uniqueT = [];
-    for (var ti = 0; ti < rTeams.length; ti++) {
-      var tName = String(rTeams[ti] || '').trim();
-      var tLower = tName.toLowerCase();
-      if (tName && !seenT[tLower]) {
-        seenT[tLower] = true;
-        uniqueT.push(tName);
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch(eLock) {}
+
+  try {
+    sheet.clear();
+    var headers = [];
+    for (var r = 0; r < 11; r++) {
+      headers.push(order[r] ? order[r].roundName || ('Ronda ' + (r + 1)) : ('Ronda ' + (r + 1)));
+    }
+    sheet.appendRow(headers);
+
+    // Asegurar que cada ronda solo tenga cada equipo 1 sola vez
+    var cleanedRounds = [];
+    var maxTeams = 0;
+    for (var c = 0; c < 11; c++) {
+      var rTeams = order[c] && order[c].teams ? order[c].teams : [];
+      var seenT = {};
+      var uniqueT = [];
+      for (var ti = 0; ti < rTeams.length; ti++) {
+        var tName = String(rTeams[ti] || '').trim();
+        var tLower = tName.toLowerCase();
+        if (tName && !seenT[tLower]) {
+          seenT[tLower] = true;
+          uniqueT.push(tName);
+        }
+      }
+      cleanedRounds.push(uniqueT);
+      if (uniqueT.length > maxTeams) maxTeams = uniqueT.length;
+    }
+
+    for (var row = 0; row < maxTeams; row++) {
+      var rowData = [];
+      for (var col = 0; col < 11; col++) {
+        var t = (cleanedRounds[col] && cleanedRounds[col][row]) ? cleanedRounds[col][row] : '';
+        rowData.push(t);
+      }
+      sheet.appendRow(rowData);
+    }
+    SpreadsheetApp.flush();
+    return { success: true, message: 'Orden de elección del Draft guardado con éxito en la pestaña Draft.' };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+/**
+ * Reinicia la temporada en Google Sheets de forma atómica y segura:
+ * - Vacía las filas de Alineaciones (conservando cabecera)
+ * - Vacía las filas de Historial_Draft (conservando cabecera)
+ * - Vacía las filas de Historial_Fichajes (conservando cabecera)
+ * - Limpia la pestaña Draft (orden de rondas)
+ * - Restablece el estado 'Disponible' a todos los jugadores en la pestaña Jugadores
+ */
+function resetSeasonInSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return { success: false, message: 'Google Sheets ocupado, reinténtalo en unos segundos' };
+  }
+
+  try {
+    // 1. Limpiar Alineaciones manteniendo cabecera (fila 1)
+    var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Alineación', 'Lineups', 'Lineup', 'Plantillas', 'Plantilla', 'Alineaciones_Equipos', 'Alineaciones Equipos']);
+    if (sheetAl) {
+      var lastRowAl = sheetAl.getLastRow();
+      if (lastRowAl > 1) {
+        var lastColAl = Math.max(6, sheetAl.getLastColumn());
+        sheetAl.getRange(2, 1, lastRowAl - 1, lastColAl).clearContent();
       }
     }
-    cleanedRounds.push(uniqueT);
-    if (uniqueT.length > maxTeams) maxTeams = uniqueT.length;
-  }
 
-  for (var row = 0; row < maxTeams; row++) {
-    var rowData = [];
-    for (var col = 0; col < 11; col++) {
-      var t = (cleanedRounds[col] && cleanedRounds[col][row]) ? cleanedRounds[col][row] : '';
-      rowData.push(t);
+    // 2. Limpiar Historial_Draft manteniendo cabecera (fila 1)
+    var sheetDraft = findSheet(ss, ['Historial_Draft', 'Historial del Draft', 'Historial de Draft', 'Historial Draft', 'Draft_Historial', 'Elecciones Draft', 'Draft_Elecciones']);
+    if (sheetDraft) {
+      var lastRowD = sheetDraft.getLastRow();
+      if (lastRowD > 1) {
+        var lastColD = Math.max(6, sheetDraft.getLastColumn());
+        sheetDraft.getRange(2, 1, lastRowD - 1, lastColD).clearContent();
+      }
     }
-    sheet.appendRow(rowData);
+
+    // 3. Limpiar Historial_Fichajes manteniendo cabecera (fila 1)
+    var sheetFic = findSheet(ss, ['Historial_Fichajes', 'Historial de Fichajes', 'Historial del Fichaje', 'Historial Fichajes', 'Fichajes', 'Transfers']);
+    if (sheetFic) {
+      var lastRowF = sheetFic.getLastRow();
+      if (lastRowF > 1) {
+        var lastColF = Math.max(7, sheetFic.getLastColumn());
+        sheetFic.getRange(2, 1, lastRowF - 1, lastColF).clearContent();
+      }
+    }
+
+    // 4. Limpiar pestaña Draft
+    var sheetDraftOrder = ss.getSheetByName('Draft') || findSheet(ss, ['Orden_Draft', 'Orden Draft', 'Draft_Orden', 'Turnos_Draft', 'Turnos Draft']);
+    if (sheetDraftOrder) {
+      sheetDraftOrder.clear();
+    }
+
+    // 5. Restablecer estado 'Disponible' en la hoja Jugadores
+    var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
+    if (sheetJug) {
+      var jugValues = sheetJug.getDataRange().getValues();
+      if (jugValues.length > 1) {
+        var estadoCol = -1;
+        var headers = jugValues[0];
+        for (var hc = 0; hc < headers.length; hc++) {
+          var hName = String(headers[hc] || '').trim().toLowerCase();
+          if (hName === 'estado' || hName === 'status' || hName === 'situacion') {
+            estadoCol = hc + 1;
+            break;
+          }
+        }
+        if (estadoCol === -1) estadoCol = 5;
+        for (var r = 1; r < jugValues.length; r++) {
+          var curStatus = String(jugValues[r][estadoCol - 1] || '').trim();
+          if (curStatus !== 'Abandona Liga') {
+            sheetJug.getRange(r + 1, estadoCol).setValue('Disponible');
+          }
+        }
+      }
+    }
+
+    SpreadsheetApp.flush();
+    return {
+      success: true,
+      message: 'Temporada reiniciada correctamente en Google Sheets (Alineaciones, Fichajes, Draft y Jugadores vaciados).'
+    };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
   }
-  return { success: true, message: 'Orden de elección del Draft guardado con éxito en la pestaña Draft.' };
 }
 
 /**
@@ -870,6 +973,7 @@ function getFullSyncData() {
       if (cPos === -1) cPos = 4;
       if (cVal === -1) cVal = 5;
 
+      var seenLineupKeys = {};
       for (var a = 1; a < alData.length; a++) {
         var rowA = alData[a];
         var tName = String(rowA[cTeam] || '').trim();
@@ -877,14 +981,18 @@ function getFullSyncData() {
         if (tName && pName) {
           var aJornada = Number(rowA[cJor]) || 1;
           if (aJornada > maxJ) maxJ = aJornada;
-          lineups.push({
-            teamName: tName,
-            jornada: aJornada,
-            playerName: pName,
-            realTeam: String(rowA[cReal] || '').trim(),
-            position: String(rowA[cPos] || '').trim(),
-            value: Number(rowA[cVal]) || 0
-          });
+          var lKey = (tName + ':::' + aJornada + ':::' + pName).toLowerCase();
+          if (!seenLineupKeys[lKey]) {
+            seenLineupKeys[lKey] = true;
+            lineups.push({
+              teamName: tName,
+              jornada: aJornada,
+              playerName: pName,
+              realTeam: String(rowA[cReal] || '').trim(),
+              position: String(rowA[cPos] || '').trim(),
+              value: Number(rowA[cVal]) || 0
+            });
+          }
         }
       }
     }
@@ -1038,15 +1146,15 @@ function getFullSyncData() {
       var pCatalogMap = {};
       players.forEach(function(pl) { pCatalogMap[pl.name.toLowerCase()] = pl; });
 
-      var seenDraftKeys = {};
+      var seenDraftPlayers = {};
       for (var dr = dHeaderRowIdx + 1; dr < dData.length; dr++) {
         var dRow = dData[dr];
         var dTeam = colDTeam !== -1 && dRow[colDTeam] !== undefined ? String(dRow[colDTeam]).trim() : '';
         var dPlayer = colDPlayer !== -1 && dRow[colDPlayer] !== undefined ? String(dRow[colDPlayer]).trim() : '';
-        var dKey = (dTeam + ':::' + dPlayer).toLowerCase();
+        var dPlayLower = dPlayer.toLowerCase();
         
-        if ((dTeam || dPlayer) && !seenDraftKeys[dKey]) {
-          seenDraftKeys[dKey] = true;
+        if (dPlayer && !seenDraftPlayers[dPlayLower]) {
+          seenDraftPlayers[dPlayLower] = true;
           var rawDDate = colDDate !== -1 ? dRow[colDDate] : '';
           var dDateStr = '';
           if (rawDDate instanceof Date) {
@@ -1640,7 +1748,14 @@ function processDraftSelection(team, token, player) {
   if (!validateTeamToken(team, token)) {
     return { success: false, message: 'Token incorrecto o no autorizado para el equipo ' + team };
   }
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch(eLock) {}
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetAl = findSheet(ss, [
     'Alineaciones',
     'Alineacion',
@@ -1718,11 +1833,13 @@ function processDraftSelection(team, token, player) {
 
   var alreadyInDraft = false;
   for (var dr = 1; dr < dData.length; dr++) {
-    var exPlay = String(dData[dr][colDPlay] || '').trim().toLowerCase();
-    if (exPlay === normPlayer) {
-      alreadyInDraft = true;
-      break;
+    for (var dc = 0; dc < dData[dr].length; dc++) {
+      if (String(dData[dr][dc] || '').trim().toLowerCase() === normPlayer) {
+        alreadyInDraft = true;
+        break;
+      }
     }
+    if (alreadyInDraft) break;
   }
 
   if (!alreadyInDraft) {
@@ -1832,8 +1949,12 @@ function processDraftSelection(team, token, player) {
   } catch(errAvisoDraft) {
     Logger.log("Error al enviar aviso de draft a Telegram: " + errAvisoDraft);
   }
-  
+
+  SpreadsheetApp.flush();
   return { success: true, message: '¡Selección registrada correctamente! ' + player + ' fichado por ' + team + '.' };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
 }
 
 /**

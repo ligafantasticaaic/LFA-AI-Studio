@@ -312,7 +312,7 @@ async function startServer() {
       console.log(`[gas-action] Enviando acción "${action}" a Apps Script: ${targetUrl}`);
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
+      const timeout = setTimeout(() => controller.abort(), 35000);
 
       const response = await fetch(url.toString(), {
         method: 'GET',
@@ -327,7 +327,7 @@ async function startServer() {
         data = JSON.parse(rawText);
       } catch {
         console.warn('[gas-action] Respuesta no JSON de Apps Script:', rawText.substring(0, 200));
-        return res.status(502).json({
+        return res.status(200).json({
           success: false,
           error: 'INVALID_GAS_RESPONSE',
           message: 'Google Apps Script no devolvió un JSON válido. Comprueba la URL de la Web App.',

@@ -78,6 +78,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [isSyncingPendingDrafts, setIsSyncingPendingDrafts] = useState<boolean>(false);
   const [copiedGasCode, setCopiedGasCode] = useState<boolean>(false);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [isResettingSeason, setIsResettingSeason] = useState<boolean>(false);
   const [, setSyncVersion] = useState<number>(0);
 
   // 1. Primera Jornada con Aportaciones (j) State
@@ -622,19 +623,29 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handleResetSeason = () => {
+  const handleResetSeason = async () => {
+    const hasGas = !!gasEngine.getGasUrl();
     const confirm = window.confirm(
       '¿Deseas reiniciar la temporada?\n\n' +
       '• Se vaciarán las plantillas y alineaciones de las jornadas.\n' +
       '• Se vaciará el historial de fichajes y sustituciones.\n' +
       '• Se vaciará el historial y elecciones del Draft.\n' +
-      '• Todos los futbolistas volverán al estado "Disponible".\n\n' +
-      'Este proceso es completamente independiente de Guardar y Sincronizar.'
+      '• Todos los futbolistas volverán al estado "Disponible".\n' +
+      (hasGas ? '• Se vaciarán las hojas remotas en Google Sheets (Alineaciones, Fichajes, Draft).\n\n' : '\n') +
+      '¿Estás seguro de que deseas continuar?'
     );
     if (!confirm) return;
-    const res = gasEngine.resetSeasonData();
-    loadAdminData();
-    showAlert(res.message, res.success);
+
+    setIsResettingSeason(true);
+    try {
+      const res = await gasEngine.resetSeasonData();
+      loadAdminData();
+      showAlert(res.message, res.success);
+    } catch (err: any) {
+      showAlert('Error al reiniciar la temporada: ' + (err?.message || err), false);
+    } finally {
+      setIsResettingSeason(false);
+    }
   };
 
   const handleCopyGasCode = () => {
@@ -2663,11 +2674,19 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
 
             <div>
               <button
+                type="button"
                 onClick={handleResetSeason}
-                className="bg-rose-900/60 hover:bg-rose-800/80 text-rose-200 border border-rose-600/50 text-xs font-bold py-2.5 px-5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-rose-950/50"
+                disabled={isResettingSeason}
+                className={`bg-rose-900/60 hover:bg-rose-800/80 text-rose-200 border border-rose-600/50 text-xs font-bold py-2.5 px-5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-rose-950/50 ${
+                  isResettingSeason ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
               >
-                <RotateCcw className="w-4 h-4 text-rose-400" />
-                <span>Reiniciar Temporada (Vaciar Alineaciones, Fichajes y Draft)</span>
+                <RotateCcw className={`w-4 h-4 text-rose-400 ${isResettingSeason ? 'animate-spin' : ''}`} />
+                <span>
+                  {isResettingSeason
+                    ? 'Reiniciando temporada y limpiando Google Sheets...'
+                    : 'Reiniciar Temporada (Vaciar Alineaciones, Fichajes y Draft)'}
+                </span>
               </button>
             </div>
           </div>

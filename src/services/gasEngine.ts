@@ -1357,7 +1357,7 @@ class GasEngineService {
         }));
       }
 
-      // Sincronizar estado de los jugadores: si están en las alineaciones activas pasan a 'Fichado'
+      // Sincronizar estado de los jugadores: si están en las alineaciones activas pasan a 'Fichado', si no a 'Disponible'
       const assignedPlayerNames = new Set(
         this.lineups
           .filter(l => l.playerName && l.playerName.trim() !== '')
@@ -1366,11 +1366,7 @@ class GasEngineService {
       this.players.forEach(p => {
         const lower = (p.name || '').trim().toLowerCase();
         if (p.status !== 'Abandona Liga') {
-          if (assignedPlayerNames.has(lower)) {
-            p.status = 'Fichado';
-          } else if (p.status === 'Fichado' && !assignedPlayerNames.has(lower)) {
-            p.status = 'Disponible';
-          }
+          p.status = assignedPlayerNames.has(lower) ? 'Fichado' : 'Disponible';
         }
       });
 
@@ -2027,6 +2023,11 @@ class GasEngineService {
   public getPlayersForMercado(): Player[] {
     const positionOrder: Record<string, number> = { 'Portero': 1, 'Defensa': 2, 'Medio': 3, 'Delantero': 4, 'N/A': 99 };
     const seen = new Set<string>();
+
+    const maxJ = this.getMaxJornada();
+    const activeLineups = this.lineups.filter(l => l.jornada === maxJ && l.playerName && l.playerName.trim() !== '');
+    const activeAssigned = new Set(activeLineups.map(l => l.playerName.trim().toLowerCase()));
+
     return this.players
       .filter(p => {
         if (!p.name || !p.name.trim() || p.status === 'Abandona Liga') return false;
@@ -2042,8 +2043,14 @@ class GasEngineService {
             if (typeof val === 'number') total += val;
           });
         }
+        const lowerName = p.name.trim().toLowerCase();
+        const computedStatus: 'Disponible' | 'Fichado' | 'Abandona Liga' = p.status === 'Abandona Liga'
+          ? 'Abandona Liga'
+          : (activeAssigned.has(lowerName) ? 'Fichado' : 'Disponible');
+
         return {
           ...p,
+          status: computedStatus,
           totalPoints: parseFloat(total.toFixed(2))
         };
       })
@@ -2088,6 +2095,10 @@ class GasEngineService {
         seen.add(key);
         return true;
       })
+      .map(p => ({
+        ...p,
+        status: 'Disponible' as const
+      }))
       .sort((a, b) => {
         const teamComp = a.realTeam.localeCompare(b.realTeam);
         if (teamComp !== 0) return teamComp;
@@ -3397,16 +3408,7 @@ class GasEngineService {
    * cumpliendo turnos por orden estricto (un equipo no vuelve a elegir hasta que todos los demás han elegido en ese turno).
    */
   public generateRandomDraftOrder(pushToServer: boolean = true): DraftRoundOrder[] {
-    const seenTeams = new Set<string>();
-    const currentTeams: string[] = [];
-    for (const t of this.getTeams()) {
-      const trimmed = String(t || '').trim();
-      const lower = trimmed.toLowerCase();
-      if (trimmed && !seenTeams.has(lower)) {
-        seenTeams.add(lower);
-        currentTeams.push(trimmed);
-      }
-    }
+    const currentTeams = this.getTeamNames();
 
     if (this.teams.length !== currentTeams.length) {
       this.teams = [...currentTeams];
@@ -3427,29 +3429,52 @@ class GasEngineService {
       });
     }
     this.setDraftOrder(order, pushToServer);
-    return order;
+    return this.draftOrder;
   }
 
   /**
    * Guarda el orden de elección del Draft en memoria, localStorage y servidor central
+   * Garantiza que cada ronda tenga a cada equipo exactamente una sola vez
    */
   public setDraftOrder(order: DraftRoundOrder[], pushToServer: boolean = true): void {
-    const cleanOrder = (order || []).map(ro => {
+    const validTeams = this.getTeamNames();
+    const validSet = new Set(validTeams.map(t => t.toLowerCase().trim()));
+
+    const cleanOrder: DraftRoundOrder[] = [];
+    for (let r = 1; r <= 11; r++) {
+      const ro = (order && order[r - 1]) ? order[r - 1] : { round: r, roundName: `Ronda ${r}`, teams: [] };
       const seenInRound = new Set<string>();
       const uniqueTeams: string[] = [];
+
       for (const t of (ro.teams || [])) {
         const trimmed = String(t || '').trim();
         const lower = trimmed.toLowerCase();
-        if (trimmed && !seenInRound.has(lower)) {
+        if (trimmed && validSet.has(lower) && !seenInRound.has(lower)) {
           seenInRound.add(lower);
-          uniqueTeams.push(trimmed);
+          const canonical = validTeams.find(vt => vt.toLowerCase().trim() === lower) || trimmed;
+          uniqueTeams.push(canonical);
         }
       }
-      return {
-        ...ro,
-        teams: uniqueTeams
-      };
-    });
+
+      // Si algún equipo de la liga no estaba en la ronda, añadirlo
+      for (const vt of validTeams) {
+        const lower = vt.toLowerCase().trim();
+        if (!seenInRound.has(lower)) {
+          seenInRound.add(lower);
+          uniqueTeams.push(vt);
+        }
+      }
+
+      // Limitar la longitud exactamente al número de equipos de la liga
+      const finalTeams = uniqueTeams.slice(0, validTeams.length);
+
+      cleanOrder.push({
+        round: r,
+        roundName: ro.roundName || `Ronda ${r}`,
+        teams: finalTeams
+      });
+    }
+
     this.draftOrder = cleanOrder;
     localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
     if (pushToServer) {
@@ -3594,7 +3619,7 @@ class GasEngineService {
    * Prioriza el backend /api/gas-action (inmune a CORS y redirecciones) y recurre a fetchGasData como respaldo.
    */
   public async executeGasAction(payload: {
-    action: 'draft' | 'transfer' | 'saveDraftOrder' | 'ping';
+    action: 'draft' | 'transfer' | 'saveDraftOrder' | 'ping' | 'resetSeason';
     team?: string;
     token?: string;
     player?: string;
@@ -3831,9 +3856,9 @@ class GasEngineService {
   /**
    * Restablece los datos de la temporada: vacía alineaciones, historial de fichajes y elecciones de draft,
    * y devuelve a todos los futbolistas al estado 'Disponible' (salvo los que hayan abandonado la liga).
-   * Este proceso es 100% independiente de la sincronización con Google Sheets.
+   * Si hay conexión con Google Sheets configurada, también vacía y limpia las hojas remotas.
    */
-  public resetSeasonData(): { success: boolean; message: string } {
+  public async resetSeasonData(): Promise<{ success: boolean; message: string; remoteCleared?: boolean }> {
     this.lineups = [];
     this.transfers = [];
     this.drafts = [];
@@ -3849,9 +3874,30 @@ class GasEngineService {
     localStorage.setItem('lfa_draft_order', '[]');
     this.saveState();
     this.notify();
+
+    let remoteMsg = '';
+    let remoteCleared = false;
+    const gasUrl = this.getGasUrl();
+    if (gasUrl) {
+      try {
+        const gasRes = await this.executeGasAction({ action: 'resetSeason' });
+        if (gasRes.success) {
+          remoteCleared = true;
+          remoteMsg = ' Se ha vaciado también en Google Sheets (Alineaciones, Fichajes, Draft y Jugadores Disponibles).';
+        } else if (gasRes.outdatedScript) {
+          remoteMsg = ' Nota: Para vaciar también tu Google Sheets en remoto, copia el nuevo Código.gs en Apps Script y publica una Nueva Versión.';
+        } else {
+          remoteMsg = ` (Aviso Google Sheets: ${gasRes.message || 'no se pudo contactar'}).`;
+        }
+      } catch (e: any) {
+        remoteMsg = ' (No se pudo conectar con Google Sheets para limpiar en remoto).';
+      }
+    }
+
     return {
       success: true,
-      message: '¡Temporada reiniciada con éxito! Se han vaciado las alineaciones, el historial de fichajes y el draft. Todos los futbolistas vuelven a estar Disponibles.'
+      remoteCleared,
+      message: `¡Temporada reiniciada con éxito! Se han vaciado las alineaciones, el historial de fichajes y el draft. Todos los futbolistas vuelven a estar Disponibles.${remoteMsg}`
     };
   }
 
@@ -3859,13 +3905,13 @@ class GasEngineService {
    * Restablece los datos de la temporada anterior y sincroniza de forma explícita
    */
   public async resetSeasonDataAndSync(): Promise<{ success: boolean; message: string }> {
-    this.resetSeasonData();
+    const resetRes = await this.resetSeasonData();
     const syncRes = await this.syncFromRemote();
     return {
       success: syncRes.success,
       message: syncRes.success
-        ? '¡Datos de la temporada anterior limpiados y sincronizados desde Google Sheets!'
-        : 'Datos locales reseteados. Comprueba la conexión con Google Sheets si deseas actualizar.'
+        ? `${resetRes.message} Datos sincronizados desde Google Sheets.`
+        : resetRes.message
     };
   }
 }
