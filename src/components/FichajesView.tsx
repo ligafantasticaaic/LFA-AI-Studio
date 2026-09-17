@@ -266,19 +266,6 @@ export const FichajesView: React.FC = () => {
             </div>
           </div>
 
-          {/* Información sobre validación individual de horarios */}
-          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex items-start gap-3 text-slate-300">
-            <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <p className="font-bold text-white">
-                Validación individual por Horarios de Equipos (Jornada {selectedJornada || '-'})
-              </p>
-              <p className="text-slate-400 text-[11px] leading-relaxed">
-                Cada fichaje se valida individualmente según la fecha y hora del partido de los equipos implicados (registrados en la pestaña <span className="text-amber-300 font-mono font-bold">Horarios_Equipos</span>). Podrás realizar el fichaje hasta el inicio del partido de cada equipo, incluso con la jornada en juego.
-              </p>
-            </div>
-          </div>
-
           {/* Dynamic Transfer Slots */}
           <div className="space-y-4 pt-2">
             <div className="flex items-center justify-between">
