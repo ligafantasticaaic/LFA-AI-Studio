@@ -77,6 +77,8 @@ export interface ScheduleRecord {
   jornada: number;
   realTeam: string;
   deadlineIsoString: string;
+  fecha?: string;
+  hora?: string;
 }
 
 export interface TeamBalanceDetail {

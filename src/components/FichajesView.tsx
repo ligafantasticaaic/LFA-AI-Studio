@@ -12,7 +12,8 @@ import {
   Coins, 
   ShieldAlert,
   HelpCircle,
-  Search
+  Search,
+  AlertTriangle
 } from 'lucide-react';
 
 interface TransferRowState {
@@ -62,6 +63,20 @@ export const FichajesView: React.FC = () => {
   }, []);
 
   const selectedJornadaCheck = gasEngine.isJornadaPlayed(selectedJornada);
+
+  const hasInvalidSchedule = transferRows.some(r => {
+    if (r.playerOut && selectedJornada) {
+      const rtOut = gasEngine.getRealTeamOfPlayer(r.playerOut);
+      const dOut = gasEngine.getTeamScheduleDeadline(selectedJornada, rtOut);
+      if (!dOut.isOpen) return true;
+    }
+    if (r.playerIn && selectedJornada) {
+      const rtIn = gasEngine.getRealTeamOfPlayer(r.playerIn);
+      const dIn = gasEngine.getTeamScheduleDeadline(selectedJornada, rtIn);
+      if (!dIn.isOpen) return true;
+    }
+    return false;
+  });
 
   useEffect(() => {
     const j = selectedJornada || 5;
@@ -239,39 +254,30 @@ export const FichajesView: React.FC = () => {
                 onChange={(e) => setSelectedJornada(parseInt(e.target.value, 10))}
                 required
                 disabled={isLoading}
-                className={`w-full bg-slate-950 border text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none transition font-mono cursor-pointer ${
-                  selectedJornadaCheck.isPlayed
-                    ? 'border-rose-500/50 bg-rose-950/20 text-rose-200 focus:border-rose-400'
-                    : 'border-slate-700 focus:border-amber-500'
-                }`}
+                className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none transition font-mono cursor-pointer"
               >
                 <option value="">-- Selecciona Jornada --</option>
-                {Array.from({ length: 38 }, (_, i) => i + 1).map(j => {
-                  const check = gasEngine.isJornadaPlayed(j);
-                  return (
-                    <option key={`fich-jornada-${j}`} value={j}>
-                      Jornada {j}{check.isPlayed ? ' (Cerrada)' : ''}
-                    </option>
-                  );
-                })}
+                {Array.from({ length: 38 }, (_, i) => i + 1).map(j => (
+                  <option key={`fich-jornada-${j}`} value={j}>
+                    Jornada {j}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
-          {/* Aviso si la jornada seleccionada ya está jugada */}
-          {selectedJornadaCheck.isPlayed && (
-            <div className="bg-rose-950/40 border border-rose-500/40 rounded-xl p-3.5 flex items-start gap-3 text-rose-300">
-              <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-black text-rose-200 uppercase tracking-wider">
-                  Jornada {selectedJornada} no disponible para fichajes
-                </p>
-                <p className="text-slate-300">
-                  {selectedJornadaCheck.reason || 'Esta jornada ya ha sido disputada o su plazo límite ha vencido. Por favor selecciona una jornada abierta.'}
-                </p>
-              </div>
+          {/* Información sobre validación individual de horarios */}
+          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex items-start gap-3 text-slate-300">
+            <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-bold text-white">
+                Validación individual por Horarios de Equipos (Jornada {selectedJornada || '-'})
+              </p>
+              <p className="text-slate-400 text-[11px] leading-relaxed">
+                Cada fichaje se valida individualmente según la fecha y hora del partido de los equipos implicados (registrados en la pestaña <span className="text-amber-300 font-mono font-bold">Horarios_Equipos</span>). Podrás realizar el fichaje hasta el inicio del partido de cada equipo, incluso con la jornada en juego.
+              </p>
             </div>
-          )}
+          </div>
 
           {/* Dynamic Transfer Slots */}
           <div className="space-y-4 pt-2">
@@ -335,6 +341,28 @@ export const FichajesView: React.FC = () => {
                           <option key={`fich-out-${p}-${pIdx}`} value={p}>{p}</option>
                         ))}
                       </select>
+
+                      {row.playerOut && (() => {
+                        const rtOut = gasEngine.getRealTeamOfPlayer(row.playerOut);
+                        const schedOut = gasEngine.getTeamScheduleDeadline(selectedJornada, rtOut);
+                        if (!schedOut.isOpen) {
+                          return (
+                            <div className="text-[10px] text-rose-300 font-bold bg-rose-950/50 border border-rose-500/50 rounded-lg p-2 mt-1.5 flex items-start gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                              <span>{schedOut.reason || `Partido de ${rtOut} en juego o ya disputado`}</span>
+                            </div>
+                          );
+                        }
+                        if (schedOut.hasSchedule) {
+                          return (
+                            <div className="text-[10px] text-emerald-300 font-medium bg-emerald-950/30 border border-emerald-500/30 rounded-lg p-1.5 mt-1.5 flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <span>{rtOut}: Partido {schedOut.fecha} a las {schedOut.hora} (Abierto)</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
 
                     <div>
@@ -355,6 +383,28 @@ export const FichajesView: React.FC = () => {
                           </option>
                         ))}
                       </select>
+
+                      {row.playerIn && (() => {
+                        const rtIn = gasEngine.getRealTeamOfPlayer(row.playerIn);
+                        const schedIn = gasEngine.getTeamScheduleDeadline(selectedJornada, rtIn);
+                        if (!schedIn.isOpen) {
+                          return (
+                            <div className="text-[10px] text-rose-300 font-bold bg-rose-950/50 border border-rose-500/50 rounded-lg p-2 mt-1.5 flex items-start gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                              <span>{schedIn.reason || `Partido de ${rtIn} en juego o ya disputado`}</span>
+                            </div>
+                          );
+                        }
+                        if (schedIn.hasSchedule) {
+                          return (
+                            <div className="text-[10px] text-emerald-300 font-medium bg-emerald-950/30 border border-emerald-500/30 rounded-lg p-1.5 mt-1.5 flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <span>{rtIn}: Partido {schedIn.fecha} a las {schedIn.hora} (Abierto)</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
 
@@ -482,15 +532,15 @@ export const FichajesView: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800">
             <button
               type="submit"
-              disabled={isLoading || !selectedTeam || selectedJornadaCheck.isPlayed}
+              disabled={isLoading || !selectedTeam || hasInvalidSchedule}
               className={`w-full sm:w-auto font-black text-xs uppercase tracking-wider py-3 px-8 rounded-xl shadow-lg transition flex items-center justify-center gap-2 ${
-                selectedJornadaCheck.isPlayed
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                hasInvalidSchedule
+                  ? 'bg-slate-800 text-rose-400 cursor-not-allowed border border-rose-800/50'
                   : 'bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer disabled:opacity-50'
               }`}
             >
               <ArrowLeftRight className="w-4 h-4" />
-              <span>{selectedJornadaCheck.isPlayed ? 'Jornada Cerrada' : 'Realizar Fichaje(s)'}</span>
+              <span>{hasInvalidSchedule ? 'Fichaje Inválido (Horario Superado)' : 'Realizar Fichaje(s)'}</span>
             </button>
 
             {statusMessage && (

@@ -68,6 +68,34 @@ export function parseCleanNumber(val: any): number {
   return isNaN(n) ? 0 : n;
 }
 
+export function canonicalizeRealTeam(team: string): string {
+  if (!team) return '';
+  const clean = team.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const aliases: Record<string, string> = {
+    'real madrid': 'RMA', 'madrid': 'RMA', 'rma': 'RMA',
+    'barcelona': 'BAR', 'fc barcelona': 'BAR', 'barca': 'BAR', 'bar': 'BAR',
+    'atletico de madrid': 'ATM', 'atletico': 'ATM', 'atm': 'ATM',
+    'athletic club': 'ATH', 'athletic': 'ATH', 'bilbao': 'ATH', 'ath': 'ATH',
+    'villarreal': 'VIL', 'vil': 'VIL',
+    'real betis': 'BET', 'betis': 'BET', 'bet': 'BET',
+    'real sociedad': 'RSO', 'la real': 'RSO', 'sociedad': 'RSO', 'rso': 'RSO',
+    'sevilla': 'SEV', 'sevilla fc': 'SEV', 'sev': 'SEV',
+    'celta de vigo': 'CEL', 'celta': 'CEL', 'cel': 'CEL',
+    'valencia': 'VAL', 'valencia cf': 'VAL', 'val': 'VAL',
+    'osasuna': 'OSA', 'ca osasuna': 'OSA', 'osa': 'OSA',
+    'rayo vallecano': 'RAY', 'rayo': 'RAY', 'ray': 'RAY',
+    'espanyol': 'ESP', 'rcd espanyol': 'ESP', 'esp': 'ESP',
+    'girona': 'GIR', 'girona fc': 'GIR', 'gir': 'GIR',
+    'leganes': 'LEG', 'cd leganes': 'LEG', 'leg': 'LEG',
+    'alaves': 'ALV', 'deportivo alaves': 'ALV', 'alv': 'ALV',
+    'mallorca': 'MLL', 'rcd mallorca': 'MLL', 'mll': 'MLL',
+    'las palmas': 'LPA', 'ud las palmas': 'LPA', 'lpa': 'LPA',
+    'getafe': 'GET', 'getafe cf': 'GET', 'get': 'GET',
+    'valladolid': 'VLD', 'real valladolid': 'VLD', 'vld': 'VLD', 'vll': 'VLD'
+  };
+  return aliases[clean] || clean.toUpperCase();
+}
+
 // Initial Starter Dataset
 const INITIAL_TEAMS: string[] = [
   'BRIKKOMARIAN',
@@ -1604,6 +1632,36 @@ class GasEngineService {
         this.setDraftOrder(rawDraftOrder, false);
       }
 
+      // Actualizar horarios de equipos si vienen en la respuesta (pestaña Horarios_Equipos)
+      const rawSchedules = Array.isArray(data.schedules) ? data.schedules :
+                           (Array.isArray(data.horarios) ? data.horarios :
+                           (data.data && Array.isArray(data.data.schedules) ? data.data.schedules :
+                           (data.data && Array.isArray(data.data.horarios) ? data.data.horarios : null)));
+
+      if (Array.isArray(rawSchedules) && rawSchedules.length > 0) {
+        const parsedSchedules: ScheduleRecord[] = [];
+        rawSchedules.forEach((s: any) => {
+          const j = Number(s.jornada || s.Jornada || 1) || 1;
+          const rt = String(s.realTeam || s.Equipo || s.Club || s.team || '').trim();
+          const dIso = String(s.deadlineIsoString || s.deadline || s.isoString || '').trim();
+          const f = String(s.fecha || s.Fecha || '').trim();
+          const h = String(s.hora || s.Hora || '').trim();
+          if (rt) {
+            parsedSchedules.push({
+              jornada: j,
+              realTeam: rt,
+              deadlineIsoString: dIso,
+              fecha: f,
+              hora: h
+            });
+          }
+        });
+        if (parsedSchedules.length > 0) {
+          this.schedules = parsedSchedules;
+          localStorage.setItem('lfa_schedules', JSON.stringify(this.schedules));
+        }
+      }
+
       const now = new Date();
       this.lastSyncTime = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' +
                           now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -2058,30 +2116,136 @@ class GasEngineService {
     return 38;
   }
 
-  public isTeamOpenForJornada(jornada: number, realTeam: string): boolean {
+  public getTeamScheduleDeadline(jornada: number, realTeam: string): {
+    hasSchedule: boolean;
+    isOpen: boolean;
+    reason?: string;
+    fecha?: string;
+    hora?: string;
+    deadline?: Date;
+    scheduleRecord?: ScheduleRecord;
+  } {
     jornada = parseInt(String(jornada), 10);
-    // Si la jornada en su totalidad ya está disputada/cerrada, ningún equipo está abierto
-    const generalCheck = this.isJornadaPlayed(jornada);
-    if (generalCheck.isPlayed) {
-      return false;
+    if (!realTeam || isNaN(jornada) || jornada <= 0) {
+      return { hasSchedule: false, isOpen: true };
     }
 
-    if (!realTeam) return true;
+    const canonTarget = canonicalizeRealTeam(realTeam);
 
-    // Comprobar horario específico del equipo real si existe
-    const normRt = realTeam.trim().toLowerCase();
-    const matchSched = this.schedules.find(
-      s => s.jornada === jornada && s.realTeam.trim().toLowerCase() === normRt
+    // Buscar en this.schedules para esta jornada y equipo real específico
+    let matchSched = this.schedules.find(
+      s => s.jornada === jornada && canonicalizeRealTeam(s.realTeam) === canonTarget
     );
 
-    if (matchSched) {
-      const deadline = new Date(matchSched.deadlineIsoString);
-      if (!isNaN(deadline.getTime())) {
-        return new Date() < deadline;
+    // Si no se encuentra, buscar horario comodín TODOS o GENERAL
+    if (!matchSched) {
+      matchSched = this.schedules.find(
+        s => s.jornada === jornada && (s.realTeam.toUpperCase() === 'TODOS' || s.realTeam.toUpperCase() === 'GENERAL')
+      );
+    }
+
+    if (!matchSched) {
+      return { hasSchedule: false, isOpen: true };
+    }
+
+    let targetYear: number | null = null;
+    let targetMonth: number | null = null;
+    let targetDay: number | null = null;
+    let targetHours = 0;
+    let targetMinutes = 0;
+
+    if (matchSched.deadlineIsoString) {
+      const match = matchSched.deadlineIsoString.match(/([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})/);
+      if (match) {
+        targetYear = parseInt(match[1], 10);
+        targetMonth = parseInt(match[2], 10);
+        targetDay = parseInt(match[3], 10);
+        targetHours = parseInt(match[4], 10);
+        targetMinutes = parseInt(match[5], 10);
       }
     }
 
-    return true;
+    if (targetYear === null && matchSched.fecha) {
+      const matchF = matchSched.fecha.match(/([0-9]{1,4})[-/]([0-9]{1,2})[-/]([0-9]{1,4})/);
+      if (matchF) {
+        if (parseInt(matchF[1], 10) > 31) {
+          targetYear = parseInt(matchF[1], 10);
+          targetMonth = parseInt(matchF[2], 10);
+          targetDay = parseInt(matchF[3], 10);
+        } else {
+          targetDay = parseInt(matchF[1], 10);
+          targetMonth = parseInt(matchF[2], 10);
+          targetYear = parseInt(matchF[3], 10);
+        }
+      }
+      if (matchSched.hora) {
+        const matchH = matchSched.hora.match(/([0-9]{1,2})[:.h]([0-9]{2})/);
+        if (matchH) {
+          targetHours = parseInt(matchH[1], 10);
+          targetMinutes = parseInt(matchH[2], 10);
+        }
+      }
+    }
+
+    if (targetYear === null || targetMonth === null || targetDay === null) {
+      return { hasSchedule: false, isOpen: true, scheduleRecord: matchSched };
+    }
+
+    const pad = (n: number) => (n < 10 ? '0' : '') + n;
+    const fechaDisplay = matchSched.fecha || `${pad(targetDay)}/${pad(targetMonth)}/${targetYear}`;
+    const horaDisplay = matchSched.hora || `${pad(targetHours)}:${pad(targetMinutes)}h`;
+
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth() + 1;
+    const nowDay = now.getDate();
+    const nowHours = now.getHours();
+    const nowMinutes = now.getMinutes();
+
+    const nowDateNum = nowYear * 10000 + nowMonth * 100 + nowDay;
+    const targetDateNum = targetYear * 10000 + targetMonth * 100 + targetDay;
+
+    // Regla: "Si el fichaje es en una fecha posterior, el fichaje será invalido"
+    if (nowDateNum > targetDateNum) {
+      return {
+        hasSchedule: true,
+        isOpen: false,
+        reason: `El partido de ${matchSched.realTeam || realTeam} se disputó el ${fechaDisplay} a las ${horaDisplay} (fecha límite vencida).`,
+        fecha: fechaDisplay,
+        hora: horaDisplay,
+        scheduleRecord: matchSched
+      };
+    }
+
+    // Regla: "si es en la misma fecha pero posterior al horario indicado, el fichaje es inválido"
+    if (nowDateNum === targetDateNum) {
+      const nowTimeNum = nowHours * 60 + nowMinutes;
+      const targetTimeNum = targetHours * 60 + targetMinutes;
+      if (nowTimeNum >= targetTimeNum) {
+        return {
+          hasSchedule: true,
+          isOpen: false,
+          reason: `El partido de ${matchSched.realTeam || realTeam} ya ha comenzado hoy a las ${horaDisplay} (horario límite superado).`,
+          fecha: fechaDisplay,
+          hora: horaDisplay,
+          scheduleRecord: matchSched
+        };
+      }
+    }
+
+    // Regla: "Cada fichaje es individual y podrá hacerse antes del inicio del partido aun con la jornada en juego."
+    return {
+      hasSchedule: true,
+      isOpen: true,
+      fecha: fechaDisplay,
+      hora: horaDisplay,
+      scheduleRecord: matchSched
+    };
+  }
+
+  public isTeamOpenForJornada(jornada: number, realTeam: string): boolean {
+    const res = this.getTeamScheduleDeadline(jornada, realTeam);
+    return res.isOpen;
   }
 
   public getTeamLineupData(teamName: string, jornada: number): TeamLineupResponse {
@@ -2367,19 +2531,10 @@ class GasEngineService {
       return { success: false, message: 'Datos incompletos o lista de fichajes vacía.' };
     }
 
-    // 0. Validar si la jornada ya ha sido disputada
-    const jornadaCheck = this.isJornadaPlayed(jornada);
-    if (jornadaCheck.isPlayed) {
-      return {
-        success: false,
-        message: `Fichaje denegado: ${jornadaCheck.reason || `La Jornada ${jornada} ya ha sido disputada o su plazo límite ha vencido.`}`
-      };
-    }
-
     const playerMap = new Map(this.players.map(p => [p.name, p]));
     const currentLineupsForJornada = this.lineups.filter(l => l.jornada === jornada);
 
-    // 1. Validar integridad de la solicitud
+    // 1. Validar integridad de la solicitud y límite individual por equipo real según Horarios_Equipos
     const playersOutSet = new Set<string>();
     const playersInSet = new Set<string>();
 
@@ -2423,12 +2578,20 @@ class GasEngineService {
         return { success: false, message: `Error: No se pudo verificar el equipo de procedencia o destino para "${pOut}" o "${pIn}".` };
       }
 
-      if (!this.isTeamOpenForJornada(jornada, realTeamOut)) {
-        return { success: false, message: `Fichaje cancelado: El jugador "${pOut}" está bloqueado porque su equipo (${realTeamOut}) ya jugó o inició su partido en la Jornada ${jornada}.` };
+      const checkOut = this.getTeamScheduleDeadline(jornada, realTeamOut);
+      if (!checkOut.isOpen) {
+        return {
+          success: false,
+          message: `Fichaje cancelado: El jugador "${pOut}" (${realTeamOut}) no se puede transferir. ${checkOut.reason || 'El partido de su equipo ya ha comenzado o su fecha límite ha vencido.'}`
+        };
       }
 
-      if (!this.isTeamOpenForJornada(jornada, realTeamIn)) {
-        return { success: false, message: `Fichaje cancelado: El jugador "${pIn}" está bloqueado porque su equipo (${realTeamIn}) ya jugó o inició su partido en la Jornada ${jornada}.` };
+      const checkIn = this.getTeamScheduleDeadline(jornada, realTeamIn);
+      if (!checkIn.isOpen) {
+        return {
+          success: false,
+          message: `Fichaje cancelado: El jugador "${pIn}" (${realTeamIn}) no se puede transferir. ${checkIn.reason || 'El partido de su equipo ya ha comenzado o su fecha límite ha vencido.'}`
+        };
       }
     }
 
@@ -2507,12 +2670,18 @@ class GasEngineService {
 
     if (targetGasUrl) {
       try {
+        const enrichedTransfers = transfers.map(t => ({
+          ...t,
+          realTeamOut: this.getRealTeamOfPlayer(t.playerOut),
+          realTeamIn: this.getRealTeamOfPlayer(t.playerIn)
+        }));
+
         const gasRes = await this.executeGasAction({
           action: 'transfer',
           team: teamName,
           token: token,
           jornada: Number(jornada),
-          transfers: transfers,
+          transfers: enrichedTransfers,
           requestId
         });
         if (gasRes.outdatedScript) {
@@ -2521,12 +2690,19 @@ class GasEngineService {
         } else if (gasRes.success) {
           gasMessage = ' ✅ Sincronizado en tiempo real en Google Sheets.';
         } else {
-          // Si Google Sheets rechaza explícitamente (ej: jornada disputada o token no autorizado)
+          // Si Google Sheets rechaza explícitamente (ej: partido comenzado, fecha posterior, o token no autorizado)
           if (gasRes.message && (
             gasRes.message.includes('denegado') ||
             gasRes.message.includes('incorrecto') ||
             gasRes.message.includes('no autorizado') ||
             gasRes.message.includes('disputada') ||
+            gasRes.message.includes('no permitido') ||
+            gasRes.message.includes('inválido') ||
+            gasRes.message.includes('invalido') ||
+            gasRes.message.includes('partido') ||
+            gasRes.message.includes('comenzado') ||
+            gasRes.message.includes('horario') ||
+            gasRes.message.includes('fecha límite') ||
             gasRes.message.includes('Token') ||
             gasRes.message.includes('cerrada')
           )) {

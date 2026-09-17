@@ -551,6 +551,8 @@ function doGet(e) {
         }
         var reqId = (e && e.parameter && e.parameter.requestId) ? e.parameter.requestId : '';
         result = processMultipleTransfers(e.parameter.team, e.parameter.token, Number(e.parameter.jornada), trList, reqId);
+      } else if (action === 'getHorarios' || action === 'getSchedules' || action === 'getHorariosEquipos') {
+        result = { success: true, data: getHorariosEquipos(ss), schedules: getHorariosEquipos(ss) };
       } else if (action === 'getDraftOrder') {
         var sDraftOrder = ss.getSheetByName('Draft') || findSheet(ss, ['Orden_Draft', 'Orden Draft', 'Draft_Orden']);
         result = { success: true, data: getDraftOrderFromSheet(sDraftOrder) };
@@ -844,6 +846,317 @@ function findSheet(ss, candidates) {
     }
   }
   return null;
+}
+
+/**
+ * Canonicaliza el nombre de un equipo real para emparejar abreviaturas y nombres completos
+ */
+function canonicalizeRealTeam(team) {
+  if (!team) return '';
+  var clean = String(team).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  var aliases = {
+    'real madrid': 'RMA', 'madrid': 'RMA', 'rma': 'RMA',
+    'barcelona': 'BAR', 'fc barcelona': 'BAR', 'barca': 'BAR', 'bar': 'BAR',
+    'atletico de madrid': 'ATM', 'atletico': 'ATM', 'atm': 'ATM',
+    'athletic club': 'ATH', 'athletic': 'ATH', 'bilbao': 'ATH', 'ath': 'ATH',
+    'villarreal': 'VIL', 'vil': 'VIL',
+    'real betis': 'BET', 'betis': 'BET', 'bet': 'BET',
+    'real sociedad': 'RSO', 'la real': 'RSO', 'sociedad': 'RSO', 'rso': 'RSO',
+    'sevilla': 'SEV', 'sevilla fc': 'SEV', 'sev': 'SEV',
+    'celta de vigo': 'CEL', 'celta': 'CEL', 'cel': 'CEL',
+    'valencia': 'VAL', 'valencia cf': 'VAL', 'val': 'VAL',
+    'osasuna': 'OSA', 'ca osasuna': 'OSA', 'osa': 'OSA',
+    'rayo vallecano': 'RAY', 'rayo': 'RAY', 'ray': 'RAY',
+    'espanyol': 'ESP', 'rcd espanyol': 'ESP', 'esp': 'ESP',
+    'girona': 'GIR', 'girona fc': 'GIR', 'gir': 'GIR',
+    'leganes': 'LEG', 'cd leganes': 'LEG', 'leg': 'LEG',
+    'alaves': 'ALV', 'deportivo alaves': 'ALV', 'alv': 'ALV',
+    'mallorca': 'MLL', 'rcd mallorca': 'MLL', 'mll': 'MLL',
+    'las palmas': 'LPA', 'ud las palmas': 'LPA', 'lpa': 'LPA',
+    'getafe': 'GET', 'getafe cf': 'GET', 'get': 'GET',
+    'valladolid': 'VLD', 'real valladolid': 'VLD', 'vld': 'VLD', 'vll': 'VLD'
+  };
+  return aliases[clean] || clean.toUpperCase();
+}
+
+/**
+ * Parser de fecha y hora para celdas de Google Sheets
+ */
+function parseSheetDateTime(rawCombined, rawFecha, rawHora, tz) {
+  var year = null, month = null, day = null, hours = 0, minutes = 0;
+
+  if (rawCombined) {
+    if (rawCombined instanceof Date) {
+      year = rawCombined.getFullYear();
+      month = rawCombined.getMonth() + 1;
+      day = rawCombined.getDate();
+      hours = rawCombined.getHours();
+      minutes = rawCombined.getMinutes();
+    } else {
+      var strC = String(rawCombined).trim();
+      var mC = strC.match(/([0-9]{1,4})[-/]([0-9]{1,2})[-/]([0-9]{1,4})[,\sT]+([0-9]{1,2})[:.h]([0-9]{2})/);
+      if (mC) {
+        if (parseInt(mC[1], 10) > 31) {
+          year = parseInt(mC[1], 10);
+          month = parseInt(mC[2], 10);
+          day = parseInt(mC[3], 10);
+        } else {
+          day = parseInt(mC[1], 10);
+          month = parseInt(mC[2], 10);
+          year = parseInt(mC[3], 10);
+        }
+        hours = parseInt(mC[4], 10);
+        minutes = parseInt(mC[5], 10);
+      }
+    }
+  }
+
+  if (year === null && rawFecha) {
+    if (rawFecha instanceof Date) {
+      year = rawFecha.getFullYear();
+      month = rawFecha.getMonth() + 1;
+      day = rawFecha.getDate();
+      if (rawFecha.getHours() !== 0 || rawFecha.getMinutes() !== 0) {
+        hours = rawFecha.getHours();
+        minutes = rawFecha.getMinutes();
+      }
+    } else {
+      var strF = String(rawFecha).trim();
+      var mF = strF.match(/([0-9]{1,4})[-/]([0-9]{1,2})[-/]([0-9]{1,4})/);
+      if (mF) {
+        if (parseInt(mF[1], 10) > 31) {
+          year = parseInt(mF[1], 10);
+          month = parseInt(mF[2], 10);
+          day = parseInt(mF[3], 10);
+        } else {
+          day = parseInt(mF[1], 10);
+          month = parseInt(mF[2], 10);
+          year = parseInt(mF[3], 10);
+        }
+      }
+    }
+
+    if (rawHora) {
+      if (rawHora instanceof Date) {
+        hours = rawHora.getHours();
+        minutes = rawHora.getMinutes();
+      } else {
+        var strH = String(rawHora).trim();
+        var mH = strH.match(/([0-9]{1,2})[:.h]([0-9]{2})/);
+        if (mH) {
+          hours = parseInt(mH[1], 10);
+          minutes = parseInt(mH[2], 10);
+        }
+      }
+    }
+  }
+
+  if (year === null || month === null || day === null) {
+    return null;
+  }
+
+  var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+  var isoStr = year + '-' + pad(month) + '-' + pad(day) + 'T' + pad(hours) + ':' + pad(minutes);
+  var fechaFormatted = pad(day) + '/' + pad(month) + '/' + year;
+  var horaFormatted = pad(hours) + ':' + pad(minutes);
+
+  return {
+    isoString: isoStr,
+    fechaFormatted: fechaFormatted,
+    horaFormatted: horaFormatted,
+    year: year,
+    month: month,
+    day: day,
+    hours: hours,
+    minutes: minutes
+  };
+}
+
+/**
+ * Lee la pestaña Horarios_Equipos de Google Sheets y devuelve los límites de cada equipo y jornada
+ */
+function getHorariosEquipos(ss) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetHorarios = findSheet(ss, [
+    'Horarios_Equipos',
+    'Horarios Equipos',
+    'Horarios_Partidos',
+    'Horarios Partidos',
+    'HorariosEquipos',
+    'Horarios',
+    'Calendario',
+    'Partidos'
+  ]);
+  if (!sheetHorarios) return [];
+
+  var data = sheetHorarios.getDataRange().getValues();
+  if (data.length <= 1) return [];
+
+  var headerRowIdx = 0;
+  for (var hr = 0; hr < Math.min(5, data.length); hr++) {
+    var rowStr = data[hr].join(' ').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (rowStr.indexOf('jornada') !== -1 || rowStr.indexOf('equipo') !== -1 || rowStr.indexOf('fecha') !== -1 || rowStr.indexOf('hora') !== -1) {
+      headerRowIdx = hr;
+      break;
+    }
+  }
+
+  var headers = data[headerRowIdx].map(function(h) {
+    return String(h || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  });
+
+  var colJor = -1, colTeam = -1, colFecha = -1, colHora = -1, colFechaHora = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var h = headers[c];
+    if (h.indexOf('jornada') !== -1 || h === 'jor' || h === 'j') {
+      colJor = c;
+    } else if (h.indexOf('equipo') !== -1 || h === 'club' || h === 'team' || h === 'real') {
+      colTeam = c;
+    } else if (h.indexOf('fecha_hora') !== -1 || h.indexOf('fechahora') !== -1 || h.indexOf('fecha y hora') !== -1 || h.indexOf('fecha/hora') !== -1 || h.indexOf('deadline') !== -1 || h.indexOf('limite') !== -1) {
+      colFechaHora = c;
+    } else if (h.indexOf('fecha') !== -1 || h.indexOf('dia') !== -1 || h.indexOf('date') !== -1) {
+      colFecha = c;
+    } else if (h.indexOf('hora') !== -1 || h.indexOf('time') !== -1 || h.indexOf('horario') !== -1 || h.indexOf('inicio') !== -1) {
+      colHora = c;
+    }
+  }
+
+  if (colJor === -1) colJor = 0;
+  if (colTeam === -1) colTeam = 1;
+  if (colFechaHora === -1 && colFecha === -1) colFecha = 2;
+  if (colFechaHora === -1 && colHora === -1 && headers.length > 3) colHora = 3;
+
+  var schedules = [];
+  var tz = Session.getScriptTimeZone() || 'Europe/Madrid';
+
+  for (var r = headerRowIdx + 1; r < data.length; r++) {
+    var row = data[r];
+    var jVal = colJor !== -1 ? Number(row[colJor]) : 0;
+    var tVal = colTeam !== -1 && row[colTeam] !== undefined ? String(row[colTeam]).trim() : '';
+    if (!tVal && !jVal) continue;
+
+    var rawFechaHora = colFechaHora !== -1 ? row[colFechaHora] : null;
+    var rawFecha = colFecha !== -1 ? row[colFecha] : null;
+    var rawHora = colHora !== -1 ? row[colHora] : null;
+
+    var parsed = parseSheetDateTime(rawFechaHora, rawFecha, rawHora, tz);
+    if (parsed) {
+      schedules.push({
+        jornada: isNaN(jVal) ? 1 : jVal,
+        realTeam: tVal,
+        deadlineIsoString: parsed.isoString,
+        fecha: parsed.fechaFormatted,
+        hora: parsed.horaFormatted,
+        year: parsed.year,
+        month: parsed.month,
+        day: parsed.day,
+        hours: parsed.hours,
+        minutes: parsed.minutes
+      });
+    }
+  }
+
+  return schedules;
+}
+
+/**
+ * Valida si un equipo está en plazo para realizar un fichaje según Horarios_Equipos
+ * Regla de negocio:
+ * 1. Fichaje en fecha posterior a la del partido -> INVÁLIDO
+ * 2. Fichaje en la misma fecha pero posterior al horario indicado -> INVÁLIDO
+ * 3. Fichaje antes del inicio del partido -> VÁLIDO (incluso con la jornada en juego)
+ */
+function validateTeamScheduleDeadline(jornada, realTeam, schedules) {
+  if (!realTeam) return { isOpen: true };
+  if (!schedules || schedules.length === 0) return { isOpen: true };
+
+  var normTarget = canonicalizeRealTeam(realTeam);
+  
+  var sched = null;
+  for (var s = 0; s < schedules.length; s++) {
+    var sc = schedules[s];
+    if (Number(sc.jornada) === Number(jornada)) {
+      if (canonicalizeRealTeam(sc.realTeam) === normTarget) {
+        sched = sc;
+        break;
+      }
+    }
+  }
+
+  if (!sched) {
+    for (var s2 = 0; s2 < schedules.length; s2++) {
+      var sc2 = schedules[s2];
+      if (Number(sc2.jornada) === Number(jornada) && (String(sc2.realTeam).toUpperCase() === 'TODOS' || String(sc2.realTeam).toUpperCase() === 'GENERAL')) {
+        sched = sc2;
+        break;
+      }
+    }
+    if (!sched) return { isOpen: true };
+  }
+
+  var tz = Session.getScriptTimeZone() || 'Europe/Madrid';
+  var now = new Date();
+  
+  var nowYear = parseInt(Utilities.formatDate(now, tz, 'yyyy'), 10);
+  var nowMonth = parseInt(Utilities.formatDate(now, tz, 'MM'), 10);
+  var nowDay = parseInt(Utilities.formatDate(now, tz, 'dd'), 10);
+  var nowHours = parseInt(Utilities.formatDate(now, tz, 'HH'), 10);
+  var nowMinutes = parseInt(Utilities.formatDate(now, tz, 'mm'), 10);
+
+  var schedYear = sched.year;
+  var schedMonth = sched.month;
+  var schedDay = sched.day;
+  var schedHours = sched.hours !== undefined ? sched.hours : 0;
+  var schedMinutes = sched.minutes !== undefined ? sched.minutes : 0;
+
+  if (!schedYear && sched.deadlineIsoString) {
+    var mIso = String(sched.deadlineIsoString).match(/([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})/);
+    if (mIso) {
+      schedYear = parseInt(mIso[1], 10);
+      schedMonth = parseInt(mIso[2], 10);
+      schedDay = parseInt(mIso[3], 10);
+      schedHours = parseInt(mIso[4], 10);
+      schedMinutes = parseInt(mIso[5], 10);
+    }
+  }
+
+  if (!schedYear || !schedMonth || !schedDay) {
+    return { isOpen: true };
+  }
+
+  var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+  var fechaDisplay = sched.fecha || (pad(schedDay) + '/' + pad(schedMonth) + '/' + schedYear);
+  var horaDisplay = sched.hora || (pad(schedHours) + ':' + pad(schedMinutes) + 'h');
+
+  var nowDateNum = nowYear * 10000 + nowMonth * 100 + nowDay;
+  var schedDateNum = schedYear * 10000 + schedMonth * 100 + schedDay;
+
+  // Si la fecha actual es posterior a la del partido -> INVÁLIDO
+  if (nowDateNum > schedDateNum) {
+    return {
+      isOpen: false,
+      reason: 'El partido de ' + (sched.realTeam || realTeam) + ' se disputó el ' + fechaDisplay + ' a las ' + horaDisplay + ' (fecha límite vencida).'
+    };
+  }
+
+  // Si es la misma fecha pero posterior al horario del partido -> INVÁLIDO
+  if (nowDateNum === schedDateNum) {
+    var nowTimeNum = nowHours * 60 + nowMinutes;
+    var schedTimeNum = schedHours * 60 + schedMinutes;
+    if (nowTimeNum >= schedTimeNum) {
+      return {
+        isOpen: false,
+        reason: 'El partido de ' + (sched.realTeam || realTeam) + ' ya ha comenzado hoy a las ' + horaDisplay + ' (horario límite superado).'
+      };
+    }
+  }
+
+  return {
+    isOpen: true,
+    sched: sched,
+    fechaDisplay: fechaDisplay,
+    horaDisplay: horaDisplay
+  };
 }
 
 /**
@@ -1256,6 +1569,9 @@ function getFullSyncData() {
     });
   }
 
+  // 7. Horarios por Equipo para validación de fichajes (Pestaña Horarios_Equipos)
+  var schedules = getHorariosEquipos(ss);
+
   return {
     success: true,
     maxJornada: maxJ,
@@ -1266,6 +1582,8 @@ function getFullSyncData() {
     transfers: transfers,
     drafts: drafts,
     draftOrder: draftOrder,
+    schedules: schedules,
+    horarios: schedules,
     syncedAt: new Date().toISOString()
   };
 }
@@ -1979,36 +2297,42 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // 1. Validar si la jornada ya ha sido disputada (comprobando si existen puntuaciones oficiales en la hoja Jugadores)
-  var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
-  if (sheetJug) {
-    var jData = sheetJug.getDataRange().getValues();
-    if (jData.length > 0) {
-      var headerRow = jData[0];
-      var puntosColIdx = -1;
-      for (var c = 0; c < headerRow.length; c++) {
-        var hStr = String(headerRow[c] || '').trim().toLowerCase();
-        if (hStr === 'puntos_j' + jornada || hStr === 'j' + jornada || hStr === 'puntos j' + jornada || hStr === 'pts_j' + jornada) {
-          puntosColIdx = c;
-          break;
-        }
-      }
-      if (puntosColIdx !== -1) {
-        var hasScores = false;
-        for (var r = 1; r < jData.length; r++) {
-          var val = jData[r][puntosColIdx];
-          if (val !== '' && val !== null && !isNaN(Number(val)) && Number(val) > 0) {
-            hasScores = true;
-            break;
-          }
-        }
-        if (hasScores) {
-          return {
-            success: false,
-            message: 'Fichaje denegado: La Jornada ' + jornada + ' ya ha sido disputada (cuenta con puntuaciones oficiales registradas).'
-          };
-        }
-      }
+  // 1. Validación individual de fichajes según la fecha y hora de Horarios_Equipos para los equipos implicados
+  var schedules = getHorariosEquipos(ss);
+  var market = getPlayersForMercado();
+  var playerTeamMap = {};
+  for (var mi = 0; mi < market.length; mi++) {
+    var mp = market[mi];
+    if (mp && mp.name) {
+      playerTeamMap[String(mp.name).toLowerCase().trim()] = mp.realTeam || '';
+    }
+  }
+
+  for (var v = 0; v < transfers.length; v++) {
+    var tr = transfers[v];
+    var pOut = String(tr.playerOut || '').trim();
+    var pIn = String(tr.playerIn || '').trim();
+    if (!pOut || !pIn) continue;
+
+    var realOut = tr.realTeamOut || playerTeamMap[pOut.toLowerCase()] || '';
+    var realIn = tr.realTeamIn || playerTeamMap[pIn.toLowerCase()] || '';
+
+    // Validar equipo del jugador saliente
+    var checkOut = validateTeamScheduleDeadline(jornada, realOut, schedules);
+    if (!checkOut.isOpen) {
+      return {
+        success: false,
+        message: 'Fichaje no permitido (' + pOut + ' por ' + pIn + '): ' + checkOut.reason
+      };
+    }
+
+    // Validar equipo del jugador entrante
+    var checkIn = validateTeamScheduleDeadline(jornada, realIn, schedules);
+    if (!checkIn.isOpen) {
+      return {
+        success: false,
+        message: 'Fichaje no permitido (' + pOut + ' por ' + pIn + '): ' + checkIn.reason
+      };
     }
   }
 
