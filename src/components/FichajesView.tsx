@@ -45,15 +45,23 @@ export const FichajesView: React.FC = () => {
   useEffect(() => {
     const refreshData = () => {
       const teamList = gasEngine.getTeamNames();
-      const maxJ = gasEngine.getMaxJornada();
+      const openJ = gasEngine.getNextOpenJornada();
       setTeams(teamList);
-      setSelectedJornada(prev => prev || maxJ || 5);
+      setSelectedJornada(prev => {
+        // Si no hay seleccionada o la seleccionada ya está jugada, sugerir la siguiente abierta
+        if (!prev || gasEngine.isJornadaPlayed(prev).isPlayed) {
+          return openJ || 1;
+        }
+        return prev;
+      });
       setTransferHistory(gasEngine.getTransferHistory());
     };
     refreshData();
     const unsub = gasEngine.subscribe(refreshData);
     return () => unsub();
   }, []);
+
+  const selectedJornadaCheck = gasEngine.isJornadaPlayed(selectedJornada);
 
   useEffect(() => {
     const j = selectedJornada || 5;
@@ -216,23 +224,54 @@ export const FichajesView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">
-                Jornada para el Fichaje
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                  Jornada para el Fichaje
+                </label>
+                {selectedJornadaCheck.isPlayed && (
+                  <span className="text-[10px] font-bold text-rose-400 bg-rose-950/60 border border-rose-500/30 px-2 py-0.5 rounded-md">
+                    Cerrada / Disputada
+                  </span>
+                )}
+              </div>
               <select
                 value={selectedJornada}
                 onChange={(e) => setSelectedJornada(parseInt(e.target.value, 10))}
                 required
                 disabled={isLoading}
-                className="w-full bg-slate-950 border border-slate-700 text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition font-mono cursor-pointer"
+                className={`w-full bg-slate-950 border text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none transition font-mono cursor-pointer ${
+                  selectedJornadaCheck.isPlayed
+                    ? 'border-rose-500/50 bg-rose-950/20 text-rose-200 focus:border-rose-400'
+                    : 'border-slate-700 focus:border-amber-500'
+                }`}
               >
                 <option value="">-- Selecciona Jornada --</option>
-                {Array.from({ length: 38 }, (_, i) => i + 1).map(j => (
-                  <option key={`fich-jornada-${j}`} value={j}>Jornada {j}</option>
-                ))}
+                {Array.from({ length: 38 }, (_, i) => i + 1).map(j => {
+                  const check = gasEngine.isJornadaPlayed(j);
+                  return (
+                    <option key={`fich-jornada-${j}`} value={j}>
+                      Jornada {j}{check.isPlayed ? ' (Cerrada)' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
+
+          {/* Aviso si la jornada seleccionada ya está jugada */}
+          {selectedJornadaCheck.isPlayed && (
+            <div className="bg-rose-950/40 border border-rose-500/40 rounded-xl p-3.5 flex items-start gap-3 text-rose-300">
+              <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-black text-rose-200 uppercase tracking-wider">
+                  Jornada {selectedJornada} no disponible para fichajes
+                </p>
+                <p className="text-slate-300">
+                  {selectedJornadaCheck.reason || 'Esta jornada ya ha sido disputada o su plazo límite ha vencido. Por favor selecciona una jornada abierta.'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Dynamic Transfer Slots */}
           <div className="space-y-4 pt-2">
@@ -443,11 +482,15 @@ export const FichajesView: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800">
             <button
               type="submit"
-              disabled={isLoading || !selectedTeam}
-              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider py-3 px-8 rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              disabled={isLoading || !selectedTeam || selectedJornadaCheck.isPlayed}
+              className={`w-full sm:w-auto font-black text-xs uppercase tracking-wider py-3 px-8 rounded-xl shadow-lg transition flex items-center justify-center gap-2 ${
+                selectedJornadaCheck.isPlayed
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                  : 'bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer disabled:opacity-50'
+              }`}
             >
               <ArrowLeftRight className="w-4 h-4" />
-              <span>Realizar Fichaje(s)</span>
+              <span>{selectedJornadaCheck.isPlayed ? 'Jornada Cerrada' : 'Realizar Fichaje(s)'}</span>
             </button>
 
             {statusMessage && (

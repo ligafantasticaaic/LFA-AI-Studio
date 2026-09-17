@@ -53,6 +53,7 @@ async function startServer() {
         directTelegram: false
       },
       draftOrder: [],
+      schedules: [],
       isDraftHidden: false,
       updatedAt: null,
       updatedBy: 'system'
@@ -72,6 +73,7 @@ async function startServer() {
             },
             customCodeGs: typeof parsed.customCodeGs === 'string' ? parsed.customCodeGs : defaults.customCodeGs,
             draftOrder: Array.isArray(parsed.draftOrder) ? parsed.draftOrder : defaults.draftOrder,
+            schedules: Array.isArray(parsed.schedules) ? parsed.schedules : (defaults.schedules || []),
             isDraftHidden: typeof parsed.isDraftHidden === 'boolean' ? parsed.isDraftHidden : defaults.isDraftHidden,
             notificationConfig: {
               ...defaults.notificationConfig,
@@ -118,6 +120,9 @@ async function startServer() {
       draftOrder: Array.isArray(newValues.draftOrder)
         ? newValues.draftOrder
         : current.draftOrder || [],
+      schedules: Array.isArray(newValues.schedules)
+        ? newValues.schedules
+        : (current.schedules || []),
       isDraftHidden: typeof newValues.isDraftHidden === 'boolean'
         ? newValues.isDraftHidden
         : current.isDraftHidden ?? false,
@@ -334,7 +339,7 @@ async function startServer() {
 
   // POST /api/gas-action - Ejecuta mutaciones en tiempo real en Google Sheets (Draft, Fichajes, Orden Draft)
   app.post('/api/gas-action', async (req, res) => {
-    const { action, team, token, player, jornada, transfers, draftOrder, customGasUrl } = req.body || {};
+    const { action, team, token, player, jornada, transfers, draftOrder, customGasUrl, requestId } = req.body || {};
     const config = getGasConfig();
     const targetUrl = (customGasUrl || config.gasUrl || '').trim();
 
@@ -353,6 +358,7 @@ async function startServer() {
       if (token) url.searchParams.set('token', String(token));
       if (player) url.searchParams.set('player', String(player));
       if (jornada !== undefined) url.searchParams.set('jornada', String(jornada));
+      if (requestId) url.searchParams.set('requestId', String(requestId));
       if (transfers !== undefined) {
         url.searchParams.set('transfers', typeof transfers === 'string' ? transfers : JSON.stringify(transfers));
       }
@@ -361,10 +367,10 @@ async function startServer() {
       }
       url.searchParams.set('_t', String(Date.now()));
 
-      console.log(`[gas-action] Enviando acción "${action}" a Apps Script: ${targetUrl}`);
+      console.log(`[gas-action] Enviando acción "${action}" (req: ${requestId || 'none'}) a Apps Script: ${targetUrl}`);
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 35000);
+      const timeout = setTimeout(() => controller.abort(), 60000);
 
       const response = await fetch(url.toString(), {
         method: 'GET',
@@ -406,10 +412,14 @@ async function startServer() {
       });
     } catch (err: any) {
       console.error('[gas-action] Error al comunicar con Google Apps Script:', err);
-      return res.status(500).json({
+      const isTimeout = err?.name === 'AbortError' || String(err?.message || '').includes('aborted');
+      return res.status(200).json({
         success: false,
-        error: err?.message || 'NETWORK_ERROR',
-        message: 'No se pudo conectar con la Web App de Google Apps Script: ' + (err?.message || 'Error de red')
+        isTimeout: isTimeout,
+        error: isTimeout ? 'TIMEOUT_GAS' : (err?.message || 'NETWORK_ERROR'),
+        message: isTimeout
+          ? 'Google Sheets tardó en responder más de 60 segundos. Si la hoja ya se actualizó, la acción fue completada.'
+          : ('No se pudo conectar con la Web App de Google Apps Script: ' + (err?.message || 'Error de red'))
       });
     }
   });

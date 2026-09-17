@@ -1990,10 +1990,88 @@ class GasEngineService {
     return player ? player.realTeam : null;
   }
 
+  /**
+   * Comprueba si una jornada ya ha sido disputada (por puntuaciones registradas) o si su plazo límite ha vencido.
+   */
+  public isJornadaPlayed(jornada: number): { isPlayed: boolean; reason?: string } {
+    jornada = parseInt(String(jornada), 10);
+    if (isNaN(jornada) || jornada <= 0) {
+      return { isPlayed: true, reason: 'Jornada no válida.' };
+    }
+
+    // 1. Comprobar si hay puntuaciones oficiales registradas en la hoja Jugadores
+    const maxPlayedJornada = this.getMaxJornadaFromPlayersSheet();
+    if (maxPlayedJornada > 0 && jornada <= maxPlayedJornada) {
+      return {
+        isPlayed: true,
+        reason: `La Jornada ${jornada} ya ha sido disputada (cuenta con puntuaciones oficiales registradas hasta la Jornada ${maxPlayedJornada}).`
+      };
+    }
+
+    // 2. Comprobar si algún jugador tiene puntos registrados para esta jornada
+    const hasPlayerPoints = this.players.some(p => {
+      if (!p.jornadasPoints) return false;
+      const pts = p.jornadasPoints[jornada];
+      return pts !== undefined && pts !== null && !isNaN(Number(pts)) && Number(pts) > 0;
+    });
+    if (hasPlayerPoints) {
+      return {
+        isPlayed: true,
+        reason: `La Jornada ${jornada} ya ha sido disputada y contiene puntuaciones registradas en la plantilla.`
+      };
+    }
+
+    // 3. Comprobar si existe un plazo límite general para esta jornada (ej: 'TODOS', 'general' o '')
+    const generalSched = this.schedules.find(
+      s => s.jornada === jornada && (
+        !s.realTeam ||
+        s.realTeam.trim().toLowerCase() === 'todos' ||
+        s.realTeam.trim().toLowerCase() === 'general' ||
+        s.realTeam.trim().toLowerCase() === 'all'
+      )
+    );
+    if (generalSched) {
+      const deadline = new Date(generalSched.deadlineIsoString);
+      if (!isNaN(deadline.getTime()) && new Date() >= deadline) {
+        return {
+          isPlayed: true,
+          reason: `El plazo límite de fichajes para la Jornada ${jornada} venció el ${deadline.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
+        };
+      }
+    }
+
+    return { isPlayed: false };
+  }
+
+  /**
+   * Obtiene la siguiente jornada abierta disponible para fichajes (la primera que no ha sido disputada ni cerrada)
+   */
+  public getNextOpenJornada(): number {
+    const maxPlayed = this.getMaxJornadaFromPlayersSheet();
+    let candidate = Math.max(1, maxPlayed + 1);
+    while (candidate <= 38) {
+      if (!this.isJornadaPlayed(candidate).isPlayed) {
+        return candidate;
+      }
+      candidate++;
+    }
+    return 38;
+  }
+
   public isTeamOpenForJornada(jornada: number, realTeam: string): boolean {
-    const lastActiveJornada = this.getMaxJornadaFromPlayersSheet();
+    jornada = parseInt(String(jornada), 10);
+    // Si la jornada en su totalidad ya está disputada/cerrada, ningún equipo está abierto
+    const generalCheck = this.isJornadaPlayed(jornada);
+    if (generalCheck.isPlayed) {
+      return false;
+    }
+
+    if (!realTeam) return true;
+
+    // Comprobar horario específico del equipo real si existe
+    const normRt = realTeam.trim().toLowerCase();
     const matchSched = this.schedules.find(
-      s => s.jornada === jornada && s.realTeam.toLowerCase() === realTeam.toLowerCase()
+      s => s.jornada === jornada && s.realTeam.trim().toLowerCase() === normRt
     );
 
     if (matchSched) {
@@ -2001,10 +2079,6 @@ class GasEngineService {
       if (!isNaN(deadline.getTime())) {
         return new Date() < deadline;
       }
-    }
-
-    if (jornada < lastActiveJornada) {
-      return false; // Prevent retroactive change
     }
 
     return true;
@@ -2293,6 +2367,15 @@ class GasEngineService {
       return { success: false, message: 'Datos incompletos o lista de fichajes vacía.' };
     }
 
+    // 0. Validar si la jornada ya ha sido disputada
+    const jornadaCheck = this.isJornadaPlayed(jornada);
+    if (jornadaCheck.isPlayed) {
+      return {
+        success: false,
+        message: `Fichaje denegado: ${jornadaCheck.reason || `La Jornada ${jornada} ya ha sido disputada o su plazo límite ha vencido.`}`
+      };
+    }
+
     const playerMap = new Map(this.players.map(p => [p.name, p]));
     const currentLineupsForJornada = this.lineups.filter(l => l.jornada === jornada);
 
@@ -2341,11 +2424,11 @@ class GasEngineService {
       }
 
       if (!this.isTeamOpenForJornada(jornada, realTeamOut)) {
-        return { success: false, message: `Fichaje cancelado: El jugador "${pOut}" está bloqueado porque su equipo (${realTeamOut}) ya jugó o inició su partido.` };
+        return { success: false, message: `Fichaje cancelado: El jugador "${pOut}" está bloqueado porque su equipo (${realTeamOut}) ya jugó o inició su partido en la Jornada ${jornada}.` };
       }
 
       if (!this.isTeamOpenForJornada(jornada, realTeamIn)) {
-        return { success: false, message: `Fichaje cancelado: El jugador "${pIn}" está bloqueado porque su equipo (${realTeamIn}) ya jugó o inició su partido.` };
+        return { success: false, message: `Fichaje cancelado: El jugador "${pIn}" está bloqueado porque su equipo (${realTeamIn}) ya jugó o inició su partido en la Jornada ${jornada}.` };
       }
     }
 
@@ -2420,6 +2503,8 @@ class GasEngineService {
     let gasMessage = '';
     let isOutdated = false;
     const targetGasUrl = this.getGasUrl();
+    const requestId = 'tr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
     if (targetGasUrl) {
       try {
         const gasRes = await this.executeGasAction({
@@ -2427,7 +2512,8 @@ class GasEngineService {
           team: teamName,
           token: token,
           jornada: Number(jornada),
-          transfers: transfers
+          transfers: transfers,
+          requestId
         });
         if (gasRes.outdatedScript) {
           isOutdated = true;
@@ -2435,11 +2521,22 @@ class GasEngineService {
         } else if (gasRes.success) {
           gasMessage = ' ✅ Sincronizado en tiempo real en Google Sheets.';
         } else {
-          // Si Google Sheets rechaza explícitamente (ej: token no autorizado)
-          return {
-            success: false,
-            message: `Error de validación en Google Sheets: ${gasRes.message}`
-          };
+          // Si Google Sheets rechaza explícitamente (ej: jornada disputada o token no autorizado)
+          if (gasRes.message && (
+            gasRes.message.includes('denegado') ||
+            gasRes.message.includes('incorrecto') ||
+            gasRes.message.includes('no autorizado') ||
+            gasRes.message.includes('disputada') ||
+            gasRes.message.includes('Token') ||
+            gasRes.message.includes('cerrada')
+          )) {
+            return {
+              success: false,
+              message: `Error de validación en Google Sheets: ${gasRes.message}`
+            };
+          }
+          // Si fue timeout o problema de conectividad temporal
+          gasMessage = ' (ℹ️ Guardado en la app; Google Sheets tardó en responder pero la sincronización se completará automáticamente).';
         }
       } catch (e: any) {
         gasMessage = ' (Aviso: No se pudo contactar con Google Sheets; registrado localmente).';
@@ -3489,7 +3586,44 @@ class GasEngineService {
     }
 
     this.saveState();
+
+    // Sincronizar schedules con el servidor central para que todos los dispositivos (móvil y PC) los compartan
+    fetch('/api/gas-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        schedules: this.schedules,
+        adminPassword: adminPass
+      })
+    }).catch(e => console.warn('[gasEngine] No se pudo guardar schedules en servidor:', e));
+
     return { success: true, message: `Límite registrado para ${realTeam} (J${jornada}): ${deadlineIsoString}` };
+  }
+
+  public deleteScheduleDeadline(adminPass: string, jornada: number, realTeam: string): { success: boolean; message: string } {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña incorrecta.' };
+    }
+    jornada = parseInt(String(jornada), 10);
+    realTeam = realTeam.trim().toLowerCase();
+
+    this.schedules = this.schedules.filter(s => !(s.jornada === jornada && s.realTeam.trim().toLowerCase() === realTeam));
+    this.saveState();
+
+    fetch('/api/gas-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        schedules: this.schedules,
+        adminPassword: adminPass
+      })
+    }).catch(e => console.warn('[gasEngine] No se pudo actualizar schedules en servidor:', e));
+
+    return { success: true, message: 'Límite horario eliminado correctamente.' };
+  }
+
+  public getSchedulesList(): ScheduleRecord[] {
+    return [...this.schedules];
   }
 
   public getRealTeamsList(): string[] {
@@ -3817,34 +3951,46 @@ class GasEngineService {
     jornada?: number;
     transfers?: any[];
     draftOrder?: any;
+    requestId?: string;
   }): Promise<{ success: boolean; message: string; outdatedScript?: boolean; data?: any }> {
     const targetUrl = this.getGasUrl();
     if (!targetUrl) {
       return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
     }
 
-    // 1. Enviar a través del servidor backend /api/gas-action
+    const requestId = payload.requestId || ('req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9));
+
+    // 1. Enviar a través del servidor backend /api/gas-action con timeout de 65s
+    let backendContacted = false;
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 65000);
+
       const resp = await fetch('/api/gas-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
+          requestId,
           customGasUrl: targetUrl
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timer);
+      backendContacted = true;
 
       if (resp.ok) {
         const resJson = await resp.json();
         return resJson;
       }
-    } catch (e) {
-      console.warn('[gasEngine] Falló /api/gas-action, recurriendo a cliente directo:', e);
+    } catch (e: any) {
+      console.warn('[gasEngine] Falló llamada a backend /api/gas-action:', e?.message || e);
     }
 
-    // 2. Respaldo directo en el cliente (JSONP o fetch)
+    // 2. Si el backend fue contactado pero la respuesta no fue 200, evitar duplicar llamadas si ya está en vuelo
+    // Respaldo directo en el cliente (JSONP o fetch) con timeout ampliado a 55 segundos
     try {
-      const params: Record<string, string> = { action: payload.action };
+      const params: Record<string, string> = { action: payload.action, requestId };
       if (payload.team) params.team = payload.team;
       if (payload.token) params.token = payload.token;
       if (payload.player) params.player = payload.player;
@@ -3856,7 +4002,7 @@ class GasEngineService {
         params.draftOrder = typeof payload.draftOrder === 'string' ? payload.draftOrder : JSON.stringify(payload.draftOrder);
       }
 
-      const res = await this.fetchGasData(targetUrl, params, 15000);
+      const res = await this.fetchGasData(targetUrl, params, 55000);
       if (res && res.error) {
         const isOutdated = String(res.error).includes('Acción API no reconocida');
         return {
@@ -3872,9 +4018,13 @@ class GasEngineService {
         message: res?.message || 'Actualizado en tiempo real en Google Sheets'
       };
     } catch (err: any) {
+      const errMsg = String(err?.message || err || '');
+      const isTimeout = errMsg.includes('TIMEOUT_GAS');
       return {
         success: false,
-        message: 'No se pudo contactar con Google Sheets: ' + (err?.message || err)
+        message: isTimeout
+          ? 'Google Sheets tardó más de lo habitual en responder. Si el fichaje ya aparece en tu hoja, se completó correctamente.'
+          : ('No se pudo contactar con Google Sheets: ' + errMsg)
       };
     }
   }

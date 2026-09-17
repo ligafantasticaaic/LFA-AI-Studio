@@ -549,7 +549,8 @@ function doGet(e) {
         } catch(eTr) {
           trList = [];
         }
-        result = processMultipleTransfers(e.parameter.team, e.parameter.token, Number(e.parameter.jornada), trList);
+        var reqId = (e && e.parameter && e.parameter.requestId) ? e.parameter.requestId : '';
+        result = processMultipleTransfers(e.parameter.team, e.parameter.token, Number(e.parameter.jornada), trList, reqId);
       } else if (action === 'getDraftOrder') {
         var sDraftOrder = ss.getSheetByName('Draft') || findSheet(ss, ['Orden_Draft', 'Orden Draft', 'Draft_Orden']);
         result = { success: true, data: getDraftOrderFromSheet(sDraftOrder) };
@@ -612,7 +613,8 @@ function doPost(e) {
     if (action === 'draft') {
       result = processDraftSelection(postData.team, postData.token, postData.player);
     } else if (action === 'transfer' || action === 'fichaje' || action === 'fichajes' || action === 'transfers') {
-      result = processMultipleTransfers(postData.team, postData.token, postData.jornada, postData.transfers);
+      var reqId = postData.requestId || (e && e.parameter && e.parameter.requestId) || '';
+      result = processMultipleTransfers(postData.team, postData.token, postData.jornada, postData.transfers, reqId);
     } else if (action === 'saveDraftOrder') {
       result = saveDraftOrderToSheet(postData.draftOrder);
     } else if (action === 'resetSeason') {
@@ -1963,115 +1965,204 @@ function processDraftSelection(team, token, player) {
 }
 
 /**
- * Procesar fichajes múltiples
+ * Procesar fichajes múltiples con bloqueo de concurrencia y deduplicación exacta
  */
-function processMultipleTransfers(team, token, jornada, transfers) {
+function processMultipleTransfers(team, token, jornada, transfers, requestId) {
   if (!validateTeamToken(team, token)) {
     return { success: false, message: 'Token incorrecto o no autorizado para el equipo ' + team };
   }
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas']);
-  var sheetFichajes = findSheet(ss, [
-    'Historial_Fichajes',
-    'Historial de Fichajes',
-    'Historial del Fichaje',
-    'Historial Fichajes',
-    'Fichajes',
-    'Transfers',
-    'Fichaje',
-    'Mercado Fichajes'
-  ]);
-  
-  if (!sheetFichajes) {
-    sheetFichajes = ss.insertSheet('Historial_Fichajes');
-    sheetFichajes.appendRow(['Fecha/Hora', 'Equipo', 'Jornada', 'Jugador Sale', 'Jugador Entra', 'Coste', 'Tipo']);
-  }
-  
-  var market = getPlayersForMercado();
-  var marketMap = {};
-  market.forEach(function(m) { marketMap[m.name] = m; });
-  
-  var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
-  
-  var previousTransfers = getTransferHistory();
-  var teamNormalCount = previousTransfers.filter(function(t) { return t.team === team && t.type === 'Normal'; }).length;
-  
-  transfers.forEach(function(t) {
-    var pOut = t.playerOut;
-    var pIn = t.playerIn;
-    var isAbandon = !!t.isAbandonment;
-    var cost = 0;
-    var type = isAbandon ? 'Abandono' : 'Normal';
-    
-    if (!isAbandon) {
-      if (teamNormalCount >= FREE_TRANSFERS_PER_TEAM) {
-        cost = TRANSFER_COST;
-      }
-      teamNormalCount++;
-    }
-    
-    // Evitar duplicar la fila en Historial_Fichajes si ya se insertó en el mismo minuto
-    var isDuplicate = previousTransfers.some(function(pt) {
-      return pt.team === team &&
-             Number(pt.jornada) === Number(jornada) &&
-             pt.playerOut === pOut &&
-             pt.playerIn === pIn &&
-             pt.timestamp === nowStr;
-    });
 
-    if (!isDuplicate) {
-      sheetFichajes.appendRow([nowStr, team, jornada, pOut, pIn, cost, type]);
-    }
-    
-    // Disparar aviso automático a Telegram y GitHub Actions
-    try {
-      enviarAvisoTelegramYGitHub(team, pIn, pOut, cost, jornada, type);
-    } catch(errAviso) {
-      Logger.log("Error al disparar aviso de fichaje: " + errAviso);
-    }
-    
-    // Actualizar alineación en la hoja Alineaciones
-    if (sheetAl) {
-      var alData = sheetAl.getDataRange().getValues();
-      for (var r = 1; r < alData.length; r++) {
-        if (String(alData[r][0]).trim() === team && Number(alData[r][1]) === Number(jornada) && String(alData[r][2]).trim() === pOut) {
-          var pInfo = marketMap[pIn] || { realTeam: '', position: 'Medio', value: 0 };
-          sheetAl.getRange(r + 1, 3).setValue(pIn);
-          sheetAl.getRange(r + 1, 4).setValue(pInfo.realTeam);
-          sheetAl.getRange(r + 1, 5).setValue(pInfo.position);
-          sheetAl.getRange(r + 1, 6).setValue(pInfo.value);
+  jornada = Number(jornada);
+  if (isNaN(jornada) || jornada <= 0) {
+    return { success: false, message: 'Jornada no válida: ' + jornada };
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 1. Validar si la jornada ya ha sido disputada (comprobando si existen puntuaciones oficiales en la hoja Jugadores)
+  var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
+  if (sheetJug) {
+    var jData = sheetJug.getDataRange().getValues();
+    if (jData.length > 0) {
+      var headerRow = jData[0];
+      var puntosColIdx = -1;
+      for (var c = 0; c < headerRow.length; c++) {
+        var hStr = String(headerRow[c] || '').trim().toLowerCase();
+        if (hStr === 'puntos_j' + jornada || hStr === 'j' + jornada || hStr === 'puntos j' + jornada || hStr === 'pts_j' + jornada) {
+          puntosColIdx = c;
           break;
         }
       }
+      if (puntosColIdx !== -1) {
+        var hasScores = false;
+        for (var r = 1; r < jData.length; r++) {
+          var val = jData[r][puntosColIdx];
+          if (val !== '' && val !== null && !isNaN(Number(val)) && Number(val) > 0) {
+            hasScores = true;
+            break;
+          }
+        }
+        if (hasScores) {
+          return {
+            success: false,
+            message: 'Fichaje denegado: La Jornada ' + jornada + ' ya ha sido disputada (cuenta con puntuaciones oficiales registradas).'
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Control de concurrencia y prevención de escrituras dobles mediante ScriptLock
+  var lock = LockService.getScriptLock();
+  var hasLock = false;
+  try {
+    hasLock = lock.tryLock(30000);
+  } catch(eLock) {
+    hasLock = false;
+  }
+
+  var cache = CacheService.getScriptCache();
+  var reqKey = requestId ? ('tr_req_' + String(requestId).substring(0, 50)) : '';
+
+  try {
+    // Si la solicitud con este requestId ya se procesó en los últimos 10 minutos, retornar éxito de inmediato
+    if (reqKey && cache && cache.get(reqKey)) {
+      return {
+        success: true,
+        message: 'Fichajes ya procesados previamente en Google Sheets (solicitud repetida evitada).',
+        alreadyProcessed: true
+      };
     }
 
-    // Actualizar estado en la hoja Jugadores: pIn pasa a 'Fichado', pOut pasa a 'Disponible' o 'Abandona Liga'
-    var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
-    if (sheetJug) {
-      var jugData = sheetJug.getDataRange().getValues();
-      var estadoCol = 5;
-      if (jugData.length > 0) {
-        for (var hc = 0; hc < jugData[0].length; hc++) {
-          var hName = String(jugData[0][hc]).trim().toLowerCase();
-          if (hName === 'estado' || hName === 'status' || hName === 'situacion') {
-            estadoCol = hc + 1;
+    var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas']);
+    var sheetFichajes = findSheet(ss, [
+      'Historial_Fichajes',
+      'Historial de Fichajes',
+      'Historial del Fichaje',
+      'Historial Fichajes',
+      'Fichajes',
+      'Transfers',
+      'Fichaje',
+      'Mercado Fichajes'
+    ]);
+    
+    if (!sheetFichajes) {
+      sheetFichajes = ss.insertSheet('Historial_Fichajes');
+      sheetFichajes.appendRow(['Fecha/Hora', 'Equipo', 'Jornada', 'Jugador Sale', 'Jugador Entra', 'Coste', 'Tipo']);
+    }
+    
+    var market = getPlayersForMercado();
+    var marketMap = {};
+    market.forEach(function(m) { marketMap[m.name] = m; });
+    
+    var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
+    
+    var previousTransfers = getTransferHistory();
+    var teamNormalCount = previousTransfers.filter(function(t) { return t.team === team && t.type === 'Normal'; }).length;
+    
+    // Inspección en tiempo real de las últimas 50 filas de Historial_Fichajes para evitar duplicados exactos
+    var currentFichData = sheetFichajes.getDataRange().getValues();
+    var startScanIdx = Math.max(1, currentFichData.length - 50);
+
+    transfers.forEach(function(t) {
+      var pOut = String(t.playerOut || '').trim();
+      var pIn = String(t.playerIn || '').trim();
+      if (!pOut || !pIn) return;
+
+      var isAbandon = !!t.isAbandonment;
+      var cost = 0;
+      var type = isAbandon ? 'Abandono' : 'Normal';
+      
+      if (!isAbandon) {
+        if (teamNormalCount >= FREE_TRANSFERS_PER_TEAM) {
+          cost = TRANSFER_COST;
+        }
+        teamNormalCount++;
+      }
+      
+      // Comprobar si ya existe este mismo fichaje registrado en las filas recientes
+      var isDuplicate = false;
+      for (var f = startScanIdx; f < currentFichData.length; f++) {
+        var row = currentFichData[f];
+        var rowTeam = String(row[1] || '').trim().toLowerCase();
+        var rowJornada = Number(row[2]);
+        var rowOut = String(row[3] || '').trim().toLowerCase();
+        var rowIn = String(row[4] || '').trim().toLowerCase();
+        if (rowTeam === team.toLowerCase().trim() &&
+            rowJornada === jornada &&
+            rowOut === pOut.toLowerCase() &&
+            rowIn === pIn.toLowerCase()) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      // Si no está duplicado, añadir fila y emitir notificación
+      if (!isDuplicate) {
+        sheetFichajes.appendRow([nowStr, team, jornada, pOut, pIn, cost, type]);
+        // Registrar en nuestra caché local en memoria para no duplicar si hay varios items en el mismo lote
+        currentFichData.push([nowStr, team, jornada, pOut, pIn, cost, type]);
+        
+        // Disparar aviso automático a Telegram y GitHub Actions
+        try {
+          enviarAvisoTelegramYGitHub(team, pIn, pOut, cost, jornada, type);
+        } catch(errAviso) {
+          Logger.log("Error al disparar aviso de fichaje: " + errAviso);
+        }
+      }
+      
+      // Actualizar alineación en la hoja Alineaciones
+      if (sheetAl) {
+        var alData = sheetAl.getDataRange().getValues();
+        for (var r = 1; r < alData.length; r++) {
+          if (String(alData[r][0]).trim().toLowerCase() === team.toLowerCase().trim() &&
+              Number(alData[r][1]) === jornada &&
+              String(alData[r][2]).trim().toLowerCase() === pOut.toLowerCase()) {
+            var pInfo = marketMap[pIn] || { realTeam: '', position: 'Medio', value: 0 };
+            sheetAl.getRange(r + 1, 3).setValue(pIn);
+            sheetAl.getRange(r + 1, 4).setValue(pInfo.realTeam);
+            sheetAl.getRange(r + 1, 5).setValue(pInfo.position);
+            sheetAl.getRange(r + 1, 6).setValue(pInfo.value);
             break;
           }
         }
       }
-      for (var jr = 1; jr < jugData.length; jr++) {
-        var rowName = String(jugData[jr][0]).trim().toLowerCase();
-        if (rowName === String(pIn).trim().toLowerCase()) {
-          sheetJug.getRange(jr + 1, estadoCol).setValue('Fichado');
+
+      // Actualizar estado en la hoja Jugadores: pIn pasa a 'Fichado', pOut pasa a 'Disponible' o 'Abandona Liga'
+      if (sheetJug) {
+        var jugData = sheetJug.getDataRange().getValues();
+        var estadoCol = 5;
+        if (jugData.length > 0) {
+          for (var hc = 0; hc < jugData[0].length; hc++) {
+            var hName = String(jugData[0][hc]).trim().toLowerCase();
+            if (hName === 'estado' || hName === 'status' || hName === 'situacion') {
+              estadoCol = hc + 1;
+              break;
+            }
+          }
         }
-        if (rowName === String(pOut).trim().toLowerCase()) {
-          sheetJug.getRange(jr + 1, estadoCol).setValue(isAbandon ? 'Abandona Liga' : 'Disponible');
+        for (var jr = 1; jr < jugData.length; jr++) {
+          var rowName = String(jugData[jr][0]).trim().toLowerCase();
+          if (rowName === pIn.toLowerCase()) {
+            sheetJug.getRange(jr + 1, estadoCol).setValue('Fichado');
+          }
+          if (rowName === pOut.toLowerCase()) {
+            sheetJug.getRange(jr + 1, estadoCol).setValue(isAbandon ? 'Abandona Liga' : 'Disponible');
+          }
         }
       }
+    });
+
+    if (reqKey && cache) {
+      try { cache.put(reqKey, '1', 600); } catch(eC) {}
     }
-  });
-  
-  return { success: true, message: 'Fichajes procesados correctamente en Google Sheets.' };
+    
+    return { success: true, message: 'Fichajes procesados correctamente en Google Sheets.' };
+  } finally {
+    if (hasLock && lock) {
+      try { lock.releaseLock(); } catch(eRel) {}
+    }
+  }
 }
 `;
 
