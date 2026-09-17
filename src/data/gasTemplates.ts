@@ -542,7 +542,7 @@ function doGet(e) {
         result = { success: true, data: getAccountingData() };
       } else if (action === 'draft') {
         result = processDraftSelection(e.parameter.team, e.parameter.token, e.parameter.player);
-      } else if (action === 'transfer') {
+      } else if (action === 'transfer' || action === 'fichaje' || action === 'fichajes' || action === 'transfers') {
         var trList = [];
         try {
           trList = typeof e.parameter.transfers === 'string' ? JSON.parse(e.parameter.transfers) : (e.parameter.transfers || []);
@@ -611,7 +611,7 @@ function doPost(e) {
   try {
     if (action === 'draft') {
       result = processDraftSelection(postData.team, postData.token, postData.player);
-    } else if (action === 'transfer') {
+    } else if (action === 'transfer' || action === 'fichaje' || action === 'fichajes' || action === 'transfers') {
       result = processMultipleTransfers(postData.team, postData.token, postData.jornada, postData.transfers);
     } else if (action === 'saveDraftOrder') {
       result = saveDraftOrderToSheet(postData.draftOrder);
@@ -1010,6 +1010,7 @@ function getFullSyncData() {
     'Mercado Fichajes'
   ]);
   var transfers = [];
+  var seenTransfers = {};
   if (sheetFichajes) {
     var fData = sheetFichajes.getDataRange().getValues();
     if (fData.length > 1) {
@@ -1075,15 +1076,19 @@ function getFullSyncData() {
           var fJor = colFJor !== -1 && row[colFJor] !== '' ? Number(row[colFJor]) : 1;
           var fType = colFType !== -1 && row[colFType] ? String(row[colFType]).trim() : 'Normal';
           
-          transfers.push({
-            timestamp: dateStr,
-            team: fTeam,
-            jornada: isNaN(fJor) ? 1 : fJor,
-            playerOut: fOut,
-            playerIn: fIn,
-            cost: isNaN(fCost) ? 0 : fCost,
-            type: fType
-          });
+          var tKey = dateStr + ':::' + fTeam.toLowerCase() + ':::' + fJor + ':::' + fOut.toLowerCase() + ':::' + fIn.toLowerCase();
+          if (!seenTransfers[tKey]) {
+            seenTransfers[tKey] = true;
+            transfers.push({
+              timestamp: dateStr,
+              team: fTeam,
+              jornada: isNaN(fJor) ? 1 : fJor,
+              playerOut: fOut,
+              playerIn: fIn,
+              cost: isNaN(fCost) ? 0 : fCost,
+              type: fType
+            });
+          }
         }
       }
     }
@@ -2005,7 +2010,18 @@ function processMultipleTransfers(team, token, jornada, transfers) {
       teamNormalCount++;
     }
     
-    sheetFichajes.appendRow([nowStr, team, jornada, pOut, pIn, cost, type]);
+    // Evitar duplicar la fila en Historial_Fichajes si ya se insertó en el mismo minuto
+    var isDuplicate = previousTransfers.some(function(pt) {
+      return pt.team === team &&
+             Number(pt.jornada) === Number(jornada) &&
+             pt.playerOut === pOut &&
+             pt.playerIn === pIn &&
+             pt.timestamp === nowStr;
+    });
+
+    if (!isDuplicate) {
+      sheetFichajes.appendRow([nowStr, team, jornada, pOut, pIn, cost, type]);
+    }
     
     // Disparar aviso automático a Telegram y GitHub Actions
     try {

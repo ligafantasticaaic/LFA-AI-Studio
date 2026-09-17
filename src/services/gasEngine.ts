@@ -1143,6 +1143,71 @@ class GasEngineService {
       }
 
       // 1. Iniciar JSONP (inmune a CORS, pasa el redirect 302 sin preflight)
+      const isMutatingAction = !!(params && ['transfer', 'draft', 'saveDraftOrder', 'resetSeason'].includes(String(params.action || '')));
+
+      if (isMutatingAction) {
+        // En acciones de mutación, NUNCA disparar JSONP y Fetch simultáneamente para evitar duplicados en Google Sheets.
+        // Se prueba Fetch primero; si falla, se recurre a JSONP de forma secuencial.
+        fetchDone = false;
+        jsonpDone = false;
+
+        const startJsonpFallback = () => {
+          if (isDone || jsonpDone) return;
+          if (typeof document !== 'undefined') {
+            callbackName = 'lfa_cb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+            scriptElement = document.createElement('script');
+            const jsonpUrl = fullUrl + '&callback=' + callbackName;
+
+            (window as any)[callbackName] = (data: any) => {
+              onSuccess(data);
+            };
+
+            scriptElement.onerror = () => {
+              onFail(new Error('SCRIPT_LOAD_ERROR'), 'jsonp');
+            };
+
+            scriptElement.src = jsonpUrl;
+            document.head.appendChild(scriptElement);
+          } else {
+            jsonpDone = true;
+            onFail(new Error('NO_DOCUMENT_JSONP'), 'jsonp');
+          }
+        };
+
+        try {
+          abortController = new AbortController();
+          fetch(fullUrl, {
+            method: 'GET',
+            mode: 'cors',
+            redirect: 'follow',
+            signal: abortController.signal
+          }).then(async (res) => {
+            if (isDone) return;
+            if (!res.ok) {
+              startJsonpFallback();
+              return;
+            }
+            const text = await res.text();
+            const trimmed = text.trim();
+            if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || text.includes('accounts.google.com')) {
+              startJsonpFallback();
+              return;
+            }
+            try {
+              const data = JSON.parse(trimmed);
+              onSuccess(data);
+            } catch {
+              startJsonpFallback();
+            }
+          }).catch(() => {
+            startJsonpFallback();
+          });
+        } catch {
+          startJsonpFallback();
+        }
+        return;
+      }
+
       if (typeof document !== 'undefined') {
         callbackName = 'lfa_cb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
         scriptElement = document.createElement('script');
@@ -1445,15 +1510,24 @@ class GasEngineService {
                            (data.data && Array.isArray(data.data.fichajes) ? data.data.fichajes : null))));
 
       if (rawTransfers !== null && Array.isArray(rawTransfers)) {
-        this.transfers = rawTransfers.map((t: any) => ({
-          timestamp: String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || t.Hora || '').trim(),
-          team: String(t.team || t.Equipo || t.Team || t.Club || t['Nombre Equipo'] || '').trim(),
-          jornada: Number(t.jornada || t.Jornada || t.Jor || t.Semana || 1) || 1,
-          playerOut: String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || t['Jugador que sale'] || t.Sale || t.Baja || t['Jugador Baja'] || t.Saliente || '').trim(),
-          playerIn: String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || t['Jugador que entra'] || t.Entra || t.Alta || t['Jugador Alta'] || t.Entrante || t.Fichaje || '').trim(),
-          cost: parseCleanNumber(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : (t.Precio !== undefined ? t.Precio : 0))),
-          type: ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono')
-        })).filter(t => t.team || t.playerOut || t.playerIn);
+        const seenTransfers = new Set<string>();
+        const parsedTransfers: TransferRecord[] = [];
+        rawTransfers.forEach((t: any) => {
+          const timestamp = String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || t.Hora || '').trim();
+          const team = String(t.team || t.Equipo || t.Team || t.Club || t['Nombre Equipo'] || '').trim();
+          const jornada = Number(t.jornada || t.Jornada || t.Jor || t.Semana || 1) || 1;
+          const playerOut = String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || t['Jugador que sale'] || t.Sale || t.Baja || t['Jugador Baja'] || t.Saliente || '').trim();
+          const playerIn = String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || t['Jugador que entra'] || t.Entra || t.Alta || t['Jugador Alta'] || t.Entrante || t.Fichaje || '').trim();
+          const cost = parseCleanNumber(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : (t.Precio !== undefined ? t.Precio : 0)));
+          const type = ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono');
+
+          const key = `${timestamp}:::${team.toLowerCase()}:::${jornada}:::${playerOut.toLowerCase()}:::${playerIn.toLowerCase()}`;
+          if ((team || playerOut || playerIn) && !seenTransfers.has(key)) {
+            seenTransfers.add(key);
+            parsedTransfers.push({ timestamp, team, jornada, playerOut, playerIn, cost, type });
+          }
+        });
+        this.transfers = parsedTransfers;
         updatedTransfersCount = this.transfers.length;
       }
 
@@ -2296,89 +2370,53 @@ class GasEngineService {
       };
     }
 
-    // 3. Conteo de fichajes normales para calcular costes
+    // 3. Conteo de fichajes normales para calcular costes previstos
     let normalTransfersCount = this.transfers.filter(
       tr => tr.team.trim() === teamName && tr.type === 'Normal'
     ).length;
 
+    const plannedTransfers: Array<{
+      pOut: string;
+      pIn: string;
+      isAbandon: boolean;
+      cost: number;
+      type: 'Normal' | 'Abandono';
+      pInDetails: any;
+    }> = [];
+
     const processedSummary: string[] = [];
 
-    // 4. Aplicar cambios a line-up e historial
-    transfers.forEach(t => {
+    for (const t of transfers) {
       const pOut = t.playerOut.trim();
       const pIn = t.playerIn.trim();
       const isAbandon = !!t.isAbandonment;
       const pInDetails = playerMap.get(pIn);
 
-      const lineupEntry = this.lineups.find(
-        l => l.team.trim() === teamName && l.jornada === jornada && l.playerName.trim() === pOut
-      );
+      let cost = 0;
+      let transferType: 'Normal' | 'Abandono' = 'Normal';
 
-      if (lineupEntry && pInDetails) {
-        lineupEntry.playerName = pIn;
-        lineupEntry.realTeam = pInDetails.realTeam;
-        lineupEntry.position = pInDetails.position;
-        lineupEntry.value = pInDetails.value;
-
-        let cost = 0;
-        let transferType: 'Normal' | 'Abandono' = 'Normal';
-
-        const normOut = pOut.trim().toLowerCase();
-        const normIn = pIn.trim().toLowerCase();
-
-        this.players.forEach(p => {
-          const pNameLower = (p.name || '').trim().toLowerCase();
-          if (pNameLower === normIn) {
-            p.status = 'Fichado';
-          }
-          if (pNameLower === normOut) {
-            p.status = isAbandon ? 'Abandona Liga' : 'Disponible';
-          }
-        });
-
-        if (isAbandon) {
-          transferType = 'Abandono';
-        } else {
-          if (normalTransfersCount >= FREE_TRANSFERS_PER_TEAM) {
-            cost = TRANSFER_COST;
-          }
-          normalTransfersCount++;
+      if (isAbandon) {
+        transferType = 'Abandono';
+      } else {
+        if (normalTransfersCount >= FREE_TRANSFERS_PER_TEAM) {
+          cost = TRANSFER_COST;
         }
-
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
-                        now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
-
-        this.transfers.unshift({
-          timestamp: dateStr,
-          team: teamName,
-          jornada,
-          playerOut: pOut,
-          playerIn: pIn,
-          cost,
-          type: transferType
-        });
-
-        // Disparar aviso automático (Telegram y GitHub Actions)
-        this.triggerFichajeNotification({
-          equipo: teamName,
-          jugadorEntra: pIn,
-          jugadorSale: pOut,
-          jornada,
-          coste: cost.toFixed(2),
-          tipo: transferType
-        }).catch(err => {
-          console.warn('[gasEngine] Error enviando notificación de fichaje:', err);
-        });
-
-        processedSummary.push(`${pIn} por ${pOut} (${cost === 0 ? 'Gratis' : cost + '€'})`);
+        normalTransfersCount++;
       }
-    });
 
-    this.saveState();
-    this.notify();
+      plannedTransfers.push({
+        pOut,
+        pIn,
+        isAbandon,
+        cost,
+        type: transferType,
+        pInDetails
+      });
 
-    // Sincronizar en tiempo real con Google Sheets
+      processedSummary.push(`${pIn} por ${pOut} (${cost === 0 ? 'Gratis' : cost + '€'})`);
+    }
+
+    // 4. Validar y sincronizar con Google Sheets ANTES de alterar el historial o la alineación
     let gasMessage = '';
     let isOutdated = false;
     const targetGasUrl = this.getGasUrl();
@@ -2393,16 +2431,87 @@ class GasEngineService {
         });
         if (gasRes.outdatedScript) {
           isOutdated = true;
-          gasMessage = ' ⚠️ Google Sheets no se actualizó en tiempo real porque tu Apps Script necesita una "Nueva versión" de Código.gs.';
+          gasMessage = ' (⚠️ En Google Sheets se reflejará automáticamente en cuanto despliegues la Nueva versión de Código.gs desde Apps Script > Administrar implementaciones).';
         } else if (gasRes.success) {
           gasMessage = ' ✅ Sincronizado en tiempo real en Google Sheets.';
         } else {
-          gasMessage = ` ⚠️ Aviso de Google Sheets: ${gasRes.message}`;
+          // Si Google Sheets rechaza explícitamente (ej: token no autorizado)
+          return {
+            success: false,
+            message: `Error de validación en Google Sheets: ${gasRes.message}`
+          };
         }
       } catch (e: any) {
-        gasMessage = ' ⚠️ No se pudo enviar a Google Sheets en este momento.';
+        gasMessage = ' (Aviso: No se pudo contactar con Google Sheets; registrado localmente).';
       }
     }
+
+    // 5. SOLO tras la validación confirmada, aplicar cambios a la alineación, jugadores y registrar en Historial
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                    now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+
+    plannedTransfers.forEach(pt => {
+      const lineupEntry = this.lineups.find(
+        l => l.team.trim() === teamName && l.jornada === jornada && l.playerName.trim() === pt.pOut
+      );
+
+      if (lineupEntry && pt.pInDetails) {
+        lineupEntry.playerName = pt.pIn;
+        lineupEntry.realTeam = pt.pInDetails.realTeam;
+        lineupEntry.position = pt.pInDetails.position;
+        lineupEntry.value = pt.pInDetails.value;
+
+        const normOut = pt.pOut.toLowerCase();
+        const normIn = pt.pIn.toLowerCase();
+
+        this.players.forEach(p => {
+          const pNameLower = (p.name || '').trim().toLowerCase();
+          if (pNameLower === normIn) {
+            p.status = 'Fichado';
+          }
+          if (pNameLower === normOut) {
+            p.status = pt.isAbandon ? 'Abandona Liga' : 'Disponible';
+          }
+        });
+
+        // Registrar en el historial UNA SOLA VEZ tras la validación (evitar anotación doble)
+        const alreadyRecorded = this.transfers.some(existing =>
+          existing.team.trim().toLowerCase() === teamName.toLowerCase() &&
+          existing.jornada === jornada &&
+          existing.playerOut.trim().toLowerCase() === pt.pOut.toLowerCase() &&
+          existing.playerIn.trim().toLowerCase() === pt.pIn.toLowerCase() &&
+          existing.timestamp === dateStr
+        );
+
+        if (!alreadyRecorded) {
+          this.transfers.unshift({
+            timestamp: dateStr,
+            team: teamName,
+            jornada,
+            playerOut: pt.pOut,
+            playerIn: pt.pIn,
+            cost: pt.cost,
+            type: pt.type
+          });
+        }
+
+        // Disparar aviso automático (Telegram y GitHub Actions)
+        this.triggerFichajeNotification({
+          equipo: teamName,
+          jugadorEntra: pt.pIn,
+          jugadorSale: pt.pOut,
+          jornada,
+          coste: pt.cost.toFixed(2),
+          tipo: pt.type
+        }).catch(err => {
+          console.warn('[gasEngine] Error enviando notificación de fichaje:', err);
+        });
+      }
+    });
+
+    this.saveState();
+    this.notify();
 
     return {
       success: true,
@@ -2567,7 +2676,21 @@ class GasEngineService {
   }
 
   public getTransferHistory(): TransferRecord[] {
-    return [...this.transfers];
+    const seen = new Set<string>();
+    const uniqueTransfers: TransferRecord[] = [];
+    for (const t of this.transfers) {
+      const tNorm = String(t.team || '').trim().toLowerCase();
+      const jNorm = t.jornada;
+      const outNorm = String(t.playerOut || '').trim().toLowerCase();
+      const inNorm = String(t.playerIn || '').trim().toLowerCase();
+      const timeNorm = String(t.timestamp || '').trim();
+      const key = `${timeNorm}:::${tNorm}:::${jNorm}:::${outNorm}:::${inNorm}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueTransfers.push(t);
+      }
+    }
+    return uniqueTransfers;
   }
 
   public getDraftHistory(): DraftRecord[] {
