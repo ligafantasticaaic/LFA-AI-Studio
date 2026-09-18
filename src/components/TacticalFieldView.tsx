@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { gasEngine } from '../services/gasEngine';
 import { TeamLineupResponse, LineupPlayerDetail } from '../types/league';
-import { Shield, Sparkles, Trophy, RotateCw } from 'lucide-react';
+import { Shield, Sparkles, Trophy, RotateCw, Users } from 'lucide-react';
 
 interface TacticalFieldViewProps {
   initialTeam?: string;
@@ -15,7 +15,7 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
   const [teams, setTeams] = useState<string[]>([]);
   const [maxJornada, setMaxJornada] = useState<number>(5);
   const [selectedTeam, setSelectedTeam] = useState<string>(initialTeam || '');
-  const [selectedJornada, setSelectedJornada] = useState<number>(initialJornada || 1);
+  const [selectedJornada, setSelectedJornada] = useState<number | ''>(initialJornada || '');
   const [lineupData, setLineupData] = useState<TeamLineupResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -26,18 +26,15 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
       setTeams(teamList);
       setMaxJornada(maxJ);
 
-      const team = selectedTeam || initialTeam || teamList[0] || '';
-      const j = selectedJornada || initialJornada || 1;
+      const team = selectedTeam || initialTeam || '';
+      const j = typeof selectedJornada === 'number' && selectedJornada > 0
+        ? selectedJornada
+        : (initialJornada || '');
 
-      if (!selectedTeam && team) {
-        setSelectedTeam(team);
-      }
-      if (!selectedJornada && j) {
-        setSelectedJornada(j);
-      }
-
-      if (team && j) {
+      if (team && typeof j === 'number' && j > 0) {
         setLineupData(gasEngine.getTeamLineupData(team, j));
+      } else {
+        setLineupData(null);
       }
     };
 
@@ -50,15 +47,20 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
 
   const handleTeamChange = (t: string) => {
     setSelectedTeam(t);
-    if (t && selectedJornada) {
+    if (t && typeof selectedJornada === 'number' && selectedJornada > 0) {
       setLineupData(gasEngine.getTeamLineupData(t, selectedJornada));
+    } else {
+      setLineupData(null);
     }
   };
 
-  const handleJornadaChange = (j: number) => {
+  const handleJornadaChange = (val: string) => {
+    const j = val ? parseInt(val, 10) : '';
     setSelectedJornada(j);
-    if (selectedTeam && j) {
+    if (selectedTeam && typeof j === 'number' && j > 0) {
       setLineupData(gasEngine.getTeamLineupData(selectedTeam, j));
+    } else {
+      setLineupData(null);
     }
   };
 
@@ -99,7 +101,6 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
 
   const renderPlayerCircle = (p: LineupPlayerDetail, idx: number) => {
     const realTeam = String(p.realTeam || 'DEFAULT').toUpperCase().trim();
-    const clubStyle = CLUB_GRADIENTS[realTeam] || CLUB_GRADIENTS['DEFAULT'];
     const pts = typeof p.points === 'number' ? p.points : 0;
     
     let glowBadge = 'bg-slate-800 text-slate-200 border-slate-700';
@@ -110,27 +111,27 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
     return (
       <div 
         key={`disc-${p.name}-${p.position}-${idx}`} 
-        className="flex flex-col items-center justify-center relative group transition-transform duration-300 hover:scale-110 cursor-pointer z-30"
+        className="flex flex-col items-center justify-center relative group transition-transform duration-200 hover:scale-105 cursor-pointer z-30 shrink min-w-0"
       >
         {/* Glow halo */}
-        <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-amber-400/20 to-emerald-400/20 blur-sm group-hover:blur-md opacity-40 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute -inset-0.5 rounded-full bg-gradient-to-tr from-amber-400/20 to-emerald-400/20 blur-[2px] opacity-40 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
         {/* Player Badge Disc */}
-        <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full border-[3px] border-amber-400/90 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-white flex flex-col items-center justify-center text-center shadow-2xl overflow-hidden p-1">
-          <div className="text-[9px] font-black uppercase leading-none bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full border border-amber-400 mb-0.5 tracking-tight font-mono">
+        <div className="relative w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 sm:border-[3px] border-amber-400/90 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-white flex flex-col items-center justify-center text-center shadow-xl overflow-hidden p-0.5 sm:p-1">
+          <div className="text-[7px] xs:text-[7.5px] sm:text-[8.5px] md:text-[9px] font-black uppercase leading-none bg-amber-500 text-slate-950 px-1 sm:px-1.5 py-0.5 rounded-full border border-amber-400 mb-0.5 tracking-tight font-mono">
             {realTeam}
           </div>
-          <span className="text-xs sm:text-sm font-black truncate max-w-[75px] sm:max-w-[85px] uppercase tracking-tight text-slate-100 mb-0.5 leading-tight" title={p.name}>
+          <span className="text-[8.5px] xs:text-[9.5px] sm:text-xs md:text-sm font-black truncate max-w-[40px] xs:max-w-[48px] sm:max-w-[62px] md:max-w-[76px] uppercase tracking-tight text-slate-100 leading-tight" title={p.name}>
             {p.name.split(' ').pop()}
           </span>
-          <div className="flex justify-around w-full text-[9px] sm:text-[10px] font-bold text-amber-400 border-t border-slate-800 pt-0.5 mt-0.5 font-mono">
+          <div className="flex justify-between sm:justify-around w-full px-0.5 sm:px-1 text-[7px] xs:text-[7.5px] sm:text-[8.5px] md:text-[9px] font-bold text-amber-400 border-t border-slate-800/80 pt-0.5 mt-0.5 font-mono">
             <span>{getPositionGroup(p.position)}</span>
             <span>{p.value}M</span>
           </div>
         </div>
 
         {/* Points Bubble Badge */}
-        <div className={`absolute -top-1.5 -right-1.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-black border-2 z-40 ${glowBadge}`}>
+        <div className={`absolute -top-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] md:text-xs font-black border z-40 ${glowBadge}`}>
           {p.points !== '' ? p.points : '-'}
         </div>
       </div>
@@ -144,13 +145,14 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <div className="flex-1 min-w-[200px]">
             <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">
-              Equipo LFA
+              Equipo (Ver Alineación)
             </label>
             <select
               value={selectedTeam}
               onChange={(e) => handleTeamChange(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 text-white font-bold text-xs sm:text-sm py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer"
             >
+              <option value="">Seleccionar equipo</option>
               {teams.map((t, idx) => (
                 <option key={`tac-team-${t}-${idx}`} value={t}>{t}</option>
               ))}
@@ -159,13 +161,14 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
 
           <div className="flex-1 min-w-[140px]">
             <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">
-              Jornada
+              Jornada (Ver Alineación)
             </label>
             <select
               value={selectedJornada}
-              onChange={(e) => handleJornadaChange(parseInt(e.target.value, 10))}
+              onChange={(e) => handleJornadaChange(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 text-white font-bold text-xs sm:text-sm py-2 px-3 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer font-mono"
             >
+              <option value="">Seleccionar Jornada</option>
               {Array.from({ length: maxJornada }, (_, i) => i + 1).map(j => (
                 <option key={`tac-jornada-${j}`} value={j}>Jornada {j}</option>
               ))}
@@ -176,17 +179,23 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
         <div className="flex items-center gap-3 self-end sm:self-center">
           <div className="bg-slate-950 border border-slate-800 px-4 py-2 rounded-xl text-center shadow-inner">
             <span className="block text-[10px] uppercase font-bold text-slate-400">Valor 11:</span>
-            <span className="text-base font-black text-amber-400 font-mono">{lineupData?.totalValue || '0'}M</span>
+            <span className="text-base font-black text-amber-400 font-mono">
+              {selectedTeam && selectedJornada ? `${lineupData?.totalValue || '0'}M` : '-'}
+            </span>
           </div>
           <div className="bg-slate-950 border border-slate-800 px-4 py-2 rounded-xl text-center shadow-inner">
-            <span className="block text-[10px] uppercase font-bold text-slate-400">Puntos J{selectedJornada}:</span>
-            <span className="text-base font-black text-emerald-400 font-mono">{lineupData?.totalPoints || '0'} pts</span>
+            <span className="block text-[10px] uppercase font-bold text-slate-400">
+              {selectedJornada ? `Puntos J${selectedJornada}:` : 'Puntos Jornada:'}
+            </span>
+            <span className="text-base font-black text-emerald-400 font-mono">
+              {selectedTeam && selectedJornada ? `${lineupData?.totalPoints || '0'} pts` : '-'}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Realistic Grass Tactical Pitch */}
-      <div className="relative rounded-3xl p-4 sm:p-8 overflow-hidden shadow-2xl border-4 border-slate-800 bg-[#16502d] min-h-[580px] sm:min-h-[640px] flex flex-col justify-between select-none">
+      <div className="relative rounded-2xl sm:rounded-3xl p-2.5 sm:p-6 overflow-hidden shadow-2xl border-2 sm:border-4 border-slate-800 bg-[#16502d] min-h-[500px] sm:min-h-[640px] flex flex-col justify-between select-none w-full max-w-full box-border">
         {/* Grass Turf Stripes Background */}
         <div 
           className="absolute inset-0 opacity-40 pointer-events-none"
@@ -196,58 +205,77 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
         />
 
         {/* Tactical Pitch Markings */}
-        <div className="absolute inset-4 sm:inset-6 border-2 border-white/25 rounded-2xl pointer-events-none">
+        <div className="absolute inset-2 sm:inset-4 border-2 border-white/25 rounded-xl sm:rounded-2xl pointer-events-none">
           {/* Halfway line */}
           <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/25 -translate-y-1/2" />
           {/* Center Circle */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 sm:w-36 sm:h-36 rounded-full border-2 border-white/25" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white/40" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 sm:w-32 sm:h-32 rounded-full border-2 border-white/25" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white/40" />
           
           {/* Top Penalty Area (Opponent Box) */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-56 sm:w-72 h-24 sm:h-28 border-b-2 border-x-2 border-white/25 rounded-b-lg" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-44 sm:w-64 h-20 sm:h-24 border-b-2 border-x-2 border-white/25 rounded-b-lg" />
           
           {/* Bottom Penalty Area (Own Box) */}
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-56 sm:w-72 h-24 sm:h-28 border-t-2 border-x-2 border-white/25 rounded-t-lg" />
-          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white/40" />
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-44 sm:w-64 h-20 sm:h-24 border-t-2 border-x-2 border-white/25 rounded-t-lg" />
+          <div className="absolute bottom-12 sm:bottom-14 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-white/40" />
         </div>
 
-        {/* Tactical Formation Rows (Top: DEL, Middle: MED, Lower: DEF, Bottom: POR) */}
-        
-        {/* Delanteros */}
-        <div className="relative z-10 flex items-center justify-around gap-2 pt-2 sm:pt-4">
-          {delanteros.length === 0 ? (
-            <span className="text-xs text-white/40 italic">Sin delanteros alineados</span>
-          ) : (
-            delanteros.map((p, idx) => renderPlayerCircle(p, idx))
-          )}
-        </div>
+        {/* Tactical Formation Rows or Placeholder */}
+        {!selectedTeam || !selectedJornada ? (
+          <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center p-6 space-y-2">
+            <Users className="w-12 h-12 text-white/30 mx-auto" />
+            <p className="text-white/90 font-black text-sm sm:text-base">
+              Selecciona un equipo y una jornada
+            </p>
+            <p className="text-white/50 text-xs max-w-xs">
+              Elige en los desplegables para visualizar la alineación táctica sobre el campo de fútbol.
+            </p>
+          </div>
+        ) : lineupData && (!lineupData.players || lineupData.players.length === 0) ? (
+          <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center p-6 space-y-2">
+            <p className="text-white/80 font-bold text-sm">
+              No se encontró alineación para {selectedTeam} en la Jornada {selectedJornada}.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Delanteros */}
+            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-1 pt-2 sm:pt-4 px-1 sm:px-3 box-border overflow-hidden">
+              {delanteros.length === 0 ? (
+                <span className="text-[11px] text-white/40 italic">Sin delanteros alineados</span>
+              ) : (
+                delanteros.map((p, idx) => renderPlayerCircle(p, idx))
+              )}
+            </div>
 
-        {/* Centrocampistas */}
-        <div className="relative z-10 flex items-center justify-around gap-2 py-4">
-          {medios.length === 0 ? (
-            <span className="text-xs text-white/40 italic">Sin mediocentros alineados</span>
-          ) : (
-            medios.map((p, idx) => renderPlayerCircle(p, idx))
-          )}
-        </div>
+            {/* Centrocampistas */}
+            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-1 py-3 sm:py-4 px-1 sm:px-3 box-border overflow-hidden">
+              {medios.length === 0 ? (
+                <span className="text-[11px] text-white/40 italic">Sin mediocentros alineados</span>
+              ) : (
+                medios.map((p, idx) => renderPlayerCircle(p, idx))
+              )}
+            </div>
 
-        {/* Defensas */}
-        <div className="relative z-10 flex items-center justify-around gap-2 py-4">
-          {defensas.length === 0 ? (
-            <span className="text-xs text-white/40 italic">Sin defensas alineados</span>
-          ) : (
-            defensas.map((p, idx) => renderPlayerCircle(p, idx))
-          )}
-        </div>
+            {/* Defensas */}
+            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-1 py-3 sm:py-4 px-1 sm:px-3 box-border overflow-hidden">
+              {defensas.length === 0 ? (
+                <span className="text-[11px] text-white/40 italic">Sin defensas alineados</span>
+              ) : (
+                defensas.map((p, idx) => renderPlayerCircle(p, idx))
+              )}
+            </div>
 
-        {/* Portero */}
-        <div className="relative z-10 flex items-center justify-center pb-2 sm:pb-4">
-          {porteros.length === 0 ? (
-            <span className="text-xs text-white/40 italic">Sin portero alineado</span>
-          ) : (
-            porteros.map((p, idx) => renderPlayerCircle(p, idx))
-          )}
-        </div>
+            {/* Portero */}
+            <div className="relative z-10 w-full max-w-full flex items-center justify-center pb-2 sm:pb-4 px-1 sm:px-3 box-border overflow-hidden">
+              {porteros.length === 0 ? (
+                <span className="text-[11px] text-white/40 italic">Sin portero alineado</span>
+              ) : (
+                porteros.map((p, idx) => renderPlayerCircle(p, idx))
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

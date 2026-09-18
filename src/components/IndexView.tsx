@@ -20,7 +20,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
   const [teams, setTeams] = useState<string[]>([]);
   const [maxJornada, setMaxJornada] = useState<number>(5);
   const [selectedTeam, setSelectedTeam] = useState<string>('');
-  const [selectedJornada, setSelectedJornada] = useState<number>(5);
+  const [selectedJornada, setSelectedJornada] = useState<number | ''>('');
   
   const [lineupData, setLineupData] = useState<TeamLineupResponse | null>(null);
   const [weeklyScores, setWeeklyScores] = useState<StandingScore[]>([]);
@@ -46,22 +46,19 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
 
     setTeams(teamList);
     setMaxJornada(maxJ);
-    
-    const team = selectedTeam || teamList[0] || '';
-    const j = selectedJornada && selectedJornada <= maxJ ? selectedJornada : (maxJ || 1);
-    
-    if (!selectedTeam) setSelectedTeam(team);
-    if (selectedJornada !== j) setSelectedJornada(j);
 
-    // Load standings
+    // Standings calculation
     setGeneralScores(gasEngine.calculateGeneralScores(maxJ));
     setMostGoalsTeams(gasEngine.calculateMostGoalsTeams(maxJ));
     setLeastConcededTeams(gasEngine.calculateLeastConcededTeams(maxJ));
-    setWeeklyScores(gasEngine.calculateWeeklyScores(j));
+    const activeJ = typeof selectedJornada === 'number' && selectedJornada > 0 ? selectedJornada : maxJ;
+    setWeeklyScores(gasEngine.calculateWeeklyScores(activeJ));
 
-    if (team && j) {
-      const data = gasEngine.getTeamLineupData(team, j);
+    if (selectedTeam && typeof selectedJornada === 'number' && selectedJornada > 0) {
+      const data = gasEngine.getTeamLineupData(selectedTeam, selectedJornada);
       setLineupData(data);
+    } else {
+      setLineupData(null);
     }
     setIsLoading(false);
   };
@@ -77,20 +74,28 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
 
   const handleTeamChange = (teamName: string) => {
     setSelectedTeam(teamName);
-    if (teamName && selectedJornada) {
+    if (teamName && typeof selectedJornada === 'number' && selectedJornada > 0) {
       const data = gasEngine.getTeamLineupData(teamName, selectedJornada);
       setLineupData(data);
       if (data.error) setTeamError(data.error); else setTeamError('');
+    } else {
+      setLineupData(null);
+      setTeamError('');
     }
   };
 
-  const handleJornadaChange = (jNum: number) => {
+  const handleJornadaChange = (val: string) => {
+    const jNum = val ? parseInt(val, 10) : '';
     setSelectedJornada(jNum);
-    setWeeklyScores(gasEngine.calculateWeeklyScores(jNum));
-    if (selectedTeam && jNum) {
+    const effectiveJ = typeof jNum === 'number' && jNum > 0 ? jNum : maxJornada;
+    setWeeklyScores(gasEngine.calculateWeeklyScores(effectiveJ));
+    if (selectedTeam && typeof jNum === 'number' && jNum > 0) {
       const data = gasEngine.getTeamLineupData(selectedTeam, jNum);
       setLineupData(data);
       if (data.error) setTeamError(data.error); else setTeamError('');
+    } else {
+      setLineupData(null);
+      setTeamError('');
     }
   };
 
@@ -130,7 +135,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
               onChange={(e) => handleTeamChange(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 text-white font-bold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer"
             >
-              <option value="">-- Selecciona Equipo --</option>
+              <option value="">Seleccionar equipo</option>
               {teams.map((t, idx) => (
                 <option key={`idx-team-${t}-${idx}`} value={t}>{t}</option>
               ))}
@@ -143,10 +148,10 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
             </label>
             <select
               value={selectedJornada}
-              onChange={(e) => handleJornadaChange(parseInt(e.target.value, 10))}
+              onChange={(e) => handleJornadaChange(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 text-white font-bold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer font-mono"
             >
-              <option value="">-- Selecciona Jornada --</option>
+              <option value="">Seleccionar Jornada</option>
               {Array.from({ length: maxJornada }, (_, i) => i + 1).map(j => (
                 <option key={`idx-jornada-${j}`} value={j}>Jornada {j}</option>
               ))}
@@ -177,11 +182,17 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
                 Alineación y Puntos del Equipo
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Desglose oficial de futbolistas alineados para <strong className="text-white">{selectedTeam || '---'}</strong> en <strong className="text-amber-400">Jornada {selectedJornada}</strong>
+                {selectedTeam && selectedJornada ? (
+                  <>
+                    Desglose oficial de futbolistas alineados para <strong className="text-white">{selectedTeam}</strong> en <strong className="text-amber-400">Jornada {selectedJornada}</strong>
+                  </>
+                ) : (
+                  <>Selecciona un equipo y una jornada en los desplegables para consultar su alineación.</>
+                )}
               </p>
             </div>
 
-            {onGoToField && selectedTeam && (
+            {onGoToField && selectedTeam && typeof selectedJornada === 'number' && selectedJornada > 0 && (
               <button
                 onClick={() => onGoToField(selectedTeam, selectedJornada)}
                 className="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition cursor-pointer self-start sm:self-auto"
@@ -213,7 +224,13 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {!lineupData?.players?.length ? (
+                {!selectedTeam || !selectedJornada ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
+                      Selecciona un equipo y una jornada para ver la alineación y puntos.
+                    </td>
+                  </tr>
+                ) : !lineupData?.players?.length ? (
                   <tr>
                     <td colSpan={7} className="p-6 text-center text-slate-500 font-medium">
                       No se encontró alineación para este equipo y jornada.
@@ -255,21 +272,21 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
                 <tr>
                   <td colSpan={4} className="p-2.5 sm:p-3 text-right text-slate-400">Puntuación Total Jornada:</td>
                   <td className="p-2.5 sm:p-3 text-center text-amber-400 font-black font-mono text-sm sm:text-base">
-                    {lineupData?.totalPoints || '0'}
+                    {selectedTeam && selectedJornada ? (lineupData?.totalPoints || '0') : '-'}
                   </td>
                   <td colSpan={2}></td>
                 </tr>
                 <tr>
                   <td colSpan={4} className="p-2.5 sm:p-3 text-right text-slate-400">Valor Total Equipo:</td>
                   <td className="p-2.5 sm:p-3 text-center text-white font-black font-mono">
-                    {lineupData?.totalValue ? `${lineupData.totalValue}M` : '0M'}
+                    {selectedTeam && selectedJornada ? (lineupData?.totalValue ? `${lineupData.totalValue}M` : '0M') : '-'}
                   </td>
                   <td colSpan={2}></td>
                 </tr>
                 <tr>
                   <td colSpan={4} className="p-2.5 sm:p-3 text-right text-slate-400">Goles Totales Equipo (Jor.):</td>
                   <td className="p-2.5 sm:p-3 text-center text-rose-400 font-black font-mono">
-                    {lineupData?.totalGoals ?? 0}
+                    {selectedTeam && selectedJornada ? (lineupData?.totalGoals ?? 0) : '-'}
                   </td>
                   <td colSpan={2}></td>
                 </tr>
