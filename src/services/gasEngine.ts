@@ -107,12 +107,12 @@ const INITIAL_TEAMS: string[] = [
 ];
 
 const INITIAL_TOKENS: TeamToken[] = [
-  { team: 'BRIKKOMARIAN', token: 'a81e9f12-4c22-44b2-9d21-9128aa90c811' },
-  { team: 'DOVIS', token: 'b73d8a45-5e33-41c3-8e32-8239bb01d922' },
-  { team: 'FREDERER', token: 'c64e7b56-6f44-42d4-9f43-7340cc12e033' },
-  { team: 'LA AUDINETA', token: 'd55f6c67-7a55-43e5-af54-6451dd23f144' },
-  { team: 'MERENDOLO', token: 'e46a5d78-8b66-44f6-b065-5562ee34a255' },
-  { team: 'PLAYA DE CUEVA', token: 'f37b4e89-9c77-45a7-c176-4673ff45b366' },
+  { team: 'BRIKKOMARIAN', token: 'arbitro' },
+  { team: 'DOVIS', token: 'porteria' },
+  { team: 'FREDERER', token: 'titular' },
+  { team: 'LA AUDINETA', token: 'fichaje' },
+  { team: 'MERENDOLO', token: 'empate' },
+  { team: 'PLAYA DE CUEVA', token: 'suplente' },
 ];
 
 const INITIAL_REAL_TEAMS: string[] = [
@@ -284,6 +284,8 @@ const INITIAL_SCHEDULES: ScheduleRecord[] = [
   { jornada: 6, realTeam: 'BAR', deadlineIsoString: '2026-10-05T16:15' },
 ];
 
+export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec';
+
 // Engine Class with LocalStorage persistence to ensure live mutations work 100%
 class GasEngineService {
   private teams: string[] = [];
@@ -293,7 +295,7 @@ class GasEngineService {
   private transfers: TransferRecord[] = [];
   private drafts: DraftRecord[] = [];
   private schedules: ScheduleRecord[] = [];
-  private gasUrl: string = '';
+  private gasUrl: string = DEFAULT_GAS_URL;
   private firstContributionJornada: number = 4;
   private adminPassword: string = ADMIN_PASSWORD;
   private leagueTexts: LeagueTexts = {
@@ -350,15 +352,18 @@ class GasEngineService {
     } catch {}
 
     // 2. Comprobación inicial contra el servidor central (/api/gas-config) y sincronización inmediata de datos
-    setTimeout(() => {
-      this.fetchServerGasConfig(true)
-        .then(() => {
-          if (this.getGasUrl()) {
-            this.syncFromRemote().catch(() => {});
-          }
-        })
-        .catch(() => {});
-    }, 150);
+    this.fetchServerGasConfig(true)
+      .then(() => {
+        if (this.getGasUrl()) {
+          this.syncFromRemote().catch(() => {});
+        }
+      })
+      .catch(() => {
+        // En caso de que el backend local no responda (ej: GitHub Pages o sin conexión), sincronizar directamente con Sheets
+        if (this.getGasUrl()) {
+          this.syncFromRemote().catch(() => {});
+        }
+      });
 
     // 3. Sincronización al volver a enfocar la ventana o pestaña (tiempo real)
     window.addEventListener('focus', () => {
@@ -404,7 +409,8 @@ class GasEngineService {
 
   public getGasUrl(): string {
     if (!this.gasUrl) {
-      this.gasUrl = localStorage.getItem('lfa_gas_url') || '';
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('lfa_gas_url') : null;
+      this.gasUrl = (saved && saved.trim()) ? saved.trim() : DEFAULT_GAS_URL;
     }
     return this.gasUrl;
   }
@@ -443,11 +449,6 @@ class GasEngineService {
                   console.warn('[gasEngine] Auto-sync post URL update failed:', err);
                 });
               }
-            }
-          } else {
-            const currentLocal = this.getGasUrl();
-            if (currentLocal) {
-              this.pushGasConfigToServer(currentLocal).catch(() => {});
             }
           }
         }
@@ -566,8 +567,12 @@ class GasEngineService {
    * Envía toda la configuración de la liga al servidor central (o URL de Sheets)
    */
   public async pushLeagueConfigToServer(partial?: Partial<LeagueConfig>, adminPassword?: string): Promise<boolean> {
+    const effectiveGasUrl = (partial?.gasUrl !== undefined && String(partial.gasUrl).trim())
+      ? String(partial.gasUrl).trim()
+      : (this.getGasUrl() || DEFAULT_GAS_URL);
+
     const payload = {
-      gasUrl: partial?.gasUrl !== undefined ? partial.gasUrl : this.gasUrl,
+      gasUrl: effectiveGasUrl,
       firstContributionJornada: partial?.firstContributionJornada !== undefined ? partial.firstContributionJornada : this.firstContributionJornada,
       teams: partial?.teams !== undefined ? partial.teams : this.teams,
       tokens: partial?.tokens !== undefined ? partial.tokens : this.tokens,
@@ -1721,6 +1726,9 @@ class GasEngineService {
 
   private loadState() {
     try {
+      const savedGasUrl = localStorage.getItem('lfa_gas_url');
+      this.gasUrl = (savedGasUrl && savedGasUrl.trim()) ? savedGasUrl.trim() : DEFAULT_GAS_URL;
+
       const savedTeams = localStorage.getItem('lfa_teams');
       const savedTokens = localStorage.getItem('lfa_tokens');
       const savedPlayers = localStorage.getItem('lfa_players');

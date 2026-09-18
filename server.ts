@@ -15,7 +15,7 @@ async function startServer() {
   // Helper to retrieve current GAS configuration
   function getGasConfig() {
     const defaults = {
-      gasUrl: process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycbzcX9D9Y4xMbPB8FCimSeAeovjoQxDFkrpmZOO231MWSV0zqIliCq5drohxPiVJ53C-AA/exec',
+      gasUrl: process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec',
       adminPassword: 'admin',
       leagueTexts: {
         leagueName: 'Liga Fantástica de Amigos',
@@ -37,12 +37,12 @@ async function startServer() {
         'PLAYA DE CUEVA'
       ],
       tokens: [
-        { team: 'BRIKKOMARIAN', token: 'a81e9f12-4c22-44b2-9d21-9128aa90c811' },
-        { team: 'DOVIS', token: 'b73d8a45-5e33-41c3-8e32-8239bb01d922' },
-        { team: 'FREDERER', token: 'c64e7b56-6f44-42d4-9f43-7340cc12e033' },
-        { team: 'LA AUDINETA', token: 'd55f6c67-7a55-43e5-af54-6451dd23f144' },
-        { team: 'MERENDOLO', token: 'e46a5d78-8b66-44f6-b065-5562ee34a255' },
-        { team: 'PLAYA DE CUEVA', token: 'f37b4e89-9c77-45a7-c176-4673ff45b366' }
+        { team: 'BRIKKOMARIAN', token: 'arbitro' },
+        { team: 'DOVIS', token: 'porteria' },
+        { team: 'FREDERER', token: 'titular' },
+        { team: 'LA AUDINETA', token: 'fichaje' },
+        { team: 'MERENDOLO', token: 'empate' },
+        { team: 'PLAYA DE CUEVA', token: 'suplente' }
       ],
       customClubStyles: [],
       notificationConfig: {
@@ -104,7 +104,9 @@ async function startServer() {
         ...(newValues.leagueTexts || {})
       },
       customCodeGs: newValues.customCodeGs !== undefined ? newValues.customCodeGs : (current.customCodeGs || ''),
-      gasUrl: (newValues.gasUrl !== undefined ? newValues.gasUrl : current.gasUrl || '').trim(),
+      gasUrl: (newValues.gasUrl !== undefined && String(newValues.gasUrl).trim())
+        ? String(newValues.gasUrl).trim()
+        : (current.gasUrl || 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec'),
       firstContributionJornada: typeof newValues.firstContributionJornada === 'number'
         ? Math.max(1, Math.min(38, newValues.firstContributionJornada))
         : current.firstContributionJornada || 4,

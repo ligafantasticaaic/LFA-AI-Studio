@@ -128,6 +128,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     const unsub = gasEngine.subscribe(() => {
       setSyncVersion(v => v + 1);
       setIsDraftHiddenAdmin(gasEngine.isDraftHidden());
+      setGasUrlInput(gasEngine.getGasUrl());
       if (isUnlocked) {
         loadAdminData();
       }
@@ -183,6 +184,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const loadAdminData = () => {
+    setGasUrlInput(gasEngine.getGasUrl());
     const res = gasEngine.getTeamTokensAdmin(adminPass);
     if (res.success) {
       setTokens(res.tokens);
