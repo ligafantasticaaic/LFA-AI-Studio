@@ -381,12 +381,12 @@ class GasEngineService {
       this.fetchServerGasConfig(true).catch(() => {});
     }, 60000);
 
-    // 5. Sondeo en tiempo real de Google Sheets (cada 12 segundos) para reflejar cambios en vivo
+    // 5. Sondeo en tiempo real de Google Sheets (cada 45 segundos) para reflejar cambios en vivo sin saturar la cuota
     setInterval(() => {
-      if (this.getGasUrl() && (typeof document === 'undefined' || !document.hidden)) {
+      if (this.getGasUrl() && !this.isSyncingRemote && (typeof document === 'undefined' || !document.hidden)) {
         this.syncFromRemote().catch(() => {});
       }
-    }, 12000);
+    }, 45000);
   }
 
   public subscribe(listener: () => void) {
@@ -1376,14 +1376,20 @@ class GasEngineService {
     }
   }
 
-  public async syncFromRemote(customUrl?: string): Promise<{ success: boolean; message: string; stats?: any }> {
-    if (this.isSyncingRemote) {
+  public async syncFromRemote(customUrl?: string, force = false): Promise<{ success: boolean; message: string; stats?: any }> {
+    if (this.isSyncingRemote && !force) {
       return { success: true, message: 'Sincronización en curso...' };
     }
     this.isSyncingRemote = true;
 
+    // Temporizador de seguridad para evitar bloqueos indefinidos del flag
+    const safetyTimer = setTimeout(() => {
+      this.isSyncingRemote = false;
+    }, 32000);
+
     const targetUrl = (customUrl !== undefined ? customUrl : this.getGasUrl()).trim();
     if (!targetUrl) {
+      clearTimeout(safetyTimer);
       this.isSyncingRemote = false;
       return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
     }
@@ -1393,13 +1399,21 @@ class GasEngineService {
 
       // 1. Intento prioritario a través del servidor backend (/api/gas-sync) para evitar CORS y acelerar respuesta
       try {
-        const proxyUrl = `/api/gas-sync?customGasUrl=${encodeURIComponent(targetUrl)}&_t=${Date.now()}`;
-        const proxyRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(28000) });
-        if (proxyRes.ok) {
-          const proxyJson = await proxyRes.json();
-          if (proxyJson && proxyJson.success !== false && !proxyJson.error) {
-            data = proxyJson;
+        const proxyUrl = `/api/gas-sync?customGasUrl=${encodeURIComponent(targetUrl)}&force=${force ? 'true' : 'false'}&_t=${Date.now()}`;
+        const ctrl = new AbortController();
+        const tId = setTimeout(() => ctrl.abort(), 26000);
+
+        try {
+          const proxyRes = await fetch(proxyUrl, { signal: ctrl.signal });
+          clearTimeout(tId);
+          if (proxyRes.ok) {
+            const proxyJson = await proxyRes.json();
+            if (proxyJson && proxyJson.success !== false && !proxyJson.error) {
+              data = proxyJson;
+            }
           }
+        } finally {
+          clearTimeout(tId);
         }
       } catch {
         // Si el proxy falla, recurrir al método de conexión directa de gasEngine
@@ -4313,6 +4327,12 @@ class GasEngineService {
     if (!drafts.length) {
       return { success: true, message: 'No hay elecciones de draft registradas en el historial local.', syncedCount: 0 };
     }
+
+    const targetUrl = this.getGasUrl();
+    if (!targetUrl) {
+      return { success: false, message: 'No hay URL de Google Apps Script configurada.', syncedCount: 0 };
+    }
+
     const tokenMap = new Map<string, string>();
     this.getTokens().forEach(t => tokenMap.set(t.team.toLowerCase().trim(), t.token));
 
@@ -4321,18 +4341,49 @@ class GasEngineService {
 
     // Enviar en orden cronológico (las más antiguas primero)
     const chronologicalDrafts = [...drafts].reverse();
-    for (const d of chronologicalDrafts) {
+
+    // Probar primero el primer elemento para verificar si Apps Script reconoce la acción 'draft'
+    const firstDraft = chronologicalDrafts[0];
+    const firstToken = tokenMap.get(firstDraft.team.toLowerCase().trim()) || '';
+    const testRes = await this.executeGasAction({
+      action: 'draft',
+      team: firstDraft.team,
+      token: firstToken,
+      player: firstDraft.playerName
+    });
+
+    if (testRes.outdatedScript) {
+      return {
+        success: false,
+        message: '⚠️ Tu Web App de Google Apps Script necesita desplegar una "Nueva versión" para habilitar el volcado de elecciones. Sigue las instrucciones de la pestaña Conectar.',
+        syncedCount: 0
+      };
+    }
+
+    if (testRes.success || (testRes.message && testRes.message.includes('ya fue seleccionado'))) {
+      successCount++;
+    } else {
+      lastError = testRes.message;
+    }
+
+    // Procesar el resto
+    for (let i = 1; i < chronologicalDrafts.length; i++) {
+      const d = chronologicalDrafts[i];
       const token = tokenMap.get(d.team.toLowerCase().trim()) || '';
-      const res = await this.executeGasAction({
-        action: 'draft',
-        team: d.team,
-        token: token,
-        player: d.playerName
-      });
-      if (res.success) {
-        successCount++;
-      } else {
-        lastError = res.message;
+      try {
+        const res = await this.executeGasAction({
+          action: 'draft',
+          team: d.team,
+          token: token,
+          player: d.playerName
+        });
+        if (res.success || (res.message && res.message.includes('ya fue seleccionado'))) {
+          successCount++;
+        } else {
+          lastError = res.message;
+        }
+      } catch (err: any) {
+        lastError = err?.message || 'Error de red';
       }
     }
 
@@ -4346,7 +4397,7 @@ class GasEngineService {
 
     return {
       success: successCount > 0,
-      message: `Se sincronizaron ${successCount} de ${drafts.length} elecciones. ${lastError ? 'Detalle: ' + lastError : ''}`,
+      message: `Se verificaron/sincronizaron ${successCount} de ${drafts.length} elecciones. ${lastError ? 'Detalle: ' + lastError : ''}`,
       syncedCount: successCount
     };
   }

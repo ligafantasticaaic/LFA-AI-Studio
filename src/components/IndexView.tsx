@@ -66,7 +66,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
-      await gasEngine.syncFromRemote();
+      await gasEngine.syncFromRemote(undefined, true);
     } catch {}
     loadInitialData();
     setIsLoading(false);
@@ -310,7 +310,8 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
           <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
             <h2 className="text-base font-black text-white flex items-center gap-2 m-0 p-0 border-none">
               <TrendingUp className="w-4 h-4 text-amber-400" />
-              Clasificación Jornada <span className="text-amber-400">{selectedJornada}</span>
+              Clasificación Jornada <span className="text-amber-400">{typeof selectedJornada === 'number' && selectedJornada > 0 ? selectedJornada : maxJornada}</span>
+              {!selectedJornada && <span className="text-[11px] font-normal text-slate-400 ml-1">(Última disputada)</span>}
             </h2>
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">

@@ -104,8 +104,8 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
     const pts = typeof p.points === 'number' ? p.points : 0;
     
     let glowBadge = 'bg-slate-800 text-slate-200 border-slate-700';
-    if (pts >= 10) glowBadge = 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/50 border-emerald-300';
-    else if (pts >= 6) glowBadge = 'bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-400/40 border-amber-200';
+    if (pts >= 10) glowBadge = 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/50 border-emerald-300';
+    else if (pts >= 6) glowBadge = 'bg-amber-400 text-slate-950 font-black shadow-sm shadow-amber-400/40 border-amber-200';
     else if (pts > 0) glowBadge = 'bg-blue-500 text-white font-bold border-blue-300';
 
     return (
@@ -114,24 +114,24 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
         className="flex flex-col items-center justify-center relative group transition-transform duration-200 hover:scale-105 cursor-pointer z-30 shrink min-w-0"
       >
         {/* Glow halo */}
-        <div className="absolute -inset-0.5 rounded-full bg-gradient-to-tr from-amber-400/20 to-emerald-400/20 blur-[2px] opacity-40 group-hover:opacity-100 transition-opacity pointer-events-none" />
+        <div className="absolute -inset-0.5 rounded-full bg-gradient-to-tr from-amber-400/20 to-emerald-400/20 blur-[1px] opacity-40 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
         {/* Player Badge Disc */}
-        <div className="relative w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 sm:border-[3px] border-amber-400/90 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-white flex flex-col items-center justify-center text-center shadow-xl overflow-hidden p-0.5 sm:p-1">
-          <div className="text-[7px] xs:text-[7.5px] sm:text-[8.5px] md:text-[9px] font-black uppercase leading-none bg-amber-500 text-slate-950 px-1 sm:px-1.5 py-0.5 rounded-full border border-amber-400 mb-0.5 tracking-tight font-mono">
+        <div className="relative w-9 h-9 xs:w-11 xs:h-11 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full border border-amber-400/80 sm:border-2 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-white flex flex-col items-center justify-center text-center shadow-lg overflow-hidden p-0.5">
+          <div className="text-[5.5px] xs:text-[6.5px] sm:text-[7.5px] md:text-[8px] font-black uppercase leading-none bg-amber-500 text-slate-950 px-1 py-0.2 rounded-full border border-amber-400 mb-0.5 tracking-tight font-mono">
             {realTeam}
           </div>
-          <span className="text-[8.5px] xs:text-[9.5px] sm:text-xs md:text-sm font-black truncate max-w-[40px] xs:max-w-[48px] sm:max-w-[62px] md:max-w-[76px] uppercase tracking-tight text-slate-100 leading-tight" title={p.name}>
+          <span className="text-[6.5px] xs:text-[7.5px] sm:text-[9.5px] md:text-[11px] font-black truncate max-w-[32px] xs:max-w-[40px] sm:max-w-[54px] md:max-w-[66px] uppercase tracking-tight text-slate-100 leading-tight" title={p.name}>
             {p.name.split(' ').pop()}
           </span>
-          <div className="flex justify-between sm:justify-around w-full px-0.5 sm:px-1 text-[7px] xs:text-[7.5px] sm:text-[8.5px] md:text-[9px] font-bold text-amber-400 border-t border-slate-800/80 pt-0.5 mt-0.5 font-mono">
+          <div className="flex justify-between sm:justify-around w-full px-0.5 text-[5.5px] xs:text-[6.5px] sm:text-[7.5px] md:text-[8px] font-bold text-amber-400 border-t border-slate-800/80 pt-0.2 mt-0.5 font-mono">
             <span>{getPositionGroup(p.position)}</span>
             <span>{p.value}M</span>
           </div>
         </div>
 
         {/* Points Bubble Badge */}
-        <div className={`absolute -top-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] md:text-xs font-black border z-40 ${glowBadge}`}>
+        <div className={`absolute -top-1 -right-1 w-4 h-4 xs:w-4.5 xs:h-4.5 sm:w-5 sm:h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[7.5px] xs:text-[8.5px] sm:text-[9.5px] md:text-xs font-black border z-40 ${glowBadge}`}>
           {p.points !== '' ? p.points : '-'}
         </div>
       </div>
@@ -240,7 +240,7 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
         ) : (
           <>
             {/* Delanteros */}
-            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-1 pt-2 sm:pt-4 px-1 sm:px-3 box-border overflow-hidden">
+            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-0.5 sm:gap-1 pt-2 sm:pt-4 px-0.5 sm:px-3 box-border overflow-hidden">
               {delanteros.length === 0 ? (
                 <span className="text-[11px] text-white/40 italic">Sin delanteros alineados</span>
               ) : (
@@ -249,7 +249,7 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
             </div>
 
             {/* Centrocampistas */}
-            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-1 py-3 sm:py-4 px-1 sm:px-3 box-border overflow-hidden">
+            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-0.5 sm:gap-1 py-2 sm:py-4 px-0.5 sm:px-3 box-border overflow-hidden">
               {medios.length === 0 ? (
                 <span className="text-[11px] text-white/40 italic">Sin mediocentros alineados</span>
               ) : (
@@ -258,7 +258,7 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
             </div>
 
             {/* Defensas */}
-            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-1 py-3 sm:py-4 px-1 sm:px-3 box-border overflow-hidden">
+            <div className="relative z-10 w-full max-w-full flex items-center justify-evenly gap-0.5 sm:gap-1 py-2 sm:py-4 px-0.5 sm:px-3 box-border overflow-hidden">
               {defensas.length === 0 ? (
                 <span className="text-[11px] text-white/40 italic">Sin defensas alineados</span>
               ) : (
@@ -267,7 +267,7 @@ export const TacticalFieldView: React.FC<TacticalFieldViewProps> = ({
             </div>
 
             {/* Portero */}
-            <div className="relative z-10 w-full max-w-full flex items-center justify-center pb-2 sm:pb-4 px-1 sm:px-3 box-border overflow-hidden">
+            <div className="relative z-10 w-full max-w-full flex items-center justify-center pb-2 sm:pb-4 px-0.5 sm:px-3 box-border overflow-hidden">
               {porteros.length === 0 ? (
                 <span className="text-[11px] text-white/40 italic">Sin portero alineado</span>
               ) : (

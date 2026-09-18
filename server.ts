@@ -285,10 +285,15 @@ async function startServer() {
     }
   });
 
+  // Cache en memoria para acelerar sincronizaciones y proteger Google Apps Script de sobrecargas
+  let syncCache: { url: string; data: any; timestamp: number } | null = null;
+  let inFlightSync: Promise<any> | null = null;
+
   // GET /api/gas-sync - Obtiene la sincronización completa desde Google Sheets sin bloqueos de CORS
   app.get('/api/gas-sync', async (req, res) => {
     const config = getGasConfig();
     const targetUrl = (req.query.customGasUrl ? String(req.query.customGasUrl) : config.gasUrl || '').trim();
+    const forceRefresh = req.query.force === 'true' || req.query.force === '1';
 
     if (!targetUrl) {
       return res.status(400).json({
@@ -298,37 +303,61 @@ async function startServer() {
       });
     }
 
+    // Servir desde caché fresca si no se solicita forzar refresco (< 20 segundos)
+    const now = Date.now();
+    if (!forceRefresh && syncCache && syncCache.url === targetUrl && (now - syncCache.timestamp < 20000)) {
+      return res.json(syncCache.data);
+    }
+
     try {
-      const url = new URL(targetUrl);
-      url.searchParams.set('action', 'getFullSync');
-      url.searchParams.set('_t', String(Date.now()));
+      // Deduplicación en vuelo: si ya hay una petición en curso a Apps Script, reutilizarla
+      if (!inFlightSync) {
+        inFlightSync = (async () => {
+          const url = new URL(targetUrl);
+          url.searchParams.set('action', 'getFullSync');
+          url.searchParams.set('_t', String(Date.now()));
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 35000);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 28000);
 
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        redirect: 'follow',
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
+          try {
+            const response = await fetch(url.toString(), {
+              method: 'GET',
+              redirect: 'follow',
+              signal: controller.signal
+            });
+            clearTimeout(timeout);
 
-      const text = await response.text();
-      let data: any = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        return res.status(502).json({
-          success: false,
-          error: 'INVALID_JSON',
-          message: 'Google Apps Script no devolvió un JSON válido.',
-          raw: text.substring(0, 300)
+            const text = await response.text();
+            let data: any = null;
+            try {
+              data = JSON.parse(text);
+            } catch {
+              throw new Error('Google Apps Script no devolvió un JSON válido.');
+            }
+
+            if (data && data.success !== false) {
+              syncCache = { url: targetUrl, data, timestamp: Date.now() };
+            }
+            return data;
+          } finally {
+            clearTimeout(timeout);
+          }
+        })().finally(() => {
+          inFlightSync = null;
         });
       }
 
-      return res.json(data);
+      const result = await inFlightSync;
+      return res.json(result);
     } catch (err: any) {
       console.error('[gas-sync] Error al obtener datos de Google Apps Script:', err);
+      // Si falló pero tenemos caché previa (aunque sea antigua), devolverla para no dejar al usuario sin datos
+      if (syncCache && syncCache.url === targetUrl) {
+        console.log('[gas-sync] Sirviendo datos de respaldo en caché.');
+        return res.json({ ...syncCache.data, fromStaleCache: true });
+      }
+
       return res.status(500).json({
         success: false,
         error: err?.message || 'NETWORK_ERROR',
@@ -403,6 +432,10 @@ async function startServer() {
             ? `⚠️ Tu Web App de Google Apps Script necesita actualizarse: No reconoce la acción "${action}". Copia el nuevo "Código.gs" desde Admin y en Apps Script despliega una "Nueva versión".`
             : `Error de Google Sheets: ${data.error}`
         });
+      }
+
+      if (data?.success !== false) {
+        syncCache = null;
       }
 
       return res.json({

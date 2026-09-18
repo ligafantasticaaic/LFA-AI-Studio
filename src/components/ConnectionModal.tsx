@@ -85,24 +85,36 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const handleSaveAndSync = async () => {
     if (!gasUrlInput.trim()) return;
 
-    gasEngine.setGasUrl(gasUrlInput);
+    gasEngine.setGasUrl(gasUrlInput.trim());
     setIsSyncing(true);
     setTestResult(null);
 
-    const result = await gasEngine.syncFromRemote(gasUrlInput);
-    setIsSyncing(false);
+    const safetyTimer = setTimeout(() => {
+      setIsSyncing(false);
+    }, 25000);
 
-    if (result.success) {
-      setTestResult({
-        success: true,
-        message: result.message
-      });
-      if (onSyncComplete) onSyncComplete();
-    } else {
+    try {
+      const result = await gasEngine.syncFromRemote(gasUrlInput.trim(), true);
+      if (result.success) {
+        setTestResult({
+          success: true,
+          message: result.message
+        });
+        if (onSyncComplete) onSyncComplete();
+      } else {
+        setTestResult({
+          success: false,
+          message: result.message
+        });
+      }
+    } catch (e: any) {
       setTestResult({
         success: false,
-        message: result.message
+        message: 'Error al sincronizar: ' + (e?.message || 'Error de conexión.')
       });
+    } finally {
+      clearTimeout(safetyTimer);
+      setIsSyncing(false);
     }
   };
 

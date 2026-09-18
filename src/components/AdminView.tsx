@@ -595,11 +595,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const handleSyncPendingDrafts = async () => {
     setIsSyncingPendingDrafts(true);
-    const res = await gasEngine.syncAllPendingDraftsToGoogleSheets();
-    setIsSyncingPendingDrafts(false);
-    showAlert(res.message, res.success);
-    if (res.success) {
-      loadAdminData();
+    const safetyTimer = setTimeout(() => setIsSyncingPendingDrafts(false), 20000);
+    try {
+      const res = await gasEngine.syncAllPendingDraftsToGoogleSheets();
+      showAlert(res.message, res.success);
+      if (res.success) {
+        loadAdminData();
+      }
+    } catch (e: any) {
+      showAlert('Error al volcar elecciones: ' + (e?.message || 'Error de red'), false);
+    } finally {
+      clearTimeout(safetyTimer);
+      setIsSyncingPendingDrafts(false);
     }
   };
 
@@ -611,15 +618,25 @@ export const AdminView: React.FC<AdminViewProps> = ({
     gasEngine.setGasUrl(gasUrlInput.trim());
     setIsSyncingGas(true);
     setGasFeedback(null);
-    const res = await gasEngine.syncFromRemote(gasUrlInput.trim());
-    setIsSyncingGas(false);
-    setGasFeedback({
-      isSuccess: !!res.success,
-      message: res.message,
-      stats: res.stats
-    });
-    if (res.success) {
-      loadAdminData();
+    const safetyTimer = setTimeout(() => setIsSyncingGas(false), 25000);
+    try {
+      const res = await gasEngine.syncFromRemote(gasUrlInput.trim(), true);
+      setGasFeedback({
+        isSuccess: !!res.success,
+        message: res.message,
+        stats: res.stats
+      });
+      if (res.success) {
+        loadAdminData();
+      }
+    } catch (e: any) {
+      setGasFeedback({
+        isSuccess: false,
+        message: 'Error al sincronizar: ' + (e?.message || 'Error de conexión.')
+      });
+    } finally {
+      clearTimeout(safetyTimer);
+      setIsSyncingGas(false);
     }
   };
 
