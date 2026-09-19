@@ -3422,7 +3422,9 @@ class GasEngineService {
 
   public getCustomCodeGs(): string {
     if (this.customCodeGs && this.customCodeGs.trim().length > 100) {
-      return this.customCodeGs;
+      if (this.customCodeGs.includes('onOpen') && this.customCodeGs.includes('copyLineupsInSheets')) {
+        return this.customCodeGs;
+      }
     }
     return generateCustomGasCode({
       adminPassword: this.adminPassword,
@@ -3777,24 +3779,85 @@ class GasEngineService {
     return { success: true, message: `Se generaron ${this.tokens.length} tokens correctamente.` };
   }
 
-  public copyLastJornadaAlineacionesWeb(adminPass: string): { success: boolean; message: string } {
+  /**
+   * Copia las alineaciones de la última jornada (o una jornada específica) a la siguiente en Google Sheets y en la app.
+   */
+  public async copyLastJornadaAlineaciones(
+    adminPass: string,
+    customSourceJ?: number,
+    customTargetJ?: number
+  ): Promise<{ success: boolean; message: string; sourceJornada?: number; targetJornada?: number; count?: number; syncedRemote?: boolean }> {
     if (!this.verifyAdminPassword(adminPass)) {
-      return { success: false, message: 'Contraseña incorrecta.' };
+      return { success: false, message: 'Contraseña de administrador incorrecta.' };
     }
+
     const maxLineupsJ = this.getMaxJornadaFromAlineacionesSheet();
-    const targetJornada = maxLineupsJ + 1;
+    let sourceJ = (typeof customSourceJ === 'number' && customSourceJ > 0) ? customSourceJ : maxLineupsJ;
+    let targetJ = (typeof customTargetJ === 'number' && customTargetJ > 0) ? customTargetJ : (sourceJ > 0 ? sourceJ + 1 : 0);
 
-    const lastLineup = this.lineups.filter(l => l.jornada === maxLineupsJ && l.playerName);
-    if (lastLineup.length === 0) {
-      return { success: false, message: `No se encontraron alineaciones en la Jornada ${maxLineupsJ}.` };
+    const gasUrl = this.getGasUrl();
+    let gasMessage = '';
+    let remoteSuccess = false;
+
+    // 1. Si Google Apps Script está conectado, invocar la acción remota en Google Sheets
+    if (gasUrl) {
+      try {
+        const gasRes = await this.executeGasAction({
+          action: 'copyLineups',
+          sourceJornada: sourceJ > 0 ? sourceJ : undefined,
+          targetJornada: targetJ > 0 ? targetJ : undefined
+        });
+
+        if (gasRes && gasRes.success) {
+          remoteSuccess = true;
+          const finalSrc = gasRes.sourceJornada || sourceJ;
+          const finalTgt = gasRes.targetJornada || targetJ;
+          gasMessage = ' ' + (gasRes.message || `Sincronizado en tiempo real en la pestaña "Alineaciones" de Google Sheets.`);
+          // Sincronizar remotamente de inmediato para traer la información actualizada
+          await this.syncFromRemote(undefined, true).catch(() => {});
+          return {
+            success: true,
+            message: gasRes.message || `Se copiaron las alineaciones de la J${finalSrc} a la J${finalTgt} en Google Sheets.`,
+            sourceJornada: finalSrc,
+            targetJornada: finalTgt,
+            count: gasRes.count || gasRes.data?.count,
+            syncedRemote: true
+          };
+        } else if (gasRes?.outdatedScript) {
+          gasMessage = ' ⚠️ Nota: Para copiar directamente en Google Sheets, actualiza Código.gs desde el Panel Admin y despliega una "Nueva versión".';
+        } else if (gasRes && gasRes.message) {
+          gasMessage = ' (Aviso Google Sheets: ' + gasRes.message + ')';
+        }
+      } catch (errGas) {
+        console.warn('[gasEngine] Error llamando a copyLineups en GAS:', errGas);
+      }
     }
 
-    const playerMap = new Map(this.players.map(p => [p.name, p]));
+    // 2. Si no hay GAS o por respaldo local en el navegador:
+    if (sourceJ <= 0) {
+      return { success: false, message: 'No se encontraron alineaciones registradas en ninguna jornada para copiar.' };
+    }
+
+    if (targetJ <= 0) {
+      targetJ = sourceJ + 1;
+    }
+
+    if (sourceJ === targetJ) {
+      return { success: false, message: `La jornada origen y destino no pueden ser iguales (J${sourceJ}).` };
+    }
+
+    const lastLineup = this.lineups.filter(l => l.jornada === sourceJ && l.playerName && l.playerName.trim());
+    if (lastLineup.length === 0) {
+      return { success: false, message: `No se encontraron alineaciones en la Jornada ${sourceJ}.` };
+    }
+
+    // Preparar las nuevas alineaciones para la jornada destino
+    const playerMap = new Map(this.players.map(p => [p.name.trim().toLowerCase(), p]));
     const newJornadaData: LineupEntry[] = lastLineup.map(l => {
-      const pD = playerMap.get(l.playerName);
+      const pD = playerMap.get(l.playerName.trim().toLowerCase());
       return {
         team: l.team,
-        jornada: targetJornada,
+        jornada: targetJ,
         playerName: l.playerName,
         realTeam: pD?.realTeam || l.realTeam || 'N/A',
         position: pD?.position || l.position || 'N/A',
@@ -3802,9 +3865,24 @@ class GasEngineService {
       };
     });
 
+    // Guardar las alineaciones de la nueva jornada localmente (evitando duplicaciones)
+    this.lineups = this.lineups.filter(l => l.jornada !== targetJ);
     this.lineups.push(...newJornadaData);
     this.saveState();
-    return { success: true, message: `Se copiaron ${newJornadaData.length} alineaciones de la J${maxLineupsJ} a la J${targetJornada}.` };
+    this.notify();
+
+    return {
+      success: true,
+      message: `Se copiaron ${newJornadaData.length} futbolistas de la J${sourceJ} a la J${targetJ}.${gasMessage}`,
+      sourceJornada: sourceJ,
+      targetJornada: targetJ,
+      count: newJornadaData.length,
+      syncedRemote: remoteSuccess
+    };
+  }
+
+  public copyLastJornadaAlineacionesWeb(adminPass: string, sourceJ?: number, targetJ?: number) {
+    return this.copyLastJornadaAlineaciones(adminPass, sourceJ, targetJ);
   }
 
   public saveScheduleDeadline(adminPass: string, jornada: number, realTeam: string, deadlineIsoString: string): { success: boolean; message: string } {
@@ -4180,15 +4258,25 @@ class GasEngineService {
    * Prioriza el backend /api/gas-action (inmune a CORS y redirecciones) y recurre a fetchGasData como respaldo.
    */
   public async executeGasAction(payload: {
-    action: 'draft' | 'transfer' | 'saveDraftOrder' | 'ping' | 'resetSeason';
+    action: 'draft' | 'transfer' | 'saveDraftOrder' | 'ping' | 'resetSeason' | 'copyLineups' | 'copiarAlineaciones';
     team?: string;
     token?: string;
     player?: string;
     jornada?: number;
+    sourceJornada?: number;
+    targetJornada?: number;
     transfers?: any[];
     draftOrder?: any;
     requestId?: string;
-  }): Promise<{ success: boolean; message: string; outdatedScript?: boolean; data?: any }> {
+  }): Promise<{
+    success: boolean;
+    message: string;
+    outdatedScript?: boolean;
+    data?: any;
+    sourceJornada?: number;
+    targetJornada?: number;
+    count?: number;
+  }> {
     const targetUrl = this.getGasUrl();
     if (!targetUrl) {
       return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
@@ -4231,6 +4319,8 @@ class GasEngineService {
       if (payload.token) params.token = payload.token;
       if (payload.player) params.player = payload.player;
       if (payload.jornada !== undefined) params.jornada = String(payload.jornada);
+      if (payload.sourceJornada !== undefined) params.sourceJornada = String(payload.sourceJornada);
+      if (payload.targetJornada !== undefined) params.targetJornada = String(payload.targetJornada);
       if (payload.transfers !== undefined) {
         params.transfers = typeof payload.transfers === 'string' ? payload.transfers : JSON.stringify(payload.transfers);
       }

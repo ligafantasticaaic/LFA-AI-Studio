@@ -317,6 +317,118 @@ var FREE_TRANSFERS_PER_TEAM = 3;
 var ADMIN_PASSWORD = "admin";
 var FIRST_CONTRIBUTION_JORNADA = 5; // Primera jornada con aportaciones semanales (configurable)
 
+/**
+ * =========================================================================
+ * MENÚ PERSONALIZADO DE GOOGLE SHEETS (onOpen)
+ * Crea el menú superior "⚽ Liga Fantástica" al abrir la hoja de cálculo
+ * para copiar alineaciones entre jornadas directamente desde Google Sheets.
+ * =========================================================================
+ */
+function onOpen() {
+  try {
+    var ui = SpreadsheetApp.getUi();
+    ui.createMenu('⚽ Liga Fantástica')
+      .addItem('📋 Copiar alineaciones a la siguiente jornada', 'menuCopiarAlineacionesSiguienteJornada')
+      .addItem('🔄 Copiar alineaciones entre jornadas personalizadas...', 'menuCopiarAlineacionesPersonalizadas')
+      .addSeparator()
+      .addItem('📊 Recalcular y sincronizar datos', 'menuRecalcularTodo')
+      .addToUi();
+  } catch (err) {
+    Logger.log('onOpen notice: ' + err.message);
+  }
+}
+
+/**
+ * Menú Sheets: Copia automáticamente las alineaciones de la última jornada a la siguiente
+ */
+function menuCopiarAlineacionesSiguienteJornada() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var maxJ = getMaxJornadaFromAlineacionesSheetDirect();
+    if (!maxJ || maxJ < 1) {
+      ui.alert('Aviso', 'No se encontraron alineaciones en la pestaña "Alineaciones". Registra primero al menos una jornada.', ui.ButtonSet.OK);
+      return;
+    }
+    var targetJ = maxJ + 1;
+    var resp = ui.alert(
+      'Copiar Alineaciones Automático',
+      '¿Deseas copiar todas las alineaciones de la última jornada registrada (Jornada ' + maxJ + ') a la siguiente (Jornada ' + targetJ + ') en la pestaña "Alineaciones"?',
+      ui.ButtonSet.YES_NO
+    );
+    if (resp !== ui.Button.YES) return;
+
+    var result = copyLineupsInSheets(maxJ, targetJ);
+    if (result.success) {
+      ui.alert('¡Operación Exitosa!', result.message, ui.ButtonSet.OK);
+    } else {
+      ui.alert('Error', result.message || 'No se pudieron copiar las alineaciones.', ui.ButtonSet.OK);
+    }
+  } catch (e) {
+    ui.alert('Error', 'Ocurrió un error al copiar alineaciones: ' + e.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Menú Sheets: Permite al usuario indicar jornada origen y jornada destino
+ */
+function menuCopiarAlineacionesPersonalizadas() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var maxJ = getMaxJornadaFromAlineacionesSheetDirect() || 1;
+    var pOrig = ui.prompt(
+      'Copiar Alineaciones - Jornada Origen',
+      'Introduce el número de la Jornada ORIGEN a copiar (ej: ' + maxJ + '):',
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (pOrig.getSelectedButton() !== ui.Button.OK) return;
+    var fromJ = parseInt(pOrig.getResponseText().trim(), 10);
+    if (isNaN(fromJ) || fromJ < 1) {
+      ui.alert('Error', 'La jornada origen debe ser un número entero mayor que 0.', ui.ButtonSet.OK);
+      return;
+    }
+
+    var pDest = ui.prompt(
+      'Copiar Alineaciones - Jornada Destino',
+      'Introduce el número de la Jornada DESTINO donde pegar las alineaciones (ej: ' + (fromJ + 1) + '):',
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (pDest.getSelectedButton() !== ui.Button.OK) return;
+    var toJ = parseInt(pDest.getResponseText().trim(), 10);
+    if (isNaN(toJ) || toJ < 1) {
+      ui.alert('Error', 'La jornada destino debe ser un número entero mayor que 0.', ui.ButtonSet.OK);
+      return;
+    }
+
+    if (fromJ === toJ) {
+      ui.alert('Error', 'La jornada origen y destino no pueden ser iguales (J' + fromJ + ').', ui.ButtonSet.OK);
+      return;
+    }
+
+    var resp = ui.alert(
+      'Confirmar Copia',
+      '¿Copiar todas las alineaciones de la Jornada ' + fromJ + ' a la Jornada ' + toJ + '?',
+      ui.ButtonSet.YES_NO
+    );
+    if (resp !== ui.Button.YES) return;
+
+    var result = copyLineupsInSheets(fromJ, toJ);
+    if (result.success) {
+      ui.alert('¡Operación Exitosa!', result.message, ui.ButtonSet.OK);
+    } else {
+      ui.alert('Error', result.message || 'No se pudieron copiar las alineaciones.', ui.ButtonSet.OK);
+    }
+  } catch (e) {
+    ui.alert('Error', 'Ocurrió un error: ' + e.message, ui.ButtonSet.OK);
+  }
+}
+
+function menuRecalcularTodo() {
+  SpreadsheetApp.flush();
+  try {
+    SpreadsheetApp.getUi().alert('Información', 'Hoja de cálculo recalculada y sincronizada correctamente.', SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {}
+}
+
 // Configuración de Notificaciones (Telegram y GitHub Actions)
 var GITHUB_REPO = ""; // Repositorio GitHub (ej: "usuario/liga-fantastica")
 var GITHUB_PAT = ""; // GitHub Personal Access Token con permiso de repo / contents
@@ -560,6 +672,10 @@ function doGet(e) {
         result = saveDraftOrderToSheet(e.parameter.draftOrder);
       } else if (action === 'resetSeason') {
         result = resetSeasonInSheets();
+      } else if (action === 'copyLineups' || action === 'copiarAlineaciones') {
+        var srcJGet = Number(e.parameter.sourceJornada || e.parameter.fromJornada || 0);
+        var tgtJGet = Number(e.parameter.targetJornada || e.parameter.toJornada || 0);
+        result = copyLineupsInSheets(srcJGet, tgtJGet);
       } else {
         result = { error: 'Acción API no reconocida: ' + action };
       }
@@ -621,6 +737,10 @@ function doPost(e) {
       result = saveDraftOrderToSheet(postData.draftOrder);
     } else if (action === 'resetSeason') {
       result = resetSeasonInSheets();
+    } else if (action === 'copyLineups' || action === 'copiarAlineaciones') {
+      var srcJPost = Number(postData.sourceJornada || postData.fromJornada || (e && e.parameter && (e.parameter.sourceJornada || e.parameter.fromJornada)) || 0);
+      var tgtJPost = Number(postData.targetJornada || postData.toJornada || (e && e.parameter && (e.parameter.targetJornada || e.parameter.toJornada)) || 0);
+      result = copyLineupsInSheets(srcJPost, tgtJPost);
     } else {
       result = { error: 'Acción POST no reconocida: ' + action };
     }
@@ -805,6 +925,185 @@ function resetSeasonInSheets() {
     return {
       success: true,
       message: 'Temporada reiniciada correctamente en Google Sheets (Alineaciones, Fichajes, Draft y Jugadores vaciados).'
+    };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+/**
+ * =========================================================================
+ * COPIAR ALINEACIONES ENTRE JORNADAS (Google Sheets & API Web)
+ * Permite clonar las plantillas registradas de una jornada a otra.
+ * =========================================================================
+ */
+
+/**
+ * Detecta directamente la última jornada con alineaciones registradas en la pestaña Alineaciones
+ */
+function getMaxJornadaFromAlineacionesSheetDirect() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Alineación', 'Lineups', 'Lineup', 'Plantillas', 'Plantilla', 'Alineaciones_Equipos', 'Alineaciones Equipos']);
+  if (!sheetAl) return 0;
+  var data = sheetAl.getDataRange().getValues();
+  if (data.length <= 1) return 0;
+
+  var hRow = data[0];
+  var cJor = -1;
+  for (var hi = 0; hi < hRow.length; hi++) {
+    var hn = String(hRow[hi] || '').trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    if (hn.indexOf('jornada') !== -1 || hn === 'jor' || hn === 'j') {
+      cJor = hi;
+      break;
+    }
+  }
+  if (cJor === -1) cJor = 1;
+
+  var maxJ = 0;
+  for (var r = 1; r < data.length; r++) {
+    var jVal = Number(data[r][cJor]);
+    if (!isNaN(jVal) && jVal > maxJ) {
+      maxJ = jVal;
+    }
+  }
+  return maxJ;
+}
+
+/**
+ * Copia todas las alineaciones de una jornada a otra en la hoja "Alineaciones".
+ * Si no se especifica sourceJornada, toma la última jornada registrada.
+ * Si no se especifica targetJornada, toma sourceJornada + 1.
+ * Funciona de forma atómica con bloqueo seguro (LockService) tanto desde el menú de Google Sheets como desde la Web App.
+ */
+function copyLineupsInSheets(sourceJornada, targetJornada) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Alineación', 'Lineups', 'Lineup', 'Plantillas', 'Plantilla', 'Alineaciones_Equipos', 'Alineaciones Equipos']);
+  if (!sheetAl) {
+    return { success: false, message: 'No se encontró la pestaña "Alineaciones" en Google Sheets.' };
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (eLock) {}
+
+  try {
+    var alData = sheetAl.getDataRange().getValues();
+    if (alData.length <= 1) {
+      return { success: false, message: 'La pestaña "Alineaciones" no contiene datos.' };
+    }
+
+    var hRow = alData[0];
+    var cTeam = -1, cJor = -1, cPlay = -1, cReal = -1, cPos = -1, cVal = -1;
+    for (var hi = 0; hi < hRow.length; hi++) {
+      var hn = String(hRow[hi] || '').trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+      if (hn.indexOf('equipo') !== -1 && hn.indexOf('liga') === -1 && hn.indexOf('real') === -1) cTeam = hi;
+      else if (hn.indexOf('jornada') !== -1 || hn === 'jor' || hn === 'j') cJor = hi;
+      else if (hn.indexOf('jugador') !== -1 || hn.indexOf('player') !== -1 || hn.indexOf('nombre') !== -1) cPlay = hi;
+      else if (hn.indexOf('liga') !== -1 || hn.indexOf('real') !== -1 || hn === 'club') cReal = hi;
+      else if (hn.indexOf('posic') !== -1 || hn === 'pos') cPos = hi;
+      else if (hn.indexOf('val') !== -1 || hn.indexOf('precio') !== -1) cVal = hi;
+    }
+    if (cTeam === -1) cTeam = 0;
+    if (cJor === -1) cJor = 1;
+    if (cPlay === -1) cPlay = 2;
+    if (cReal === -1) cReal = 3;
+    if (cPos === -1) cPos = 4;
+    if (cVal === -1) cVal = 5;
+
+    // Determinar jornada origen si no viene especificada
+    var fromJ = Number(sourceJornada) || 0;
+    if (fromJ <= 0) {
+      for (var r = 1; r < alData.length; r++) {
+        var jVal = Number(alData[r][cJor]);
+        var pName = String(alData[r][cPlay] || '').trim();
+        if (!isNaN(jVal) && jVal > fromJ && pName) {
+          fromJ = jVal;
+        }
+      }
+    }
+
+    if (fromJ <= 0) {
+      return { success: false, message: 'No se encontraron alineaciones registradas en ninguna jornada para copiar.' };
+    }
+
+    // Determinar jornada destino
+    var toJ = Number(targetJornada) || 0;
+    if (toJ <= 0) {
+      toJ = fromJ + 1;
+    }
+
+    if (fromJ === toJ) {
+      return { success: false, message: 'La jornada origen y destino no pueden ser iguales (J' + fromJ + ').' };
+    }
+
+    // Extraer jugadores de la jornada origen
+    var rowsToCopy = [];
+    var seenTeams = {};
+    for (var i = 1; i < alData.length; i++) {
+      var row = alData[i];
+      var rTeam = String(row[cTeam] || '').trim();
+      var rJor = Number(row[cJor]);
+      var rPlay = String(row[cPlay] || '').trim();
+
+      if (rTeam && rPlay && rJor === fromJ) {
+        rowsToCopy.push({
+          team: rTeam,
+          player: rPlay,
+          realTeam: String(row[cReal] || '').trim(),
+          pos: String(row[cPos] || '').trim(),
+          val: row[cVal] !== undefined ? row[cVal] : ''
+        });
+        seenTeams[rTeam] = (seenTeams[rTeam] || 0) + 1;
+      }
+    }
+
+    if (rowsToCopy.length === 0) {
+      return { success: false, message: 'No se encontraron alineaciones en la Jornada ' + fromJ + ' para copiar.' };
+    }
+
+    // Si ya existían alineaciones en toJ, eliminarlas para no generar duplicados
+    for (var delRow = alData.length; delRow >= 2; delRow--) {
+      var checkJ = Number(alData[delRow - 1][cJor]);
+      if (checkJ === toJ) {
+        sheetAl.deleteRow(delRow);
+      }
+    }
+
+    // Preparar filas nuevas para toJ
+    var numCols = Math.max(6, hRow.length);
+    var newRowsBatch = [];
+    for (var k = 0; k < rowsToCopy.length; k++) {
+      var item = rowsToCopy[k];
+      var newRow = [];
+      for (var colIdx = 0; colIdx < numCols; colIdx++) newRow.push('');
+      newRow[cTeam] = item.team;
+      newRow[cJor] = toJ;
+      newRow[cPlay] = item.player;
+      newRow[cReal] = item.realTeam;
+      newRow[cPos] = item.pos;
+      newRow[cVal] = item.val;
+      newRowsBatch.push(newRow);
+    }
+
+    // Insertar por lotes para máximo rendimiento
+    if (newRowsBatch.length > 0) {
+      var startRow = sheetAl.getLastRow() + 1;
+      sheetAl.getRange(startRow, 1, newRowsBatch.length, numCols).setValues(newRowsBatch);
+    }
+
+    SpreadsheetApp.flush();
+
+    var numTeamsCopied = Object.keys(seenTeams).length;
+    var msg = 'Se han copiado ' + newRowsBatch.length + ' jugadores (' + numTeamsCopied + ' equipos) de la Jornada ' + fromJ + ' a la Jornada ' + toJ + ' en la pestaña Alineaciones.';
+
+    return {
+      success: true,
+      message: msg,
+      sourceJornada: fromJ,
+      targetJornada: toJ,
+      count: newRowsBatch.length,
+      numTeams: numTeamsCopied
     };
   } finally {
     try { lock.releaseLock(); } catch(e) {}

@@ -373,7 +373,7 @@ async function startServer() {
 
   // POST /api/gas-action - Ejecuta mutaciones en tiempo real en Google Sheets (Draft, Fichajes, Orden Draft)
   app.post('/api/gas-action', async (req, res) => {
-    const { action, team, token, player, jornada, transfers, draftOrder, customGasUrl, requestId } = req.body || {};
+    const { action, team, token, player, jornada, sourceJornada, targetJornada, transfers, draftOrder, customGasUrl, requestId } = req.body || {};
     const config = getGasConfig();
     const targetUrl = (customGasUrl || config.gasUrl || '').trim();
 
@@ -392,6 +392,8 @@ async function startServer() {
       if (token) url.searchParams.set('token', String(token));
       if (player) url.searchParams.set('player', String(player));
       if (jornada !== undefined) url.searchParams.set('jornada', String(jornada));
+      if (sourceJornada !== undefined) url.searchParams.set('sourceJornada', String(sourceJornada));
+      if (targetJornada !== undefined) url.searchParams.set('targetJornada', String(targetJornada));
       if (requestId) url.searchParams.set('requestId', String(requestId));
       if (transfers !== undefined) {
         url.searchParams.set('transfers', typeof transfers === 'string' ? transfers : JSON.stringify(transfers));

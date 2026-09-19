@@ -42,7 +42,8 @@ import {
   FileCode,
   Bot,
   Eye,
-  EyeOff
+  EyeOff,
+  ArrowRight
 } from 'lucide-react';
 import { GAS_TEMPLATES, generateCustomGasCode } from '../data/gasTemplates';
 
@@ -123,6 +124,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
   // 7. Enlaces de Acceso y Modo Jugador State
   const [copiedLinkType, setCopiedLinkType] = useState<'player' | 'admin' | null>(null);
   const [isDraftHiddenAdmin, setIsDraftHiddenAdmin] = useState<boolean>(gasEngine.isDraftHidden());
+
+  // 8. Automatización de Copia de Alineaciones State
+  const [isCopyingLineups, setIsCopyingLineups] = useState<boolean>(false);
+  const [customCopySourceJ, setCustomCopySourceJ] = useState<string>('');
+  const [customCopyTargetJ, setCustomCopyTargetJ] = useState<string>('');
 
   useEffect(() => {
     const unsub = gasEngine.subscribe(() => {
@@ -492,9 +498,21 @@ export const AdminView: React.FC<AdminViewProps> = ({
     });
   };
 
-  const handleCopyLineups = () => {
-    const res = gasEngine.copyLastJornadaAlineacionesWeb(adminPass);
-    showAlert(res.message, res.success);
+  const handleCopyLineups = async (sourceJ?: number, targetJ?: number) => {
+    setIsCopyingLineups(true);
+    try {
+      const res = await gasEngine.copyLastJornadaAlineaciones(adminPass, sourceJ, targetJ);
+      showAlert(res.message, res.success);
+      if (res.success) {
+        setSyncVersion(v => v + 1);
+        setCustomCopySourceJ('');
+        setCustomCopyTargetJ('');
+      }
+    } catch (err: any) {
+      showAlert('Error al copiar alineaciones: ' + (err?.message || err), false);
+    } finally {
+      setIsCopyingLineups(false);
+    }
   };
 
   const handleSaveSchedule = () => {
@@ -2476,20 +2494,121 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
           </div>
 
           {/* Section 2: Automatización de Jornadas */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
-            <h2 className="text-base font-black text-white border-b border-slate-800 pb-3 flex items-center gap-2 m-0 p-0">
-              <RefreshCw className="w-4 h-4 text-amber-400" />
-              Copiar Alineaciones
-            </h2>
-            <p className="text-xs text-slate-400">
-              Copia automáticamente las alineaciones de la última jornada registrada a la siguiente jornada disponible.
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <RefreshCw className={`w-4 h-4 text-amber-400 ${isCopyingLineups ? 'animate-spin' : ''}`} />
+                <h2 className="text-base font-black text-white m-0 p-0">
+                  Copiar Alineaciones entre Jornadas
+                </h2>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400">Última jornada registrada:</span>
+                <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 font-mono font-bold border border-amber-500/20">
+                  Jornada {gasEngine.getMaxJornadaFromAlineacionesSheet() || 0}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Duplica automáticamente todas las alineaciones y futbolistas de una jornada a la siguiente en la pestaña <strong className="text-white">"Alineaciones"</strong> de Google Sheets y en la app, evitando tener que reescribir manualmente cada plantilla.
             </p>
-            <button
-              onClick={handleCopyLineups}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition cursor-pointer"
-            >
-              Copiar Última Jornada
-            </button>
+
+            {/* Acciones de Copia */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              {/* Opción 1: Copia automática a la siguiente jornada */}
+              <div className="bg-slate-950/80 border border-slate-800/90 rounded-xl p-4 flex flex-col justify-between space-y-3">
+                <div className="space-y-1">
+                  <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Copia Rápida Automática
+                  </span>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Copia todas las alineaciones de la última jornada con datos (J{gasEngine.getMaxJornadaFromAlineacionesSheet() || 0}) a la siguiente (J{(gasEngine.getMaxJornadaFromAlineacionesSheet() || 0) + 1}).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyLineups()}
+                  disabled={isCopyingLineups || (gasEngine.getMaxJornadaFromAlineacionesSheet() || 0) < 1}
+                  className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCopyingLineups ? 'animate-spin' : ''}`} />
+                  <span>
+                    {isCopyingLineups 
+                      ? 'Copiando alineaciones...' 
+                      : `Copiar a J${(gasEngine.getMaxJornadaFromAlineacionesSheet() || 0) + 1}`}
+                  </span>
+                </button>
+              </div>
+
+              {/* Opción 2: Copia entre jornadas personalizadas */}
+              <div className="bg-slate-950/80 border border-slate-800/90 rounded-xl p-4 flex flex-col justify-between space-y-3">
+                <div className="space-y-1">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                    Copiar entre Jornadas Específicas
+                  </span>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Indica manualmente la jornada de origen y la jornada de destino.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1">De Jornada</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder={String(gasEngine.getMaxJornadaFromAlineacionesSheet() || 1)}
+                      value={customCopySourceJ}
+                      onChange={(e) => setCustomCopySourceJ(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 text-white py-1.5 px-2.5 rounded-lg text-xs font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div className="pt-4 text-slate-500 font-bold">➔</div>
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1">A Jornada</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder={String((gasEngine.getMaxJornadaFromAlineacionesSheet() || 0) + 1)}
+                      value={customCopyTargetJ}
+                      onChange={(e) => setCustomCopyTargetJ(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 text-white py-1.5 px-2.5 rounded-lg text-xs font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isCopyingLineups}
+                  onClick={() => {
+                    const src = customCopySourceJ ? parseInt(customCopySourceJ, 10) : undefined;
+                    const tgt = customCopyTargetJ ? parseInt(customCopyTargetJ, 10) : undefined;
+                    handleCopyLineups(src, tgt);
+                  }}
+                  className="w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-bold text-xs py-2 px-3 rounded-xl border border-slate-700 transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Copy className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Copiar selección</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Info de menú en Google Sheets */}
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 text-xs text-slate-400 space-y-1.5">
+              <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                <Info className="w-4 h-4" />
+                <span>Menú directo disponible en Google Sheets (Hoja de Cálculo):</span>
+              </span>
+              <p className="text-[11px] text-slate-300 leading-relaxed m-0">
+                Hemos incorporado la función nativa <code className="text-amber-400">onOpen()</code> en el archivo <strong className="text-white">Código.gs</strong>. Al abrir tu Google Sheets verás en la barra de menú superior la opción <strong className="text-white">⚽ Liga Fantástica</strong> con los botones directos para duplicar alineaciones entre jornadas sin salir de la hoja.
+              </p>
+              <p className="text-[11px] text-slate-400 m-0">
+                (Si aún no ves el menú en Google Sheets, actualiza tu archivo Apps Script pulsando en <strong className="text-amber-300">"Copiar Código.gs"</strong> en el gestor inferior y recarga la hoja de cálculo).
+              </p>
+            </div>
           </div>
 
           {/* Section 3: Control de Horarios */}
