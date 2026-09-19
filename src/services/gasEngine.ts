@@ -2764,10 +2764,10 @@ class GasEngineService {
             };
           }
           // Si fue timeout o problema de conectividad temporal
-          gasMessage = ' (ℹ️ Guardado en la app; Google Sheets tardó en responder pero la sincronización se completará automáticamente).';
+          gasMessage = '';
         }
       } catch (e: any) {
-        gasMessage = ' (Aviso: No se pudo contactar con Google Sheets; registrado localmente).';
+        gasMessage = '';
       }
     }
 

@@ -2619,6 +2619,17 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
     return { success: false, message: 'Jornada no válida: ' + jornada };
   }
 
+  if (typeof transfers === 'string') {
+    try {
+      transfers = JSON.parse(transfers);
+    } catch(eParse) {
+      transfers = [];
+    }
+  }
+  if (!transfers || !Array.isArray(transfers) || transfers.length === 0) {
+    return { success: false, message: 'No se recibieron fichajes para procesar.' };
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   // 1. Validación individual de fichajes según la fecha y hora de Horarios_Equipos para los equipos implicados
@@ -2682,7 +2693,7 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       };
     }
 
-    var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas']);
+    var sheetAl = findSheet(ss, ['Alineaciones', 'Alineacion', 'Lineups', 'Plantillas', 'Alineaciones_Equipos']);
     var sheetFichajes = findSheet(ss, [
       'Historial_Fichajes',
       'Historial de Fichajes',
@@ -2693,6 +2704,7 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       'Fichaje',
       'Mercado Fichajes'
     ]);
+    var sheetJug = findSheet(ss, ['Jugadores', 'Players', 'Futbolistas', 'Lista_Jugadores']);
     
     if (!sheetFichajes) {
       sheetFichajes = ss.insertSheet('Historial_Fichajes');
@@ -2711,6 +2723,36 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
     // Inspección en tiempo real de las últimas 50 filas de Historial_Fichajes para evitar duplicados exactos
     var currentFichData = sheetFichajes.getDataRange().getValues();
     var startScanIdx = Math.max(1, currentFichData.length - 50);
+
+    // Detección dinámica de columnas en Alineaciones
+    var colAlTeam = 0, colAlJor = 1, colAlPlay = 2, colAlReal = 3, colAlPos = 4, colAlVal = 5;
+    if (sheetAl && sheetAl.getLastRow() > 0) {
+      var alHeaders = sheetAl.getRange(1, 1, 1, Math.max(sheetAl.getLastColumn(), 6)).getValues()[0];
+      for (var ac = 0; ac < alHeaders.length; ac++) {
+        var ah = String(alHeaders[ac] || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (ah.indexOf('equipo') !== -1 && ah.indexOf('liga') === -1 && ah.indexOf('real') === -1) colAlTeam = ac;
+        else if (ah.indexOf('jornada') !== -1 || ah === 'jor' || ah === 'j') colAlJor = ac;
+        else if (ah.indexOf('jugador') !== -1 || ah.indexOf('player') !== -1 || ah.indexOf('nombre') !== -1) colAlPlay = ac;
+        else if (ah.indexOf('liga') !== -1 || ah.indexOf('real') !== -1 || ah === 'club') colAlReal = ac;
+        else if (ah.indexOf('posic') !== -1 || ah === 'pos') colAlPos = ac;
+        else if (ah.indexOf('val') !== -1 || ah.indexOf('precio') !== -1) colAlVal = ac;
+      }
+    }
+
+    // Detección dinámica de columna Estado y Nombre en Jugadores
+    var estadoCol = 5;
+    var nameCol = 0;
+    if (sheetJug && sheetJug.getLastRow() > 0) {
+      var jugHeaders = sheetJug.getRange(1, 1, 1, Math.max(sheetJug.getLastColumn(), 6)).getValues()[0];
+      for (var hc = 0; hc < jugHeaders.length; hc++) {
+        var hName = String(jugHeaders[hc] || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (hName === 'estado' || hName === 'status' || hName === 'situacion') {
+          estadoCol = hc + 1;
+        } else if (hName.indexOf('jugador') !== -1 || hName.indexOf('nombre') !== -1 || hName.indexOf('player') !== -1) {
+          nameCol = hc;
+        }
+      }
+    }
 
     transfers.forEach(function(t) {
       var pOut = String(t.playerOut || '').trim();
@@ -2763,14 +2805,14 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       if (sheetAl) {
         var alData = sheetAl.getDataRange().getValues();
         for (var r = 1; r < alData.length; r++) {
-          if (String(alData[r][0]).trim().toLowerCase() === team.toLowerCase().trim() &&
-              Number(alData[r][1]) === jornada &&
-              String(alData[r][2]).trim().toLowerCase() === pOut.toLowerCase()) {
+          if (String(alData[r][colAlTeam] || '').trim().toLowerCase() === team.toLowerCase().trim() &&
+              Number(alData[r][colAlJor]) === jornada &&
+              String(alData[r][colAlPlay] || '').trim().toLowerCase() === pOut.toLowerCase()) {
             var pInfo = marketMap[pIn] || { realTeam: '', position: 'Medio', value: 0 };
-            sheetAl.getRange(r + 1, 3).setValue(pIn);
-            sheetAl.getRange(r + 1, 4).setValue(pInfo.realTeam);
-            sheetAl.getRange(r + 1, 5).setValue(pInfo.position);
-            sheetAl.getRange(r + 1, 6).setValue(pInfo.value);
+            sheetAl.getRange(r + 1, colAlPlay + 1).setValue(pIn);
+            sheetAl.getRange(r + 1, colAlReal + 1).setValue(pInfo.realTeam);
+            sheetAl.getRange(r + 1, colAlPos + 1).setValue(pInfo.position);
+            sheetAl.getRange(r + 1, colAlVal + 1).setValue(pInfo.value);
             break;
           }
         }
@@ -2779,18 +2821,8 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       // Actualizar estado en la hoja Jugadores: pIn pasa a 'Fichado', pOut pasa a 'Disponible' o 'Abandona Liga'
       if (sheetJug) {
         var jugData = sheetJug.getDataRange().getValues();
-        var estadoCol = 5;
-        if (jugData.length > 0) {
-          for (var hc = 0; hc < jugData[0].length; hc++) {
-            var hName = String(jugData[0][hc]).trim().toLowerCase();
-            if (hName === 'estado' || hName === 'status' || hName === 'situacion') {
-              estadoCol = hc + 1;
-              break;
-            }
-          }
-        }
         for (var jr = 1; jr < jugData.length; jr++) {
-          var rowName = String(jugData[jr][0]).trim().toLowerCase();
+          var rowName = String(jugData[jr][nameCol] || '').trim().toLowerCase();
           if (rowName === pIn.toLowerCase()) {
             sheetJug.getRange(jr + 1, estadoCol).setValue('Fichado');
           }
@@ -2805,6 +2837,7 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       try { cache.put(reqKey, '1', 600); } catch(eC) {}
     }
     
+    SpreadsheetApp.flush();
     return { success: true, message: 'Fichajes procesados correctamente en Google Sheets.' };
   } finally {
     if (hasLock && lock) {
