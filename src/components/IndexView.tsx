@@ -19,6 +19,7 @@ interface IndexViewProps {
 export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
   const [teams, setTeams] = useState<string[]>([]);
   const [maxJornada, setMaxJornada] = useState<number>(5);
+  const [lastPlayedJornada, setLastPlayedJornada] = useState<number>(5);
   const [selectedTeam, setSelectedTeam] = useState<string>('');
   const [selectedJornada, setSelectedJornada] = useState<number | ''>('');
   
@@ -43,15 +44,19 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
     setIsLoading(true);
     const teamList = gasEngine.getTeamNames();
     const maxJ = gasEngine.getMaxJornada();
+    const lastPlayedJ = gasEngine.getLastPlayedJornada();
 
     setTeams(teamList);
     setMaxJornada(maxJ);
+    setLastPlayedJornada(lastPlayedJ);
 
     // Standings calculation
-    setGeneralScores(gasEngine.calculateGeneralScores(maxJ));
-    setMostGoalsTeams(gasEngine.calculateMostGoalsTeams(maxJ));
-    setLeastConcededTeams(gasEngine.calculateLeastConcededTeams(maxJ));
-    const activeJ = typeof selectedJornada === 'number' && selectedJornada > 0 ? selectedJornada : maxJ;
+    // Según requerimiento: considerar como última disputada para la Clasificación de la Jornada,
+    // la última jornada con puntos en la columna de la Hoja Jugadores.
+    setGeneralScores(gasEngine.calculateGeneralScores(lastPlayedJ));
+    setMostGoalsTeams(gasEngine.calculateMostGoalsTeams(lastPlayedJ));
+    setLeastConcededTeams(gasEngine.calculateLeastConcededTeams(lastPlayedJ));
+    const activeJ = typeof selectedJornada === 'number' && selectedJornada > 0 ? selectedJornada : lastPlayedJ;
     setWeeklyScores(gasEngine.calculateWeeklyScores(activeJ));
 
     if (selectedTeam && typeof selectedJornada === 'number' && selectedJornada > 0) {
@@ -87,7 +92,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
   const handleJornadaChange = (val: string) => {
     const jNum = val ? parseInt(val, 10) : '';
     setSelectedJornada(jNum);
-    const effectiveJ = typeof jNum === 'number' && jNum > 0 ? jNum : maxJornada;
+    const effectiveJ = typeof jNum === 'number' && jNum > 0 ? jNum : lastPlayedJornada;
     setWeeklyScores(gasEngine.calculateWeeklyScores(effectiveJ));
     if (selectedTeam && typeof jNum === 'number' && jNum > 0) {
       const data = gasEngine.getTeamLineupData(selectedTeam, jNum);
@@ -151,8 +156,8 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
               onChange={(e) => handleJornadaChange(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 text-white font-bold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition cursor-pointer font-mono"
             >
-              <option value="">Seleccionar Jornada</option>
-              {Array.from({ length: maxJornada }, (_, i) => i + 1).map(j => (
+              <option value="">Última disputada (Jornada {lastPlayedJornada})</option>
+              {Array.from({ length: Math.max(maxJornada, lastPlayedJornada) }, (_, i) => i + 1).map(j => (
                 <option key={`idx-jornada-${j}`} value={j}>Jornada {j}</option>
               ))}
             </select>
@@ -310,7 +315,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
           <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
             <h2 className="text-base font-black text-white flex items-center gap-2 m-0 p-0 border-none">
               <TrendingUp className="w-4 h-4 text-amber-400" />
-              Clasificación Jornada <span className="text-amber-400">{typeof selectedJornada === 'number' && selectedJornada > 0 ? selectedJornada : maxJornada}</span>
+              Clasificación Jornada <span className="text-amber-400">{typeof selectedJornada === 'number' && selectedJornada > 0 ? selectedJornada : lastPlayedJornada}</span>
               {!selectedJornada && <span className="text-[11px] font-normal text-slate-400 ml-1">(Última disputada)</span>}
             </h2>
           </div>
@@ -341,7 +346,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
           <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
             <h2 className="text-base font-black text-white flex items-center gap-2 m-0 p-0 border-none">
               <Trophy className="w-4 h-4 text-amber-400" />
-              Clasificación General (Hasta J{maxJornada})
+              Clasificación General (Hasta J{lastPlayedJornada})
             </h2>
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
@@ -371,7 +376,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
           <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
             <h2 className="text-base font-black text-white flex items-center gap-2 m-0 p-0 border-none">
               <Flame className="w-4 h-4 text-rose-500" />
-              Equipo Más Goleador (Hasta J{maxJornada})
+              Equipo Más Goleador (Hasta J{lastPlayedJornada})
             </h2>
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
@@ -401,7 +406,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onGoToField }) => {
           <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
             <h2 className="text-base font-black text-white flex items-center gap-2 m-0 p-0 border-none">
               <Shield className="w-4 h-4 text-cyan-400" />
-              Equipo Menos Goleado (Pts.Def Acum.)
+              Equipo Menos Goleado (Hasta J{lastPlayedJornada})
             </h2>
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">

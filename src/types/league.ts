@@ -108,6 +108,7 @@ export interface FinalBalanceDetail {
 
 export interface AccountingData {
   maxJornada: number;
+  firstContributionJornada?: number;
   numTeams: number;
   totalContributions: string;
   totalTransferFees: string;

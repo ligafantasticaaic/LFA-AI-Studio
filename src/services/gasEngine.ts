@@ -296,7 +296,7 @@ class GasEngineService {
   private drafts: DraftRecord[] = [];
   private schedules: ScheduleRecord[] = [];
   private gasUrl: string = DEFAULT_GAS_URL;
-  private firstContributionJornada: number = 4;
+  private firstContributionJornada: number = 5;
   private adminPassword: string = ADMIN_PASSWORD;
   private leagueTexts: LeagueTexts = {
     leagueName: 'Liga Fantástica de Amigos',
@@ -455,8 +455,9 @@ class GasEngineService {
 
         // Jornada de aportes
         if (typeof data.firstContributionJornada === 'number') {
-          if (data.firstContributionJornada !== this.firstContributionJornada) {
-            this.firstContributionJornada = data.firstContributionJornada;
+          const sJ = data.firstContributionJornada === 4 ? 5 : data.firstContributionJornada;
+          if (sJ !== this.firstContributionJornada) {
+            this.firstContributionJornada = sJ;
             localStorage.setItem('lfa_first_contribution_jornada', String(this.firstContributionJornada));
             changed = true;
           }
@@ -628,7 +629,7 @@ class GasEngineService {
   }
 
   public setFirstContributionJornada(j: number, adminPassword?: string): { success: boolean; message: string } {
-    const cleanJ = Math.max(1, Math.min(38, Math.round(j || 4)));
+    const cleanJ = Math.max(1, Math.min(38, Math.round(j || 5)));
     this.firstContributionJornada = cleanJ;
     localStorage.setItem('lfa_first_contribution_jornada', String(cleanJ));
     this.saveState();
@@ -1840,9 +1841,12 @@ class GasEngineService {
       if (savedJornada) {
         const parsedJ = parseInt(savedJornada, 10);
         if (!isNaN(parsedJ) && parsedJ >= 1) {
-          this.firstContributionJornada = parsedJ;
+          this.firstContributionJornada = parsedJ === 4 ? 5 : parsedJ;
         }
+      } else {
+        this.firstContributionJornada = 5;
       }
+      localStorage.setItem('lfa_first_contribution_jornada', String(this.firstContributionJornada));
 
       const savedClubStyles = localStorage.getItem('lfa_club_styles');
       if (savedClubStyles) {
@@ -1938,7 +1942,7 @@ class GasEngineService {
       this.transfers = [...INITIAL_TRANSFERS];
       this.drafts = [...INITIAL_DRAFTS];
       this.schedules = [...INITIAL_SCHEDULES];
-      this.firstContributionJornada = 4;
+      this.firstContributionJornada = 5;
       this.customClubStyles = [...DEFAULT_CLUB_STYLES];
     }
   }
@@ -2012,15 +2016,41 @@ class GasEngineService {
 
   public getMaxJornadaFromPlayersSheet(): number {
     let maxJ = 0;
+    const jornadaPointsSum = new Map<number, number>();
+
     this.players.forEach(p => {
       if (p.jornadasPoints) {
-        Object.keys(p.jornadasPoints).forEach(k => {
+        Object.entries(p.jornadasPoints).forEach(([k, pts]) => {
           const num = parseInt(k, 10);
-          if (!isNaN(num) && num > maxJ) maxJ = num;
+          const val = typeof pts === 'number' ? pts : parseFloat(String(pts));
+          if (!isNaN(num) && !isNaN(val)) {
+            jornadaPointsSum.set(num, (jornadaPointsSum.get(num) || 0) + val);
+          }
         });
       }
     });
+
+    // Encontrar la jornada más alta con puntos registrados (> 0) en la columna de Jugadores
+    jornadaPointsSum.forEach((totalPts, j) => {
+      if (j > maxJ && totalPts > 0) {
+        maxJ = j;
+      }
+    });
+
+    // Si ninguna jornada sumó puntos > 0 pero hay columnas numéricas registradas
+    if (maxJ === 0 && jornadaPointsSum.size > 0) {
+      maxJ = Math.max(...Array.from(jornadaPointsSum.keys()));
+    }
+
     return maxJ;
+  }
+
+  /**
+   * Devuelve la última jornada efectivamente disputada según la última jornada con puntos en la columna de la Hoja Jugadores.
+   */
+  public getLastPlayedJornada(): number {
+    const pMax = this.getMaxJornadaFromPlayersSheet();
+    return pMax > 0 ? pMax : 5;
   }
 
   public getMaxJornadaFromAlineacionesSheet(): number {
@@ -3004,7 +3034,10 @@ class GasEngineService {
   }
 
   public getAccountingData(): AccountingData {
-    const maxJornada = this.getMaxJornada();
+    // Para el cálculo de Caja, la última jornada de aportes y premios semanales
+    // es la última jornada efectivamente disputada (con puntos en la columna de la hoja Jugadores).
+    const lastPlayedJornada = this.getMaxJornadaFromPlayersSheet();
+    const maxJornada = lastPlayedJornada > 0 ? lastPlayedJornada : 1;
     const numTeams = this.getNumberOfTeams();
     const teamNames = this.getTeamNames();
     const transferHistory = this.getTransferHistory();
@@ -3071,28 +3104,32 @@ class GasEngineService {
     });
 
     // 2. Aportes y premios semanales
-    for (let j = this.firstContributionJornada; j <= maxJornada; j++) {
-      totalContributions += numTeams * WEEKLY_CONTRIBUTION;
-      teamNames.forEach(tName => {
-        const b = teamBalanceMap.get(tName);
-        if (b) b.contributions += WEEKLY_CONTRIBUTION;
-      });
-
-      const weeklyRanking = this.calculateWeeklyScores(j);
-      if (weeklyRanking.length > 0 && parseFloat(String(weeklyRanking[0].score)) > 0) {
-        const topScore = weeklyRanking[0].score;
-        const winners = weeklyRanking.filter(team => team.score === topScore);
-        const totalPrize = numTeams * 1;
-        const individualPrize = totalPrize / winners.length;
-        totalPrizeMoneyAwarded += totalPrize;
-
-        winners.forEach(winner => {
-          const matched = findTeamKey(winner.teamName);
-          if (matched) {
-            const b = teamBalanceMap.get(matched);
-            if (b) b.prizes += individualPrize;
-          }
+    // Solo computar aportes y premios para jornadas efectivamente disputadas (con puntos en Jugadores)
+    // a partir de la primera jornada de aportaciones configurada (firstContributionJornada).
+    if (lastPlayedJornada >= this.firstContributionJornada) {
+      for (let j = this.firstContributionJornada; j <= lastPlayedJornada; j++) {
+        totalContributions += numTeams * WEEKLY_CONTRIBUTION;
+        teamNames.forEach(tName => {
+          const b = teamBalanceMap.get(tName);
+          if (b) b.contributions += WEEKLY_CONTRIBUTION;
         });
+
+        const weeklyRanking = this.calculateWeeklyScores(j);
+        if (weeklyRanking.length > 0 && parseFloat(String(weeklyRanking[0].score)) > 0) {
+          const topScore = weeklyRanking[0].score;
+          const winners = weeklyRanking.filter(team => team.score === topScore);
+          const totalPrize = numTeams * 1;
+          const individualPrize = totalPrize / winners.length;
+          totalPrizeMoneyAwarded += totalPrize;
+
+          winners.forEach(winner => {
+            const matched = findTeamKey(winner.teamName);
+            if (matched) {
+              const b = teamBalanceMap.get(matched);
+              if (b) b.prizes += individualPrize;
+            }
+          });
+        }
       }
     }
 
@@ -3240,6 +3277,7 @@ class GasEngineService {
 
     return {
       maxJornada,
+      firstContributionJornada: this.firstContributionJornada,
       numTeams,
       totalContributions: totalContributions.toFixed(2),
       totalTransferFees: totalTransferFees.toFixed(2),

@@ -99,7 +99,9 @@ export const PremiosView: React.FC = () => {
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-1">
             <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">Aportes de Jornada</span>
             <div className="text-xl font-black text-slate-200 font-mono">{accountingData.totalContributions} €</div>
-            <span className="text-[11px] text-slate-500">1.50€ por equipo/jornada</span>
+            <span className="text-[11px] text-slate-500">
+              1.50€ por equipo (desde J{accountingData.firstContributionJornada || 5})
+            </span>
           </div>
 
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-1">

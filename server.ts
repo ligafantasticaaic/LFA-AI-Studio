@@ -27,7 +27,7 @@ async function startServer() {
         freeTransfers: 3
       },
       customCodeGs: '',
-      firstContributionJornada: 4,
+      firstContributionJornada: 5,
       teams: [
         'BRIKKOMARIAN',
         'DOVIS',
@@ -66,6 +66,9 @@ async function startServer() {
           return {
             ...defaults,
             ...parsed,
+            firstContributionJornada: parsed.firstContributionJornada === 4
+              ? 5
+              : (typeof parsed.firstContributionJornada === 'number' ? parsed.firstContributionJornada : defaults.firstContributionJornada),
             adminPassword: parsed.adminPassword ? String(parsed.adminPassword).trim() : defaults.adminPassword,
             leagueTexts: {
               ...defaults.leagueTexts,
@@ -109,7 +112,7 @@ async function startServer() {
         : (current.gasUrl || 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec'),
       firstContributionJornada: typeof newValues.firstContributionJornada === 'number'
         ? Math.max(1, Math.min(38, newValues.firstContributionJornada))
-        : current.firstContributionJornada || 4,
+        : current.firstContributionJornada || 5,
       customClubStyles: Array.isArray(newValues.customClubStyles)
         ? newValues.customClubStyles
         : current.customClubStyles || [],

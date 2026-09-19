@@ -315,7 +315,7 @@ var WEEKLY_CONTRIBUTION = 1.5;
 var TRANSFER_COST = 2;
 var FREE_TRANSFERS_PER_TEAM = 3;
 var ADMIN_PASSWORD = "admin";
-var FIRST_CONTRIBUTION_JORNADA = 4; // Primera jornada con aportaciones semanales (configurable)
+var FIRST_CONTRIBUTION_JORNADA = 5; // Primera jornada con aportaciones semanales (configurable)
 
 // Configuración de Notificaciones (Telegram y GitHub Actions)
 var GITHUB_REPO = ""; // Repositorio GitHub (ej: "usuario/liga-fantastica")
@@ -1633,23 +1633,45 @@ function getTeamNames() {
 }
 
 /**
- * Obtener la jornada máxima activa según la hoja de Jugadores
+ * Obtener la última jornada disputada según la columna con puntos en la hoja de Jugadores
  */
 function getMaxJornada() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('Jugadores');
   if (!sheet) return 5;
   
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var maxJ = 0;
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return 5;
+  
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var colMap = {};
   for (var c = 0; c < headers.length; c++) {
     var match = String(headers[c]).match(/Puntos_J([0-9]+)/i);
     if (match) {
       var jNum = parseInt(match[1], 10);
-      if (jNum > maxJ) maxJ = jNum;
+      colMap[jNum] = c + 1;
     }
   }
-  return maxJ > 0 ? maxJ : 5;
+  
+  var jornadas = Object.keys(colMap).map(Number).sort(function(a, b) { return b - a; });
+  for (var k = 0; k < jornadas.length; k++) {
+    var j = jornadas[k];
+    var col = colMap[j];
+    var vals = sheet.getRange(2, col, Math.min(lastRow - 1, 100), 1).getValues();
+    var hasPoints = false;
+    for (var r = 0; r < vals.length; r++) {
+      var v = vals[r][0];
+      if (v !== '' && v !== null && !isNaN(Number(v)) && Number(v) > 0) {
+        hasPoints = true;
+        break;
+      }
+    }
+    if (hasPoints) {
+      return j;
+    }
+  }
+  return jornadas.length > 0 ? jornadas[0] : 5;
 }
 
 /**
@@ -1920,24 +1942,26 @@ function getAccountingData() {
     // Salvaguarda
   }
   
-  // Calcular aportes desde la jornada configurada
-  for (var j = FIRST_CONTRIBUTION_JORNADA; j <= maxJ; j++) {
-    totalContributions += (numTeams * WEEKLY_CONTRIBUTION);
-    teams.forEach(function(t) {
-      teamBalance[t].contributions += WEEKLY_CONTRIBUTION;
-    });
-    
-    var weeklyRanking = getAllStandingsData(j).weekly;
-    if (weeklyRanking.length > 0 && parseFloat(weeklyRanking[0].score) > 0) {
-      var topScore = weeklyRanking[0].score;
-      var winners = weeklyRanking.filter(function(x) { return x.score === topScore; });
-      var totalPrize = numTeams * 1.0;
-      var indPrize = totalPrize / winners.length;
-      totalPrizeMoneyAwarded += totalPrize;
-      
-      winners.forEach(function(w) {
-        if (teamBalance[w.teamName]) teamBalance[w.teamName].prizes += indPrize;
+  // Calcular aportes desde la jornada configurada solo para jornadas efectivamente disputadas
+  if (maxJ >= FIRST_CONTRIBUTION_JORNADA) {
+    for (var j = FIRST_CONTRIBUTION_JORNADA; j <= maxJ; j++) {
+      totalContributions += (numTeams * WEEKLY_CONTRIBUTION);
+      teams.forEach(function(t) {
+        teamBalance[t].contributions += WEEKLY_CONTRIBUTION;
       });
+      
+      var weeklyRanking = getAllStandingsData(j).weekly;
+      if (weeklyRanking.length > 0 && parseFloat(weeklyRanking[0].score) > 0) {
+        var topScore = weeklyRanking[0].score;
+        var winners = weeklyRanking.filter(function(x) { return x.score === topScore; });
+        var totalPrize = numTeams * 1.0;
+        var indPrize = totalPrize / winners.length;
+        totalPrizeMoneyAwarded += totalPrize;
+        
+        winners.forEach(function(w) {
+          if (teamBalance[w.teamName]) teamBalance[w.teamName].prizes += indPrize;
+        });
+      }
     }
   }
   
@@ -2029,6 +2053,7 @@ function getAccountingData() {
   
   return {
     maxJornada: maxJ,
+    firstContributionJornada: FIRST_CONTRIBUTION_JORNADA,
     numTeams: numTeams,
     totalContributions: totalContributions.toFixed(2),
     totalTransferFees: totalTransferFees.toFixed(2),
@@ -3204,7 +3229,7 @@ export function generateCustomGasCode(options?: {
     );
   }
 
-  const j = options?.firstContributionJornada ?? 4;
+  const j = options?.firstContributionJornada ?? 5;
   code = code.replace(
     /var FIRST_CONTRIBUTION_JORNADA = \d+;/,
     `var FIRST_CONTRIBUTION_JORNADA = ${j};`
