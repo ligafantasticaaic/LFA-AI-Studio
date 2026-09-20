@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { gasEngine, FREE_TRANSFERS_PER_TEAM, TRANSFER_COST, MAX_TEAM_VALUE } from '../services/gasEngine';
+import { gasEngine, FREE_TRANSFERS_PER_TEAM, TRANSFER_COST, MAX_TEAM_VALUE, DEMO_TEAM_NAMES } from '../services/gasEngine';
 import { Player, TransferRecord } from '../types/league';
 import confetti from 'canvas-confetti';
 import { 
@@ -55,7 +55,9 @@ export const FichajesView: React.FC = () => {
         }
         return prev;
       });
-      setTransferHistory(gasEngine.getTransferHistory());
+      setTransferHistory(
+        gasEngine.getTransferHistory().filter(t => !DEMO_TEAM_NAMES.includes(String(t.team || '').toLowerCase().trim()))
+      );
     };
     refreshData();
     const unsub = gasEngine.subscribe(refreshData);
@@ -173,7 +175,9 @@ export const FichajesView: React.FC = () => {
       // Refresh lists
       setPlayersOutList(gasEngine.getTeamPlayersForJornada(selectedTeam, selectedJornada));
       setAvailablePlayersIn(gasEngine.getAvailablePlayersForJornada(selectedJornada));
-      setTransferHistory(gasEngine.getTransferHistory());
+      setTransferHistory(
+        gasEngine.getTransferHistory().filter(t => !DEMO_TEAM_NAMES.includes(String(t.team || '').toLowerCase().trim()))
+      );
     }
   };
 

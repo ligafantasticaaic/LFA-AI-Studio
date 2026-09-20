@@ -204,77 +204,23 @@ const INITIAL_PLAYERS: Player[] = [
   { name: 'Juanmi Latasa', realTeam: 'VLD', position: 'Delantero', value: 9, status: 'Disponible', jornadasPoints: { 1: 5, 2: 6, 3: 5, 4: 6, 5: 5 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
 ];
 
-// Initial Lineups for J1 to J5 (11 players per team, within <= 200M value limit)
+// Initial Lineups (empty until loaded from Google Sheets / central server)
 const INITIAL_LINEUPS: LineupEntry[] = [];
 
-// Helper to assign 11 players to each team for J1-J5
-const TEAM_PLAYER_ASSIGNMENTS: Record<string, string[]> = {
-  'Galácticos FC': [
-    'Thibaut Courtois', 'Antonio Rüdiger', 'Dani Carvajal', 'Pau Cubarsí', 'Alejandro Balde',
-    'Jude Bellingham', 'Federico Valverde', 'Brais Méndez',
-    'Kylian Mbappé', 'Vinícius Júnior', 'Hugo Duro'
-  ],
-  'Tiki-Taka United': [
-    'Marc-André ter Stegen', 'Jules Koundé', 'Robin Le Normand', 'Daniel Vivian', 'Jon Pacheco',
-    'Pedri González', 'Dani Olmo', 'Martín Zubimendi',
-    'Robert Lewandowski', 'Lamine Yamal', 'Iago Aspas'
-  ],
-  'La Saeta Rubia': [
-    'Jan Oblak', 'José María Giménez', 'Aitor Paredes', 'Diego Rico', 'Marc Bartra',
-    'Rodrigo De Paul', 'Conor Gallagher', 'Álex Baena',
-    'Antoine Griezmann', 'Julián Álvarez', 'Vedat Muriqi'
-  ],
-  'Furia Rojiblanca': [
-    'Unai Simón', 'Daley Blind', 'Cristhian Mosquera', 'Nemanja Gudelj', 'Mika Màrmol',
-    'Oihan Sancet', 'Giovani Lo Celso', 'Isco Alarcón',
-    'Nico Williams', 'Iñaki Williams', 'Alexander Sørloth'
-  ],
-  'Boquerones CF': [
-    'Álex Remiro', 'Óscar Mingueza', 'Raúl Albiol', 'Pau Cubarsí', 'Alejandro Balde',
-    'Yangel Herrera', 'Pepelu', 'Mauro Arambarri',
-    'Raphinha', 'Takefusa Kubo', 'Ayoze Pérez'
-  ],
-  'Dream Team 92': [
-    'David Soria', 'Antonio Rüdiger', 'Jules Koundé', 'Robin Le Normand', 'Daniel Vivian',
-    'Aimar Oroz', 'Federico Valverde', 'Dani Olmo',
-    'Mikel Oyarzabal', 'Borja Iglesias', 'Ante Budimir'
-  ]
-};
-
-// Generate line-ups across Jornada 1 to 5
-for (let j = 1; j <= 5; j++) {
-  INITIAL_TEAMS.forEach(team => {
-    const playerNames = TEAM_PLAYER_ASSIGNMENTS[team] || [];
-    playerNames.forEach(pName => {
-      const pData = INITIAL_PLAYERS.find(p => p.name === pName);
-      if (pData) {
-        INITIAL_LINEUPS.push({
-          team,
-          jornada: j,
-          playerName: pData.name,
-          realTeam: pData.realTeam,
-          position: pData.position,
-          value: pData.value
-        });
-      }
-    });
-  });
-}
-
-const INITIAL_TRANSFERS: TransferRecord[] = [
-  { timestamp: '15/09/2026, 18:30h', team: 'Galácticos FC', jornada: 3, playerOut: 'Mikel Merino', playerIn: 'Brais Méndez', cost: 0, type: 'Abandono' },
-  { timestamp: '22/09/2026, 12:15h', team: 'Boquerones CF', jornada: 4, playerOut: 'Abel Ruiz', playerIn: 'Ayoze Pérez', cost: 0, type: 'Normal' },
-  { timestamp: '29/09/2026, 21:05h', team: 'Furia Rojiblanca', jornada: 5, playerOut: 'Sergio Camello', playerIn: 'Alexander Sørloth', cost: 2, type: 'Normal' },
+// Lista de equipos de demo para purgar residuos de localStorage
+export const DEMO_TEAM_NAMES = [
+  'galácticos fc',
+  'galacticos fc',
+  'tiki-taka united',
+  'la saeta rubia',
+  'furia rojiblanca',
+  'boquerones cf',
+  'dream team 92'
 ];
 
-const INITIAL_DRAFTS: DraftRecord[] = [
-  { timestamp: '01/09/2026, 20:00h', team: 'Galácticos FC', playerName: 'Kylian Mbappé', realTeam: 'RMA', position: 'Delantero', value: 28 },
-  { timestamp: '01/09/2026, 20:02h', team: 'Tiki-Taka United', playerName: 'Lamine Yamal', realTeam: 'BAR', position: 'Delantero', value: 25 },
-  { timestamp: '01/09/2026, 20:05h', team: 'La Saeta Rubia', playerName: 'Antoine Griezmann', realTeam: 'ATM', position: 'Delantero', value: 23 },
-  { timestamp: '01/09/2026, 20:07h', team: 'Furia Rojiblanca', playerName: 'Nico Williams', realTeam: 'ATH', position: 'Delantero', value: 22 },
-  { timestamp: '01/09/2026, 20:10h', team: 'Boquerones CF', playerName: 'Raphinha', realTeam: 'BAR', position: 'Delantero', value: 23 },
-  { timestamp: '01/09/2026, 20:12h', team: 'Dream Team 92', playerName: 'Jude Bellingham', realTeam: 'RMA', position: 'Medio', value: 24 },
-];
+const INITIAL_TRANSFERS: TransferRecord[] = [];
+
+const INITIAL_DRAFTS: DraftRecord[] = [];
 
 const INITIAL_SCHEDULES: ScheduleRecord[] = [
   { jornada: 5, realTeam: 'RMA', deadlineIsoString: '2026-09-28T21:00' },
@@ -550,6 +496,65 @@ class GasEngineService {
             localStorage.setItem('lfa_is_draft_hidden', String(this.isDraftHiddenState));
             changed = true;
           }
+        }
+
+        // Sincronizar transferencias y alineaciones persistidas centralmente en el servidor
+        try {
+          const pResp = await fetch('/api/persisted-league', { cache: 'no-store' });
+          if (pResp.ok) {
+            const pData = await pResp.json();
+            if (pData && Array.isArray(pData.transfers) && pData.transfers.length > 0) {
+              const seenKeys = new Set<string>();
+              this.transfers.forEach(t => {
+                const k = `${String(t.team).toLowerCase().trim()}:::${t.jornada}:::${String(t.playerOut).toLowerCase().trim()}:::${String(t.playerIn).toLowerCase().trim()}`;
+                seenKeys.add(k);
+              });
+              let addedTransfers = false;
+              for (const pt of pData.transfers) {
+                const tLower = String(pt.team || '').toLowerCase().trim();
+                if (DEMO_TEAM_NAMES.includes(tLower)) continue;
+                const k = `${tLower}:::${pt.jornada}:::${String(pt.playerOut).toLowerCase().trim()}:::${String(pt.playerIn).toLowerCase().trim()}`;
+                if (!seenKeys.has(k)) {
+                  seenKeys.add(k);
+                  this.transfers.unshift(pt);
+                  addedTransfers = true;
+                }
+              }
+              if (addedTransfers) {
+                localStorage.setItem('lfa_transfers', JSON.stringify(this.transfers));
+                changed = true;
+              }
+            }
+
+            // Aplicar lineupOverrides persistidos centralmente
+            if (pData && Array.isArray(pData.lineupOverrides) && pData.lineupOverrides.length > 0) {
+              let appliedOverrides = false;
+              for (const ov of pData.lineupOverrides) {
+                const tLower = String(ov.team || '').toLowerCase().trim();
+                if (DEMO_TEAM_NAMES.includes(tLower)) continue;
+                const outLower = String(ov.playerOut || '').toLowerCase().trim();
+                const jor = Number(ov.jornada);
+                const lEntry = this.lineups.find(l =>
+                  l.team.toLowerCase().trim() === tLower &&
+                  l.jornada === jor &&
+                  l.playerName.toLowerCase().trim() === outLower
+                );
+                if (lEntry) {
+                  lEntry.playerName = ov.playerIn;
+                  if (ov.realTeam) lEntry.realTeam = ov.realTeam;
+                  if (ov.position) lEntry.position = ov.position;
+                  if (ov.value !== undefined) lEntry.value = ov.value;
+                  appliedOverrides = true;
+                }
+              }
+              if (appliedOverrides) {
+                localStorage.setItem('lfa_lineups', JSON.stringify(this.lineups));
+                changed = true;
+              }
+            }
+          }
+        } catch {
+          // Ignorar fallo de red
         }
 
         if (changed) {
@@ -1563,6 +1568,8 @@ class GasEngineService {
         rawTransfers.forEach((t: any) => {
           const timestamp = String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || t.Hora || '').trim();
           const team = String(t.team || t.Equipo || t.Team || t.Club || t['Nombre Equipo'] || '').trim();
+          if (DEMO_TEAM_NAMES.includes(team.toLowerCase())) return;
+
           const jornada = Number(t.jornada || t.Jornada || t.Jor || t.Semana || 1) || 1;
           const playerOut = String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || t['Jugador que sale'] || t.Sale || t.Baja || t['Jugador Baja'] || t.Saliente || '').trim();
           const playerIn = String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || t['Jugador que entra'] || t.Entra || t.Alta || t['Jugador Alta'] || t.Entrante || t.Fichaje || '').trim();
@@ -1576,9 +1583,12 @@ class GasEngineService {
           }
         });
 
-        // Unificar también con las transferencias locales existentes que pudieran no estar aún en Sheets
+        // Unificar también con las transferencias locales existentes que pudieran no estar aún en Sheets (excluyendo datos demo)
         this.transfers.forEach(existing => {
-          const key = `${existing.team.toLowerCase()}:::${existing.jornada}:::${existing.playerOut.toLowerCase()}:::${existing.playerIn.toLowerCase()}`;
+          const tLower = existing.team.toLowerCase().trim();
+          if (DEMO_TEAM_NAMES.includes(tLower)) return;
+
+          const key = `${tLower}:::${existing.jornada}:::${existing.playerOut.toLowerCase()}:::${existing.playerIn.toLowerCase()}`;
           if (!seenTransfers.has(key)) {
             seenTransfers.add(key);
             parsedTransfers.unshift(existing);
@@ -1639,6 +1649,7 @@ class GasEngineService {
           }
 
           const tName = String(d.team || d.Equipo || d.Team || d.Club || d['Nombre Equipo'] || '').trim();
+          if (DEMO_TEAM_NAMES.includes(tName.toLowerCase())) return;
           const dKey = `${tName.toLowerCase()}:::${pName.toLowerCase()}`;
 
           if ((tName || pName) && !seenDrafts.has(dKey)) {
@@ -1818,8 +1829,12 @@ class GasEngineService {
       } else {
         this.players = [...INITIAL_PLAYERS];
       }
-      this.lineups = savedLineups ? JSON.parse(savedLineups) : [...INITIAL_LINEUPS];
-      this.transfers = savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS];
+      this.lineups = (savedLineups ? JSON.parse(savedLineups) : [...INITIAL_LINEUPS]).filter(
+        (l: LineupEntry) => !DEMO_TEAM_NAMES.includes(String(l.team || '').toLowerCase().trim())
+      );
+      this.transfers = (savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS]).filter(
+        (t: TransferRecord) => !DEMO_TEAM_NAMES.includes(String(t.team || '').toLowerCase().trim())
+      );
       if (savedDrafts) {
         try {
           const parsed = JSON.parse(savedDrafts);
@@ -1827,8 +1842,9 @@ class GasEngineService {
             const seenD = new Set<string>();
             const uniqueD: DraftRecord[] = [];
             for (const d of parsed) {
-              const pNorm = String(d.playerName || '').trim().toLowerCase();
               const tNorm = String(d.team || '').trim().toLowerCase();
+              if (DEMO_TEAM_NAMES.includes(tNorm)) continue;
+              const pNorm = String(d.playerName || '').trim().toLowerCase();
               const key = `${tNorm}:::${pNorm}`;
               if (pNorm && !seenD.has(key)) {
                 seenD.add(key);
@@ -1844,6 +1860,20 @@ class GasEngineService {
         }
       } else {
         this.drafts = [...INITIAL_DRAFTS];
+      }
+      this.drafts = this.drafts.filter(
+        (d: DraftRecord) => !DEMO_TEAM_NAMES.includes(String(d.team || '').toLowerCase().trim())
+      );
+
+      // Guardar de inmediato en localStorage para purgar datos demo de navegadores que los tenían cacheados
+      if (savedTransfers && JSON.parse(savedTransfers).length !== this.transfers.length) {
+        localStorage.setItem('lfa_transfers', JSON.stringify(this.transfers));
+      }
+      if (savedDrafts && JSON.parse(savedDrafts).length !== this.drafts.length) {
+        localStorage.setItem('lfa_drafts', JSON.stringify(this.drafts));
+      }
+      if (savedLineups && JSON.parse(savedLineups).length !== this.lineups.length) {
+        localStorage.setItem('lfa_lineups', JSON.stringify(this.lineups));
       }
       this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
 

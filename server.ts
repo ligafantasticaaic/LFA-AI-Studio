@@ -206,29 +206,45 @@ async function startServer() {
     }
   }
 
+  const DEMO_TEAMS_SERVER = [
+    'galácticos fc',
+    'galacticos fc',
+    'tiki-taka united',
+    'la saeta rubia',
+    'furia rojiblanca',
+    'boquerones cf',
+    'dream team 92'
+  ];
+
   function mergePersistedLeagueData(data: any) {
     if (!data || typeof data !== 'object') return data;
     const persisted = getPersistedLeagueData();
 
-    // 1. Unificar transferencias (evitando duplicados)
-    if (persisted.transfers.length > 0) {
-      const existingTransfers = Array.isArray(data.transfers) ? [...data.transfers] : [];
-      const seen = new Set<string>();
+    // 1. Unificar transferencias (evitando duplicados y purgando cualquier demo)
+    const rawIncoming = Array.isArray(data.transfers) ? data.transfers : [];
+    const existingTransfers: any[] = [];
+    const seen = new Set<string>();
 
-      existingTransfers.forEach((t: any) => {
-        const k = `${String(t.team).toLowerCase().trim()}:::${t.jornada}:::${String(t.playerOut).toLowerCase().trim()}:::${String(t.playerIn).toLowerCase().trim()}`;
+    rawIncoming.forEach((t: any) => {
+      const tLower = String(t.team || '').toLowerCase().trim();
+      if (DEMO_TEAMS_SERVER.includes(tLower)) return;
+      const k = `${tLower}:::${t.jornada}:::${String(t.playerOut || '').toLowerCase().trim()}:::${String(t.playerIn || '').toLowerCase().trim()}`;
+      if (!seen.has(k)) {
         seen.add(k);
-      });
-
-      for (const pt of persisted.transfers) {
-        const k = `${String(pt.team).toLowerCase().trim()}:::${pt.jornada}:::${String(pt.playerOut).toLowerCase().trim()}:::${String(pt.playerIn).toLowerCase().trim()}`;
-        if (!seen.has(k)) {
-          seen.add(k);
-          existingTransfers.unshift(pt);
-        }
+        existingTransfers.push(t);
       }
-      data.transfers = existingTransfers;
+    });
+
+    for (const pt of persisted.transfers) {
+      const tLower = String(pt.team || '').toLowerCase().trim();
+      if (DEMO_TEAMS_SERVER.includes(tLower)) return;
+      const k = `${tLower}:::${pt.jornada}:::${String(pt.playerOut || '').toLowerCase().trim()}:::${String(pt.playerIn || '').toLowerCase().trim()}`;
+      if (!seen.has(k)) {
+        seen.add(k);
+        existingTransfers.unshift(pt);
+      }
     }
+    data.transfers = existingTransfers;
 
     // 2. Aplicar lineupOverrides a las alineaciones si Google Sheets no las había actualizado aún
     if (persisted.lineupOverrides.length > 0 && Array.isArray(data.lineups)) {
@@ -286,7 +302,18 @@ async function startServer() {
   // GET current centralized Google Apps Script Web App URL and league config
   app.get('/api/gas-config', (req, res) => {
     const config = getGasConfig();
-    res.json(config);
+    const persisted = getPersistedLeagueData();
+    res.json({
+      ...config,
+      pendingTransfersCount: (persisted.pendingTransfers || []).length,
+      persistedTransfersCount: (persisted.transfers || []).length
+    });
+  });
+
+  // GET centralized persisted transfers and lineups (instant across all browsers)
+  app.get('/api/persisted-league', (req, res) => {
+    const data = getPersistedLeagueData();
+    res.json(data);
   });
 
   // POST update league settings by admin
