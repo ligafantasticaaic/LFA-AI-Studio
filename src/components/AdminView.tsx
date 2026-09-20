@@ -43,7 +43,8 @@ import {
   Bot,
   Eye,
   EyeOff,
-  ArrowRight
+  ArrowRight,
+  ArrowLeftRight
 } from 'lucide-react';
 import { GAS_TEMPLATES, generateCustomGasCode } from '../data/gasTemplates';
 
@@ -77,6 +78,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
   } | null>(null);
   const [isDiagnosingRealtime, setIsDiagnosingRealtime] = useState<boolean>(false);
   const [isSyncingPendingDrafts, setIsSyncingPendingDrafts] = useState<boolean>(false);
+  const [isSyncingPendingTransfers, setIsSyncingPendingTransfers] = useState<boolean>(false);
+  const [pendingTransfersCount, setPendingTransfersCount] = useState<number>(0);
   const [copiedGasCode, setCopiedGasCode] = useState<boolean>(false);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [isResettingSeason, setIsResettingSeason] = useState<boolean>(false);
@@ -208,6 +211,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setNotificationConfig(gasEngine.getNotificationConfig());
     setLeagueTextsInput(gasEngine.getLeagueTexts());
     setCustomCodeGsInput(gasEngine.getCustomCodeGs());
+
+    gasEngine.getPendingSheetsStatus().then(st => {
+      setPendingTransfersCount(st?.count || 0);
+    }).catch(() => {});
   };
 
   // Handlers para 1. Primera Jornada con Aportaciones
@@ -630,6 +637,25 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
+  const handleSyncPendingTransfers = async () => {
+    setIsSyncingPendingTransfers(true);
+    const safetyTimer = setTimeout(() => setIsSyncingPendingTransfers(false), 25000);
+    try {
+      const res = await gasEngine.syncPendingTransfersToSheets();
+      showAlert(res.message, res.success);
+      const st = await gasEngine.getPendingSheetsStatus();
+      setPendingTransfersCount(st?.count || 0);
+      if (res.success) {
+        loadAdminData();
+      }
+    } catch (e: any) {
+      showAlert('Error al sincronizar fichajes: ' + (e?.message || 'Error de red'), false);
+    } finally {
+      clearTimeout(safetyTimer);
+      setIsSyncingPendingTransfers(false);
+    }
+  };
+
   const handleSyncGasNow = async () => {
     if (!gasUrlInput.trim()) {
       setGasFeedback({ isSuccess: false, message: 'Introduce la URL de la Web App de Google Apps Script (/exec).' });
@@ -968,6 +994,21 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isDiagnosingRealtime ? 'animate-spin text-amber-400' : 'text-slate-400'}`} />
                     <span>{isDiagnosingRealtime ? 'Diagnosticando...' : 'Diagnosticar Tiempo Real'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSyncPendingTransfers}
+                    disabled={isSyncingPendingTransfers}
+                    className="text-xs font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-950/50 hover:bg-sky-900/50 border border-sky-800 transition cursor-pointer disabled:opacity-50"
+                    title="Sincroniza los fichajes guardados en el servidor central con Google Sheets"
+                  >
+                    <ArrowLeftRight className={`w-3.5 h-3.5 ${isSyncingPendingTransfers ? 'animate-spin text-sky-300' : 'text-sky-400'}`} />
+                    <span>{isSyncingPendingTransfers ? 'Sincronizando...' : 'Sincronizar Fichajes con Sheets'}</span>
+                    {pendingTransfersCount > 0 && (
+                      <span className="ml-1 px-1.5 py-0.2 bg-amber-500 text-slate-950 font-black rounded-full text-[10px]">
+                        {pendingTransfersCount}
+                      </span>
+                    )}
                   </button>
                   <button
                     type="button"

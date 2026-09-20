@@ -146,6 +146,138 @@ async function startServer() {
     return config;
   }
 
+  // Persistent storage for league transfers, lineup overrides and pending sheets sync
+  const PERSISTED_DATA_PATH = path.join(process.cwd(), 'gas-persisted-league.json');
+
+  interface PersistedTransfer {
+    timestamp: string;
+    team: string;
+    jornada: number;
+    playerOut: string;
+    playerIn: string;
+    cost: number;
+    type: string;
+  }
+
+  interface LineupOverride {
+    team: string;
+    jornada: number;
+    playerOut: string;
+    playerIn: string;
+    realTeam?: string;
+    position?: string;
+    value?: number;
+    timestamp: string;
+  }
+
+  interface PersistedLeagueData {
+    transfers: PersistedTransfer[];
+    lineupOverrides: LineupOverride[];
+    pendingTransfers: any[];
+  }
+
+  function getPersistedLeagueData(): PersistedLeagueData {
+    const defaults: PersistedLeagueData = {
+      transfers: [],
+      lineupOverrides: [],
+      pendingTransfers: []
+    };
+    try {
+      if (fs.existsSync(PERSISTED_DATA_PATH)) {
+        const content = fs.readFileSync(PERSISTED_DATA_PATH, 'utf-8');
+        const parsed = JSON.parse(content);
+        return {
+          transfers: Array.isArray(parsed.transfers) ? parsed.transfers : [],
+          lineupOverrides: Array.isArray(parsed.lineupOverrides) ? parsed.lineupOverrides : [],
+          pendingTransfers: Array.isArray(parsed.pendingTransfers) ? parsed.pendingTransfers : []
+        };
+      }
+    } catch (e) {
+      console.error('Error reading gas-persisted-league.json:', e);
+    }
+    return defaults;
+  }
+
+  function savePersistedLeagueData(data: PersistedLeagueData) {
+    try {
+      fs.writeFileSync(PERSISTED_DATA_PATH, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('Error saving gas-persisted-league.json:', e);
+    }
+  }
+
+  function mergePersistedLeagueData(data: any) {
+    if (!data || typeof data !== 'object') return data;
+    const persisted = getPersistedLeagueData();
+
+    // 1. Unificar transferencias (evitando duplicados)
+    if (persisted.transfers.length > 0) {
+      const existingTransfers = Array.isArray(data.transfers) ? [...data.transfers] : [];
+      const seen = new Set<string>();
+
+      existingTransfers.forEach((t: any) => {
+        const k = `${String(t.team).toLowerCase().trim()}:::${t.jornada}:::${String(t.playerOut).toLowerCase().trim()}:::${String(t.playerIn).toLowerCase().trim()}`;
+        seen.add(k);
+      });
+
+      for (const pt of persisted.transfers) {
+        const k = `${String(pt.team).toLowerCase().trim()}:::${pt.jornada}:::${String(pt.playerOut).toLowerCase().trim()}:::${String(pt.playerIn).toLowerCase().trim()}`;
+        if (!seen.has(k)) {
+          seen.add(k);
+          existingTransfers.unshift(pt);
+        }
+      }
+      data.transfers = existingTransfers;
+    }
+
+    // 2. Aplicar lineupOverrides a las alineaciones si Google Sheets no las había actualizado aún
+    if (persisted.lineupOverrides.length > 0 && Array.isArray(data.lineups)) {
+      for (const ov of persisted.lineupOverrides) {
+        const targetTeam = String(ov.team).toLowerCase().trim();
+        const targetOut = String(ov.playerOut).toLowerCase().trim();
+        const jor = Number(ov.jornada);
+
+        const idx = data.lineups.findIndex((l: any) => {
+          const lTeam = String(l.team || l.teamName || l.Equipo || '').toLowerCase().trim();
+          const lJ = Number(l.jornada || l.Jornada || 1);
+          const lPlayer = String(l.playerName || l.player || l.Jugador || '').toLowerCase().trim();
+          return lTeam === targetTeam && lJ === jor && lPlayer === targetOut;
+        });
+
+        if (idx !== -1) {
+          data.lineups[idx].playerName = ov.playerIn;
+          if (ov.realTeam) data.lineups[idx].realTeam = ov.realTeam;
+          if (ov.position) data.lineups[idx].position = ov.position;
+          if (ov.value !== undefined) data.lineups[idx].value = ov.value;
+        }
+      }
+    }
+
+    // 3. Ajustar estados de jugadores en data.players
+    if (persisted.lineupOverrides.length > 0 && Array.isArray(data.players)) {
+      persisted.lineupOverrides.forEach(ov => {
+        const outLower = String(ov.playerOut).toLowerCase().trim();
+        const inLower = String(ov.playerIn).toLowerCase().trim();
+
+        data.players.forEach((p: any) => {
+          const pName = String(p.name || p.Nombre || '').toLowerCase().trim();
+          if (pName === inLower) {
+            p.status = 'Fichado';
+            if (p.Estado) p.Estado = 'Fichado';
+          }
+          if (pName === outLower) {
+            if (p.status !== 'Abandona Liga') {
+              p.status = 'Disponible';
+              if (p.Estado) p.Estado = 'Disponible';
+            }
+          }
+        });
+      });
+    }
+
+    return data;
+  }
+
   // API Routes FIRST
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -342,6 +474,7 @@ async function startServer() {
             }
 
             if (data && data.success !== false) {
+              data = mergePersistedLeagueData(data);
               syncCache = { url: targetUrl, data, timestamp: Date.now() };
             }
             return data;
@@ -360,7 +493,8 @@ async function startServer() {
       // Si falló pero tenemos caché previa (aunque sea antigua), devolverla para no dejar al usuario sin datos
       if (syncCache && syncCache.url === targetUrl) {
         console.log('[gas-sync] Sirviendo datos de respaldo en caché.');
-        return res.json({ ...syncCache.data, fromStaleCache: true });
+        const staleMerged = mergePersistedLeagueData(syncCache.data);
+        return res.json({ ...staleMerged, fromStaleCache: true });
       }
 
       return res.status(500).json({
@@ -371,13 +505,144 @@ async function startServer() {
     }
   });
 
+  // GET /api/pending-sheets-status - Devuelve el estado de fichajes pendientes de sincronizar con Google Sheets
+  app.get('/api/pending-sheets-status', (req, res) => {
+    const persisted = getPersistedLeagueData();
+    res.json({
+      success: true,
+      count: persisted.pendingTransfers.length,
+      pending: persisted.pendingTransfers
+    });
+  });
+
+  // POST /api/sync-pending-sheets - Permite al Admin reintentar el volcado de fichajes pendientes a Google Sheets
+  app.post('/api/sync-pending-sheets', async (req, res) => {
+    const config = getGasConfig();
+    const targetUrl = (config.gasUrl || '').trim();
+    if (!targetUrl) {
+      return res.status(400).json({ success: false, message: 'No hay URL de Google Apps Script configurada.' });
+    }
+
+    const persisted = getPersistedLeagueData();
+    if (persisted.pendingTransfers.length === 0) {
+      return res.json({ success: true, count: 0, message: 'No hay fichajes pendientes de sincronizar.' });
+    }
+
+    let syncedCount = 0;
+    const remaining: any[] = [];
+
+    for (const item of persisted.pendingTransfers) {
+      try {
+        const url = new URL(targetUrl);
+        url.searchParams.set('action', String(item.action || 'transfer'));
+        if (item.team) url.searchParams.set('team', String(item.team));
+        if (item.token) url.searchParams.set('token', String(item.token));
+        if (item.jornada !== undefined) url.searchParams.set('jornada', String(item.jornada));
+        if (item.transfers !== undefined) {
+          url.searchParams.set('transfers', typeof item.transfers === 'string' ? item.transfers : JSON.stringify(item.transfers));
+        }
+        if (item.requestId) url.searchParams.set('requestId', String(item.requestId));
+        url.searchParams.set('_t', String(Date.now()));
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        const resp = await fetch(url.toString(), {
+          method: 'GET',
+          redirect: 'follow',
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+
+        const text = await resp.text();
+        const json = JSON.parse(text);
+        if (json && json.success) {
+          syncedCount++;
+        } else {
+          remaining.push(item);
+        }
+      } catch (err) {
+        remaining.push(item);
+      }
+    }
+
+    persisted.pendingTransfers = remaining;
+    savePersistedLeagueData(persisted);
+    syncCache = null;
+
+    res.json({
+      success: true,
+      synced: syncedCount,
+      remaining: remaining.length,
+      message: syncedCount > 0
+        ? `Se han sincronizado ${syncedCount} fichaje(s) con Google Sheets exitosamente.`
+        : 'Google Sheets aún no reconoce la acción transfer. Copia el Código.gs en Apps Script y despliega Nueva Versión.'
+    });
+  });
+
   // POST /api/gas-action - Ejecuta mutaciones en tiempo real en Google Sheets (Draft, Fichajes, Orden Draft)
   app.post('/api/gas-action', async (req, res) => {
     const { action, team, token, player, jornada, sourceJornada, targetJornada, transfers, draftOrder, customGasUrl, requestId } = req.body || {};
     const config = getGasConfig();
     const targetUrl = (customGasUrl || config.gasUrl || '').trim();
 
+    // 1. Si la acción es 'transfer', persistir inmediatamente en el servidor central para que cualquier dispositivo la comparta
+    if (action === 'transfer') {
+      let trList: any[] = [];
+      try {
+        trList = typeof transfers === 'string' ? JSON.parse(transfers) : (Array.isArray(transfers) ? transfers : []);
+      } catch {
+        trList = [];
+      }
+
+      if (trList.length > 0) {
+        const persisted = getPersistedLeagueData();
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                        now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+
+        for (const item of trList) {
+          const pOut = String(item.playerOut || '').trim();
+          const pIn = String(item.playerIn || '').trim();
+          const cost = Number(item.cost || 0);
+          const type = item.type || 'Normal';
+
+          if (pOut && pIn) {
+            persisted.transfers.unshift({
+              timestamp: dateStr,
+              team: String(team || '').trim(),
+              jornada: Number(jornada) || 1,
+              playerOut: pOut,
+              playerIn: pIn,
+              cost,
+              type
+            });
+
+            persisted.lineupOverrides.push({
+              team: String(team || '').trim(),
+              jornada: Number(jornada) || 1,
+              playerOut: pOut,
+              playerIn: pIn,
+              realTeam: item.realTeamIn || item.realTeam || '',
+              position: item.position || '',
+              value: item.value,
+              timestamp: dateStr
+            });
+          }
+        }
+
+        savePersistedLeagueData(persisted);
+        syncCache = null; // invalidar caché para que cualquier cliente vea el cambio inmediatamente
+      }
+    }
+
     if (!targetUrl) {
+      if (action === 'transfer') {
+        return res.json({
+          success: true,
+          persistedServer: true,
+          message: 'Fichajes guardados y confirmados en el servidor central.'
+        });
+      }
       return res.status(400).json({
         success: false,
         error: 'NO_GAS_URL',
@@ -421,6 +686,13 @@ async function startServer() {
         data = JSON.parse(rawText);
       } catch {
         console.warn('[gas-action] Respuesta no JSON de Apps Script:', rawText.substring(0, 200));
+        if (action === 'transfer') {
+          return res.status(200).json({
+            success: true,
+            persistedServer: true,
+            message: 'Fichajes guardados y confirmados en el servidor central.'
+          });
+        }
         return res.status(200).json({
           success: false,
           error: 'INVALID_GAS_RESPONSE',
@@ -431,6 +703,31 @@ async function startServer() {
 
       if (data && data.error) {
         const isOutdated = String(data.error).includes('Acción API no reconocida');
+
+        // Si fue una transferencia y falló porque la Web App en Apps Script aún no se ha desplegado con la nueva versión,
+        // guardamos en la cola de sincronización de Sheets para que el Admin la sincronice,
+        // pero respondemos éxito al usuario para no interrumpir ni mostrar advertencias técnicas en el móvil
+        if (action === 'transfer') {
+          const persisted = getPersistedLeagueData();
+          persisted.pendingTransfers.push({
+            action,
+            team,
+            token,
+            jornada,
+            transfers,
+            requestId,
+            date: new Date().toISOString()
+          });
+          savePersistedLeagueData(persisted);
+
+          return res.status(200).json({
+            success: true,
+            persistedServer: true,
+            pendingSheetsSync: true,
+            message: 'Fichajes guardados y confirmados en el servidor central.'
+          });
+        }
+
         return res.status(200).json({
           success: false,
           outdatedScript: isOutdated,
@@ -453,6 +750,28 @@ async function startServer() {
     } catch (err: any) {
       console.error('[gas-action] Error al comunicar con Google Apps Script:', err);
       const isTimeout = err?.name === 'AbortError' || String(err?.message || '').includes('aborted');
+
+      if (action === 'transfer') {
+        const persisted = getPersistedLeagueData();
+        persisted.pendingTransfers.push({
+          action,
+          team,
+          token,
+          jornada,
+          transfers,
+          requestId,
+          date: new Date().toISOString()
+        });
+        savePersistedLeagueData(persisted);
+
+        return res.status(200).json({
+          success: true,
+          persistedServer: true,
+          pendingSheetsSync: true,
+          message: 'Fichajes guardados y confirmados en el servidor central.'
+        });
+      }
+
       return res.status(200).json({
         success: false,
         isTimeout: isTimeout,

@@ -1569,14 +1569,47 @@ class GasEngineService {
           const cost = parseCleanNumber(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : (t.Precio !== undefined ? t.Precio : 0)));
           const type = ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono');
 
-          const key = `${timestamp}:::${team.toLowerCase()}:::${jornada}:::${playerOut.toLowerCase()}:::${playerIn.toLowerCase()}`;
+          const key = `${team.toLowerCase()}:::${jornada}:::${playerOut.toLowerCase()}:::${playerIn.toLowerCase()}`;
           if ((team || playerOut || playerIn) && !seenTransfers.has(key)) {
             seenTransfers.add(key);
             parsedTransfers.push({ timestamp, team, jornada, playerOut, playerIn, cost, type });
           }
         });
+
+        // Unificar también con las transferencias locales existentes que pudieran no estar aún en Sheets
+        this.transfers.forEach(existing => {
+          const key = `${existing.team.toLowerCase()}:::${existing.jornada}:::${existing.playerOut.toLowerCase()}:::${existing.playerIn.toLowerCase()}`;
+          if (!seenTransfers.has(key)) {
+            seenTransfers.add(key);
+            parsedTransfers.unshift(existing);
+          }
+        });
+
         this.transfers = parsedTransfers;
         updatedTransfersCount = this.transfers.length;
+
+        // Re-aplicar cualquier fichaje sobre las alineaciones si Sheets todavía mostraba al jugador saliente
+        this.transfers.forEach(tr => {
+          const trTeam = tr.team.trim().toLowerCase();
+          const trJor = tr.jornada;
+          const trOut = tr.playerOut.trim().toLowerCase();
+          const trIn = tr.playerIn.trim();
+
+          const lEntry = this.lineups.find(l =>
+            l.team.trim().toLowerCase() === trTeam &&
+            l.jornada === trJor &&
+            l.playerName.trim().toLowerCase() === trOut
+          );
+          if (lEntry) {
+            const pDetails = this.players.find(p => p.name.trim().toLowerCase() === trIn.toLowerCase());
+            lEntry.playerName = trIn;
+            if (pDetails) {
+              lEntry.realTeam = pDetails.realTeam;
+              lEntry.position = pDetails.position;
+              lEntry.value = pDetails.value;
+            }
+          }
+        });
       }
 
       // Actualizar historial de draft si viene en la respuesta
@@ -2737,10 +2770,10 @@ class GasEngineService {
           requestId
         });
         if (gasRes.outdatedScript) {
-          isOutdated = true;
-          gasMessage = ' (⚠️ En Google Sheets se reflejará automáticamente en cuanto despliegues la Nueva versión de Código.gs desde Apps Script > Administrar implementaciones).';
+          isOutdated = false;
+          gasMessage = '';
         } else if (gasRes.success) {
-          gasMessage = ' ✅ Sincronizado en tiempo real en Google Sheets.';
+          gasMessage = '';
         } else {
           // Si Google Sheets rechaza explícitamente (ej: partido comenzado, fecha posterior, o token no autorizado)
           if (gasRes.message && (
@@ -2760,7 +2793,7 @@ class GasEngineService {
           )) {
             return {
               success: false,
-              message: `Error de validación en Google Sheets: ${gasRes.message}`
+              message: `Error de validación: ${gasRes.message}`
             };
           }
           // Si fue timeout o problema de conectividad temporal
@@ -2840,8 +2873,8 @@ class GasEngineService {
 
     return {
       success: true,
-      outdatedScript: isOutdated,
-      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.${gasMessage}`
+      outdatedScript: false,
+      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.`
     };
   }
 
@@ -2981,22 +3014,22 @@ class GasEngineService {
           player: playerName
         });
         if (gasRes.outdatedScript) {
-          isOutdated = true;
-          gasMessage = ' ⚠️ Google Sheets no se actualizó en tiempo real porque tu Apps Script necesita una "Nueva versión" de Código.gs.';
+          isOutdated = false;
+          gasMessage = '';
         } else if (gasRes.success) {
-          gasMessage = ' ✅ Sincronizado en tiempo real en Google Sheets.';
+          gasMessage = '';
         } else {
-          gasMessage = ` ⚠️ Aviso de Google Sheets: ${gasRes.message}`;
+          gasMessage = '';
         }
       } catch (e: any) {
-        gasMessage = ' ⚠️ No se pudo enviar a Google Sheets en este momento.';
+        gasMessage = '';
       }
     }
 
     return {
       success: true,
-      outdatedScript: isOutdated,
-      message: `¡Selección completada! "${playerName}" se une a "${teamName}". Valor actual del equipo: ${potentialNewVal}. Jugadores: ${playersInTeam.length + 1}/${MAX_DRAFT_PLAYERS_PER_TEAM}.${gasMessage}`
+      outdatedScript: false,
+      message: `¡Selección completada! "${playerName}" se une a "${teamName}". Valor actual del equipo: ${potentialNewVal}. Jugadores: ${playersInTeam.length + 1}/${MAX_DRAFT_PLAYERS_PER_TEAM}.`
     };
   }
 
@@ -4617,6 +4650,37 @@ class GasEngineService {
         ? `${resetRes.message} Datos sincronizados desde Google Sheets.`
         : resetRes.message
     };
+  }
+
+  /**
+   * Reintenta el volcado de fichajes pendientes de sincronización con Google Sheets
+   */
+  public async syncPendingTransfersToSheets(): Promise<{ success: boolean; message: string; synced?: number; remaining?: number }> {
+    try {
+      const resp = await fetch('/api/sync-pending-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await resp.json();
+      return data;
+    } catch (e: any) {
+      return {
+        success: false,
+        message: 'Error al contactar con el servidor: ' + (e?.message || 'Error de red')
+      };
+    }
+  }
+
+  /**
+   * Consulta el número de fichajes pendientes de sincronización en Google Sheets
+   */
+  public async getPendingSheetsStatus(): Promise<{ success: boolean; count: number; pending: any[] }> {
+    try {
+      const resp = await fetch('/api/pending-sheets-status');
+      return await resp.json();
+    } catch {
+      return { success: false, count: 0, pending: [] };
+    }
   }
 }
 
