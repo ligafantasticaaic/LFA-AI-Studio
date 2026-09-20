@@ -1980,17 +1980,29 @@ function validateTeamToken(teamName, token) {
   if (!teamName || !token) return false;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = findSheet(ss, ['Tokens', 'Equipos', 'Teams', 'Clubs', 'Equipos_Tokens']);
-  if (!sheet) return false;
-  
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    var t = String(data[i][0]).trim().toLowerCase();
-    var tok = String(data[i][1]).trim();
-    if (t === String(teamName).trim().toLowerCase() && tok === String(token).trim()) {
-      return true;
+  if (sheet) {
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      var t = String(data[i][0]).trim().toLowerCase();
+      var tok = String(data[i][1]).trim().toLowerCase();
+      if (t === String(teamName).trim().toLowerCase() && tok === String(token).trim().toLowerCase()) {
+        return true;
+      }
     }
   }
-  return false;
+
+  // Fallback de tokens de los equipos oficiales de la liga
+  var defaultTokens = {
+    "brikkomarian": "arbitro",
+    "dovis": "porteria",
+    "frederer": "titular",
+    "la audineta": "fichaje",
+    "merendolo": "empate",
+    "playa de cueva": "suplente"
+  };
+  var tNorm = String(teamName).trim().toLowerCase();
+  var tokNorm = String(token).trim().toLowerCase();
+  return defaultTokens[tNorm] === tokNorm;
 }
 
 /**

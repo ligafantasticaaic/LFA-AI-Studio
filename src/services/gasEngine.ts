@@ -4454,8 +4454,27 @@ class GasEngineService {
           };
         }
 
-        // Probar si reconoce la acción 'draft'
+        // Probar si reconoce las acciones 'transfer' y 'draft'
         try {
+          const transferTest = await this.fetchGasData(effectiveUrl, {
+            action: 'transfer',
+            team: 'TEST_DIAGNOSTIC',
+            token: 'invalid_token_diag',
+            jornada: '1',
+            transfers: '[]'
+          }, 12000);
+
+          if (transferTest?.error && String(transferTest.error).includes('Acción API no reconocida')) {
+            return {
+              configured: true,
+              connected: true,
+              realtimeReady: false,
+              outdatedScript: true,
+              message: '⚠️ Google Sheets está conectado, pero la Web App necesita publicar una "Nueva versión" en Apps Script para escribir los fichajes directamente en las hojas.',
+              instruction: 'En Google Apps Script: 1. Pega el Código.gs. 2. Ve a Implementar > Administrar implementaciones > Editar (lápiz) > Versión: "Nueva versión" > Implementar.'
+            };
+          }
+
           const draftTest = await this.fetchGasData(effectiveUrl, {
             action: 'draft',
             team: 'TEST_DIAGNOSTIC',
@@ -4469,8 +4488,8 @@ class GasEngineService {
               connected: true,
               realtimeReady: false,
               outdatedScript: true,
-              message: '⚠️ Google Sheets está conectado correctamente, pero la Web App de Apps Script necesita desplegar una "Nueva versión" para activar el tiempo real de Draft y Fichajes.',
-              instruction: 'En Google Apps Script: 1. Pega el Código.gs actualizado. 2. Haz clic en Implementar > Administrar implementaciones > Editar (lápiz) > Nueva versión > Implementar.'
+              message: '⚠️ Google Sheets está conectado, pero la Web App de Apps Script necesita desplegar una "Nueva versión" para activar el tiempo real de Draft y Fichajes.',
+              instruction: 'En Google Apps Script: 1. Pega el Código.gs actualizado. 2. Haz clic en Implementar > Administrar implementaciones > Editar (lápiz) > Versión: "Nueva versión" > Implementar.'
             };
           }
 
