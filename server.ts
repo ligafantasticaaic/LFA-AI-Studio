@@ -15,7 +15,7 @@ async function startServer() {
   // Helper to retrieve current GAS configuration
   function getGasConfig() {
     const defaults = {
-      gasUrl: process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec',
+      gasUrl: process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycbwDMoqKJXsdNu6c3aaNROXx_2-VxbwCACoTZQsZzzdP-4LXluaDACtQLaOmvdbs3cvsBQ/exec',
       adminPassword: 'admin',
       leagueTexts: {
         leagueName: 'Liga Fantástica de Amigos',
