@@ -1359,6 +1359,47 @@ function getHorariosEquipos(ss) {
 }
 
 /**
+ * Comprueba si un jugador ya cuenta con puntuación registrada en la Jornada en la hoja de Jugadores
+ */
+function isPlayerMatchPlayedInSheet(ss, playerName, jornada) {
+  if (!playerName || !jornada) return { isPlayed: false };
+  try {
+    var sheetJug = ss.getSheetByName('Jugadores');
+    if (!sheetJug) return { isPlayed: false };
+    var lastCol = sheetJug.getLastColumn();
+    if (lastCol < 1) return { isPlayed: false };
+    var headers = sheetJug.getRange(1, 1, 1, lastCol).getValues()[0];
+    var colJ = -1;
+    var colName = -1;
+    for (var c = 0; c < headers.length; c++) {
+      var hStr = String(headers[c] || '').trim();
+      if (hStr.match(new RegExp('^Puntos_J' + jornada + '$', 'i'))) colJ = c + 1;
+      if (hStr.toLowerCase() === 'nombre' || hStr.toLowerCase() === 'jugador') colName = c + 1;
+    }
+    if (colJ !== -1 && colName !== -1) {
+      var lastRow = sheetJug.getLastRow();
+      if (lastRow > 1) {
+        var names = sheetJug.getRange(2, colName, lastRow - 1, 1).getValues();
+        var normTarget = String(playerName).toLowerCase().trim();
+        for (var r = 0; r < names.length; r++) {
+          if (String(names[r][0]).toLowerCase().trim() === normTarget) {
+            var ptVal = sheetJug.getRange(r + 2, colJ).getValue();
+            if (ptVal !== '' && ptVal !== null && !isNaN(Number(ptVal))) {
+              return {
+                isPlayed: true,
+                reason: 'El jugador "' + playerName + '" ya cuenta con puntuación oficial registrada (' + ptVal + ' pts) en la Jornada ' + jornada + '.'
+              };
+            }
+            break;
+          }
+        }
+      }
+    }
+  } catch (ePts) {}
+  return { isPlayed: false };
+}
+
+/**
  * Valida si un equipo está en plazo para realizar un fichaje según Horarios_Equipos
  * Regla de negocio:
  * 1. Fichaje en fecha posterior a la del partido -> INVÁLIDO
@@ -1367,6 +1408,16 @@ function getHorariosEquipos(ss) {
  */
 function validateTeamScheduleDeadline(jornada, realTeam, schedules) {
   if (!realTeam) return { isOpen: true };
+
+  // 0. Si la jornada completa ya está jugada (con puntuaciones oficiales)
+  var maxPlayedJ = getMaxJornada();
+  if (maxPlayedJ > 0 && Number(jornada) <= maxPlayedJ) {
+    return {
+      isOpen: false,
+      reason: 'La Jornada ' + jornada + ' ya ha sido disputada (cuenta con puntuaciones oficiales registradas).'
+    };
+  }
+
   if (!schedules || schedules.length === 0) return { isOpen: true };
 
   var normTarget = canonicalizeRealTeam(realTeam);
@@ -2631,6 +2682,15 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
     return { success: false, message: 'Jornada no válida: ' + jornada };
   }
 
+  // 0. Validar si la jornada completa ya ha sido disputada
+  var maxPlayedJ = getMaxJornada();
+  if (maxPlayedJ > 0 && jornada <= maxPlayedJ) {
+    return {
+      success: false,
+      message: 'Fichaje denegado: La Jornada ' + jornada + ' ya ha sido disputada (cuenta con puntuaciones oficiales registradas hasta la Jornada ' + maxPlayedJ + ').'
+    };
+  }
+
   if (typeof transfers === 'string') {
     try {
       transfers = JSON.parse(transfers);
@@ -2660,6 +2720,24 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
     var pOut = String(tr.playerOut || '').trim();
     var pIn = String(tr.playerIn || '').trim();
     if (!pOut || !pIn) continue;
+
+    // Validar si el jugador saliente ya disputó su partido
+    var outPtsCheck = isPlayerMatchPlayedInSheet(ss, pOut, jornada);
+    if (outPtsCheck.isPlayed) {
+      return {
+        success: false,
+        message: 'Fichaje cancelado: El jugador saliente "' + pOut + '" no se puede cambiar. ' + outPtsCheck.reason
+      };
+    }
+
+    // Validar si el jugador entrante ya disputó su partido
+    var inPtsCheck = isPlayerMatchPlayedInSheet(ss, pIn, jornada);
+    if (inPtsCheck.isPlayed) {
+      return {
+        success: false,
+        message: 'Fichaje cancelado: El jugador entrante "' + pIn + '" no se puede fichar. ' + inPtsCheck.reason
+      };
+    }
 
     var realOut = tr.realTeamOut || playerTeamMap[pOut.toLowerCase()] || '';
     var realIn = tr.realTeamIn || playerTeamMap[pIn.toLowerCase()] || '';

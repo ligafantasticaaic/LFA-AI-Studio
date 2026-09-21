@@ -222,13 +222,7 @@ const INITIAL_TRANSFERS: TransferRecord[] = [];
 
 const INITIAL_DRAFTS: DraftRecord[] = [];
 
-const INITIAL_SCHEDULES: ScheduleRecord[] = [
-  { jornada: 5, realTeam: 'RMA', deadlineIsoString: '2026-09-28T21:00' },
-  { jornada: 5, realTeam: 'BAR', deadlineIsoString: '2026-09-28T16:15' },
-  { jornada: 5, realTeam: 'ATM', deadlineIsoString: '2026-09-29T18:30' },
-  { jornada: 6, realTeam: 'RMA', deadlineIsoString: '2026-10-05T21:00' },
-  { jornada: 6, realTeam: 'BAR', deadlineIsoString: '2026-10-05T16:15' },
-];
+const INITIAL_SCHEDULES: ScheduleRecord[] = [];
 
 export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec';
 
@@ -2245,7 +2239,34 @@ class GasEngineService {
       return { hasSchedule: false, isOpen: true };
     }
 
+    // 0. Si la jornada completa ya fue disputada o cerrada (puntuaciones registradas)
+    const jPlayed = this.isJornadaPlayed(jornada);
+    if (jPlayed.isPlayed) {
+      return {
+        hasSchedule: true,
+        isOpen: false,
+        reason: jPlayed.reason || `La Jornada ${jornada} ya ha sido disputada (no se permiten modificaciones).`
+      };
+    }
+
     const canonTarget = canonicalizeRealTeam(realTeam);
+
+    // 0.1 Comprobar si los jugadores de este equipo real ya tienen puntuaciones oficiales registradas en esta jornada
+    const teamHasPointsInJornada = this.players.some(p => 
+      canonicalizeRealTeam(p.realTeam) === canonTarget &&
+      p.jornadasPoints &&
+      p.jornadasPoints[jornada] !== undefined &&
+      p.jornadasPoints[jornada] !== null &&
+      typeof p.jornadasPoints[jornada] === 'number' &&
+      !isNaN(p.jornadasPoints[jornada] as number)
+    );
+    if (teamHasPointsInJornada) {
+      return {
+        hasSchedule: true,
+        isOpen: false,
+        reason: `El partido de ${realTeam} en la Jornada ${jornada} ya ha sido disputado (cuenta con puntuaciones oficiales registradas).`
+      };
+    }
 
     // Buscar en this.schedules para esta jornada y equipo real específico
     let matchSched = this.schedules.find(
@@ -2361,6 +2382,49 @@ class GasEngineService {
   public isTeamOpenForJornada(jornada: number, realTeam: string): boolean {
     const res = this.getTeamScheduleDeadline(jornada, realTeam);
     return res.isOpen;
+  }
+
+  /**
+   * Comprueba si el partido de un jugador específico para una jornada ya ha sido disputado
+   * (por contar con puntos oficiales en la columna de Jugadores o por haber vencido el horario de su equipo)
+   */
+  public isPlayerMatchPlayed(playerName: string, jornada: number): { isPlayed: boolean; reason?: string } {
+    jornada = parseInt(String(jornada), 10);
+    if (isNaN(jornada) || jornada <= 0) {
+      return { isPlayed: true, reason: 'Jornada no válida.' };
+    }
+
+    const jPlayed = this.isJornadaPlayed(jornada);
+    if (jPlayed.isPlayed) {
+      return { isPlayed: true, reason: jPlayed.reason || `La Jornada ${jornada} ya ha sido disputada.` };
+    }
+
+    const norm = (s: string) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const targetNorm = norm(playerName);
+    const player = this.players.find(p => norm(p.name) === targetNorm);
+
+    if (player && player.jornadasPoints) {
+      const pts = player.jornadasPoints[jornada];
+      if (typeof pts === 'number' && !isNaN(pts)) {
+        return {
+          isPlayed: true,
+          reason: `El jugador "${player.name}" ya disputó su partido de la Jornada ${jornada} (puntuación registrada: ${pts} pts).`
+        };
+      }
+    }
+
+    const realTeam = player?.realTeam || this.getRealTeamOfPlayer(playerName);
+    if (realTeam) {
+      const sched = this.getTeamScheduleDeadline(jornada, realTeam);
+      if (!sched.isOpen) {
+        return {
+          isPlayed: true,
+          reason: sched.reason || `El partido de ${realTeam} ya ha comenzado o se ha disputado.`
+        };
+      }
+    }
+
+    return { isPlayed: false };
   }
 
   public getTeamLineupData(teamName: string, jornada: number): TeamLineupResponse {
@@ -2646,10 +2710,19 @@ class GasEngineService {
       return { success: false, message: 'Datos incompletos o lista de fichajes vacía.' };
     }
 
+    // 0. Validar si la jornada completa ya ha sido disputada o cerrada (con puntuaciones oficiales)
+    const jornadaCheck = this.isJornadaPlayed(jornada);
+    if (jornadaCheck.isPlayed) {
+      return {
+        success: false,
+        message: `Fichaje denegado: ${jornadaCheck.reason || `La Jornada ${jornada} ya ha sido disputada.`}`
+      };
+    }
+
     const playerMap = new Map(this.players.map(p => [p.name, p]));
     const currentLineupsForJornada = this.lineups.filter(l => l.jornada === jornada);
 
-    // 1. Validar integridad de la solicitud y límite individual por equipo real según Horarios_Equipos
+    // 1. Validar integridad de la solicitud y límite individual por equipo real según Horarios_Equipos y partidos disputados
     const playersOutSet = new Set<string>();
     const playersInSet = new Set<string>();
 
@@ -2684,6 +2757,24 @@ class GasEngineService {
       const existingTeamForIn = currentLineupsForJornada.find(l => l.playerName.trim() === pIn);
       if (existingTeamForIn && existingTeamForIn.team.trim() !== teamName) {
         return { success: false, message: `El jugador "${pIn}" ya pertenece a "${existingTeamForIn.team}" en la Jornada ${jornada}.` };
+      }
+
+      // Validar si el partido del jugador saliente ya se disputó (cuenta con puntos o su horario ha vencido)
+      const outPlayed = this.isPlayerMatchPlayed(pOut, jornada);
+      if (outPlayed.isPlayed) {
+        return {
+          success: false,
+          message: `Fichaje cancelado: El jugador saliente "${pOut}" no se puede cambiar. ${outPlayed.reason}`
+        };
+      }
+
+      // Validar si el partido del jugador entrante ya se disputó (cuenta con puntos o su horario ha vencido)
+      const inPlayed = this.isPlayerMatchPlayed(pIn, jornada);
+      if (inPlayed.isPlayed) {
+        return {
+          success: false,
+          message: `Fichaje cancelado: El jugador entrante "${pIn}" no se puede fichar. ${inPlayed.reason}`
+        };
       }
 
       const realTeamOut = this.getRealTeamOfPlayer(pOut);
@@ -2800,10 +2891,13 @@ class GasEngineService {
           requestId
         });
         if (gasRes.outdatedScript) {
-          isOutdated = false;
-          gasMessage = '';
+          isOutdated = true;
+          gasMessage = ' (Guardado localmente. Recuerda desplegar "Nueva Versión" en Apps Script para sincronizar con Sheets)';
+        } else if (gasRes.pendingSheetsSync) {
+          isOutdated = true;
+          gasMessage = ' (Guardado en el servidor central, pendiente de volcar a Google Sheets)';
         } else if (gasRes.success) {
-          gasMessage = '';
+          gasMessage = ' (Sincronizado con Google Sheets en tiempo real)';
         } else {
           // Si Google Sheets rechaza explícitamente (ej: partido comenzado, fecha posterior, o token no autorizado)
           if (gasRes.message && (
@@ -2823,7 +2917,7 @@ class GasEngineService {
           )) {
             return {
               success: false,
-              message: `Error de validación: ${gasRes.message}`
+              message: `Error de validación en Google Sheets: ${gasRes.message}`
             };
           }
           // Si fue timeout o problema de conectividad temporal
@@ -2903,8 +2997,8 @@ class GasEngineService {
 
     return {
       success: true,
-      outdatedScript: false,
-      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.`
+      outdatedScript: isOutdated,
+      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.${gasMessage}`
     };
   }
 
@@ -4337,6 +4431,8 @@ class GasEngineService {
     success: boolean;
     message: string;
     outdatedScript?: boolean;
+    pendingSheetsSync?: boolean;
+    persistedServer?: boolean;
     data?: any;
     sourceJornada?: number;
     targetJornada?: number;

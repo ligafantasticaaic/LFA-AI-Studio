@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { gasEngine, FREE_TRANSFERS_PER_TEAM, TRANSFER_COST, MAX_TEAM_VALUE, DEMO_TEAM_NAMES } from '../services/gasEngine';
 import { Player, TransferRecord } from '../types/league';
 import confetti from 'canvas-confetti';
@@ -66,19 +66,29 @@ export const FichajesView: React.FC = () => {
 
   const selectedJornadaCheck = gasEngine.isJornadaPlayed(selectedJornada);
 
-  const hasInvalidSchedule = transferRows.some(r => {
-    if (r.playerOut && selectedJornada) {
-      const rtOut = gasEngine.getRealTeamOfPlayer(r.playerOut);
-      const dOut = gasEngine.getTeamScheduleDeadline(selectedJornada, rtOut);
-      if (!dOut.isOpen) return true;
+  const scheduleInvalidReason = useMemo(() => {
+    if (!selectedJornada) return null;
+    if (selectedJornadaCheck.isPlayed) {
+      return selectedJornadaCheck.reason || `La Jornada ${selectedJornada} ya ha sido disputada.`;
     }
-    if (r.playerIn && selectedJornada) {
-      const rtIn = gasEngine.getRealTeamOfPlayer(r.playerIn);
-      const dIn = gasEngine.getTeamScheduleDeadline(selectedJornada, rtIn);
-      if (!dIn.isOpen) return true;
+    for (const r of transferRows) {
+      if (r.playerOut) {
+        const outCheck = gasEngine.isPlayerMatchPlayed(r.playerOut, selectedJornada);
+        if (outCheck.isPlayed) {
+          return `Jugador saliente "${r.playerOut}": ${outCheck.reason}`;
+        }
+      }
+      if (r.playerIn) {
+        const inCheck = gasEngine.isPlayerMatchPlayed(r.playerIn, selectedJornada);
+        if (inCheck.isPlayed) {
+          return `Jugador entrante "${r.playerIn}": ${inCheck.reason}`;
+        }
+      }
     }
-    return false;
-  });
+    return null;
+  }, [selectedJornada, selectedJornadaCheck, transferRows]);
+
+  const hasInvalidSchedule = !!scheduleInvalidReason;
 
   useEffect(() => {
     const j = selectedJornada || 5;
@@ -138,6 +148,22 @@ export const FichajesView: React.FC = () => {
     if (!selectedTeam || !teamToken.trim() || !selectedJornada) {
       setStatusMessage({
         text: 'Equipo, Token y Jornada son obligatorios.',
+        isSuccess: false
+      });
+      return;
+    }
+
+    if (selectedJornadaCheck.isPlayed) {
+      setStatusMessage({
+        text: selectedJornadaCheck.reason || `La Jornada ${selectedJornada} ya ha sido disputada. No se admiten nuevos fichajes.`,
+        isSuccess: false
+      });
+      return;
+    }
+
+    if (scheduleInvalidReason) {
+      setStatusMessage({
+        text: scheduleInvalidReason,
         isSuccess: false
       });
       return;
@@ -258,15 +284,27 @@ export const FichajesView: React.FC = () => {
                 onChange={(e) => setSelectedJornada(parseInt(e.target.value, 10))}
                 required
                 disabled={isLoading}
-                className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none transition font-mono cursor-pointer"
+                className={`w-full bg-slate-950 border text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none transition font-mono cursor-pointer ${
+                  selectedJornadaCheck.isPlayed
+                    ? 'border-rose-500/60 text-rose-300'
+                    : 'border-slate-700 focus:border-amber-500'
+                }`}
               >
                 <option value="">-- Selecciona Jornada --</option>
-                {Array.from({ length: 38 }, (_, i) => i + 1).map(j => (
-                  <option key={`fich-jornada-${j}`} value={j}>
-                    Jornada {j}
-                  </option>
-                ))}
+                {Array.from({ length: 38 }, (_, i) => i + 1).map(j => {
+                  const check = gasEngine.isJornadaPlayed(j);
+                  return (
+                    <option key={`fich-jornada-${j}`} value={j}>
+                      Jornada {j} {check.isPlayed ? '(Disputada / Cerrada)' : '(Abierta)'}
+                    </option>
+                  );
+                })}
               </select>
+              {selectedJornadaCheck.isPlayed && (
+                <p className="mt-1 text-[11px] text-rose-400 font-medium">
+                  {selectedJornadaCheck.reason || `La Jornada ${selectedJornada} ya fue disputada.`}
+                </p>
+              )}
             </div>
           </div>
 
@@ -523,16 +561,29 @@ export const FichajesView: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800">
             <button
               type="submit"
-              disabled={isLoading || !selectedTeam || hasInvalidSchedule}
+              disabled={isLoading || !selectedTeam || !teamToken.trim() || selectedJornadaCheck.isPlayed || hasInvalidSchedule}
               className={`w-full sm:w-auto font-black text-xs uppercase tracking-wider py-3 px-8 rounded-xl shadow-lg transition flex items-center justify-center gap-2 ${
-                hasInvalidSchedule
+                selectedJornadaCheck.isPlayed || hasInvalidSchedule
                   ? 'bg-slate-800 text-rose-400 cursor-not-allowed border border-rose-800/50'
                   : 'bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer disabled:opacity-50'
               }`}
             >
               <ArrowLeftRight className="w-4 h-4" />
-              <span>{hasInvalidSchedule ? 'Fichaje Inválido (Horario Superado)' : 'Realizar Fichaje(s)'}</span>
+              <span>
+                {selectedJornadaCheck.isPlayed
+                  ? 'Jornada ya disputada'
+                  : hasInvalidSchedule
+                  ? 'Fichaje Inválido (Partido disputado)'
+                  : 'Realizar Fichaje(s)'}
+              </span>
             </button>
+
+            {scheduleInvalidReason && !selectedJornadaCheck.isPlayed && (
+              <div className="p-2.5 rounded-xl text-xs font-semibold bg-rose-950/70 border border-rose-500/40 text-rose-300 flex items-center gap-2 w-full sm:w-auto">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{scheduleInvalidReason}</span>
+              </div>
+            )}
 
             {statusMessage && (
               <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 w-full sm:w-auto ${
