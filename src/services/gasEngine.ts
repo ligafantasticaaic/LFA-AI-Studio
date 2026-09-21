@@ -3068,6 +3068,7 @@ class GasEngineService {
     const uniqueTransfers: TransferRecord[] = [];
     for (const t of this.transfers) {
       const tNorm = String(t.team || '').trim().toLowerCase();
+      if (DEMO_TEAM_NAMES.includes(tNorm)) continue;
       const jNorm = t.jornada;
       const outNorm = String(t.playerOut || '').trim().toLowerCase();
       const inNorm = String(t.playerIn || '').trim().toLowerCase();
@@ -3087,6 +3088,7 @@ class GasEngineService {
     for (const d of this.drafts) {
       const pNorm = String(d.playerName || '').trim().toLowerCase();
       const tNorm = String(d.team || '').trim().toLowerCase();
+      if (DEMO_TEAM_NAMES.includes(tNorm)) continue;
       const key = `${tNorm}:::${pNorm}`;
       if (pNorm && !seen.has(key)) {
         seen.add(key);
