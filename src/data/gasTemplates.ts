@@ -1305,10 +1305,16 @@ function getHorariosEquipos(ss) {
   });
 
   var colJor = -1, colTeam = -1, colFecha = -1, colHora = -1, colFechaHora = -1;
+  var colLocal = -1, colVisitante = -1;
+
   for (var c = 0; c < headers.length; c++) {
     var h = headers[c];
     if (h.indexOf('jornada') !== -1 || h === 'jor' || h === 'j') {
       colJor = c;
+    } else if (h.indexOf('local') !== -1) {
+      colLocal = c;
+    } else if (h.indexOf('visit') !== -1) {
+      colVisitante = c;
     } else if (h.indexOf('equipo') !== -1 || h === 'club' || h === 'team' || h === 'real') {
       colTeam = c;
     } else if (h.indexOf('fecha_hora') !== -1 || h.indexOf('fechahora') !== -1 || h.indexOf('fecha y hora') !== -1 || h.indexOf('fecha/hora') !== -1 || h.indexOf('deadline') !== -1 || h.indexOf('limite') !== -1) {
@@ -1321,7 +1327,7 @@ function getHorariosEquipos(ss) {
   }
 
   if (colJor === -1) colJor = 0;
-  if (colTeam === -1) colTeam = 1;
+  if (colTeam === -1 && colLocal === -1) colTeam = 1;
   if (colFechaHora === -1 && colFecha === -1) colFecha = 2;
   if (colFechaHora === -1 && colHora === -1 && headers.length > 3) colHora = 3;
 
@@ -1331,31 +1337,153 @@ function getHorariosEquipos(ss) {
   for (var r = headerRowIdx + 1; r < data.length; r++) {
     var row = data[r];
     var jVal = colJor !== -1 ? Number(row[colJor]) : 0;
-    var tVal = colTeam !== -1 && row[colTeam] !== undefined ? String(row[colTeam]).trim() : '';
-    if (!tVal && !jVal) continue;
-
     var rawFechaHora = colFechaHora !== -1 ? row[colFechaHora] : null;
     var rawFecha = colFecha !== -1 ? row[colFecha] : null;
     var rawHora = colHora !== -1 ? row[colHora] : null;
 
+    var teamsInRow = [];
+    if (colLocal !== -1 && colVisitante !== -1) {
+      var loc = String(row[colLocal] || '').trim();
+      var vis = String(row[colVisitante] || '').trim();
+      if (loc) teamsInRow.push(loc);
+      if (vis) teamsInRow.push(vis);
+    } else if (colTeam !== -1 && row[colTeam] !== undefined) {
+      var tStr = String(row[colTeam]).trim();
+      if (tStr.indexOf(' - ') !== -1) {
+        var parts = tStr.split(' - ');
+        parts.forEach(function(p) { if (p.trim()) teamsInRow.push(p.trim()); });
+      } else if (tStr.indexOf(' vs ') !== -1 || tStr.indexOf(' VS ') !== -1) {
+        var partsVs = tStr.split(/\s+vs\s+/i);
+        partsVs.forEach(function(p) { if (p.trim()) teamsInRow.push(p.trim()); });
+      } else if (tStr) {
+        teamsInRow.push(tStr);
+      }
+    }
+
+    if (teamsInRow.length === 0 && !jVal) continue;
+    if (teamsInRow.length === 0) teamsInRow.push('TODOS');
+
     var parsed = parseSheetDateTime(rawFechaHora, rawFecha, rawHora, tz);
     if (parsed) {
-      schedules.push({
-        jornada: isNaN(jVal) ? 1 : jVal,
-        realTeam: tVal,
-        deadlineIsoString: parsed.isoString,
-        fecha: parsed.fechaFormatted,
-        hora: parsed.horaFormatted,
-        year: parsed.year,
-        month: parsed.month,
-        day: parsed.day,
-        hours: parsed.hours,
-        minutes: parsed.minutes
-      });
+      for (var ti = 0; ti < teamsInRow.length; ti++) {
+        var rt = teamsInRow[ti];
+        schedules.push({
+          jornada: isNaN(jVal) ? 1 : jVal,
+          realTeam: rt,
+          deadlineIsoString: parsed.isoString,
+          fecha: parsed.fechaFormatted,
+          hora: parsed.horaFormatted,
+          year: parsed.year,
+          month: parsed.month,
+          day: parsed.day,
+          hours: parsed.hours,
+          minutes: parsed.minutes
+        });
+      }
     }
   }
 
   return schedules;
+}
+
+/**
+ * Comprueba si todos los equipos de la liga ya han disputado su partido en la jornada
+ * Una jornada está finalizada ÚNICAMENTE cuando todos sus partidos se han jugado.
+ */
+function isJornadaFullyPlayedInSheet(ss, jornada) {
+  jornada = Number(jornada);
+  if (!jornada || isNaN(jornada)) return false;
+  try {
+    if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetJug = ss.getSheetByName('Jugadores');
+    if (!sheetJug) return false;
+    var lastCol = sheetJug.getLastColumn();
+    var lastRow = sheetJug.getLastRow();
+    if (lastCol < 1 || lastRow < 2) return false;
+
+    var headers = sheetJug.getRange(1, 1, 1, lastCol).getValues()[0];
+    var colJ = -1;
+    var colEquipo = -1;
+    for (var c = 0; c < headers.length; c++) {
+      var hStr = String(headers[c] || '').trim();
+      if (hStr.match(new RegExp('^Puntos_J' + jornada + '$', 'i'))) colJ = c + 1;
+      if (hStr.toLowerCase() === 'equipo' || hStr.toLowerCase() === 'club' || hStr.toLowerCase() === 'realteam') colEquipo = c + 1;
+    }
+    if (colJ === -1 || colEquipo === -1) return false;
+
+    var data = sheetJug.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    var teamsWithPoints = {};
+    var allLeagueTeams = {};
+
+    for (var r = 0; r < data.length; r++) {
+      var rawEq = String(data[r][colEquipo - 1] || '').trim();
+      if (!rawEq) continue;
+      var canon = canonicalizeRealTeam(rawEq);
+      if (!canon || canon === 'LIBRE' || canon === 'SIN EQUIPO') continue;
+      allLeagueTeams[canon] = true;
+
+      var pt = data[r][colJ - 1];
+      if (pt !== '' && pt !== null && !isNaN(Number(pt))) {
+        teamsWithPoints[canon] = true;
+      }
+    }
+
+    var leagueList = Object.keys(allLeagueTeams);
+    if (leagueList.length === 0) return false;
+
+    // Si hay algún equipo sin puntos registrados en esta jornada, la jornada NO está finalizada (partido suspendido/pendiente)
+    for (var i = 0; i < leagueList.length; i++) {
+      var eqName = leagueList[i];
+      if (!teamsWithPoints[eqName]) {
+        return false;
+      }
+    }
+
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+/**
+ * Comprueba si los jugadores de un equipo real ya tienen puntuaciones en la jornada
+ */
+function isTeamPlayedInSheet(ss, realTeam, jornada) {
+  if (!realTeam || !jornada) return { isPlayed: false };
+  try {
+    if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetJug = ss.getSheetByName('Jugadores');
+    if (!sheetJug) return { isPlayed: false };
+    var lastCol = sheetJug.getLastColumn();
+    var lastRow = sheetJug.getLastRow();
+    if (lastCol < 1 || lastRow < 2) return { isPlayed: false };
+
+    var headers = sheetJug.getRange(1, 1, 1, lastCol).getValues()[0];
+    var colJ = -1;
+    var colEquipo = -1;
+    for (var c = 0; c < headers.length; c++) {
+      var hStr = String(headers[c] || '').trim();
+      if (hStr.match(new RegExp('^Puntos_J' + jornada + '$', 'i'))) colJ = c + 1;
+      if (hStr.toLowerCase() === 'equipo' || hStr.toLowerCase() === 'club' || hStr.toLowerCase() === 'realteam') colEquipo = c + 1;
+    }
+    if (colJ === -1 || colEquipo === -1) return { isPlayed: false };
+
+    var data = sheetJug.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    var canonTarget = canonicalizeRealTeam(realTeam);
+    for (var r = 0; r < data.length; r++) {
+      var eq = canonicalizeRealTeam(String(data[r][colEquipo - 1] || ''));
+      if (eq === canonTarget) {
+        var pt = data[r][colJ - 1];
+        if (pt !== '' && pt !== null && !isNaN(Number(pt))) {
+          return {
+            isPlayed: true,
+            reason: 'El partido de ' + realTeam + ' en la Jornada ' + jornada + ' ya ha sido disputado (cuenta con puntuaciones oficiales registradas).'
+          };
+        }
+      }
+    }
+  } catch(e) {}
+  return { isPlayed: false };
 }
 
 /**
@@ -1405,16 +1533,25 @@ function isPlayerMatchPlayedInSheet(ss, playerName, jornada) {
  * 1. Fichaje en fecha posterior a la del partido -> INVÁLIDO
  * 2. Fichaje en la misma fecha pero posterior al horario indicado -> INVÁLIDO
  * 3. Fichaje antes del inicio del partido -> VÁLIDO (incluso con la jornada en juego)
+ * 4. Partido suspendido/pendiente -> VÁLIDO mientras no se haya jugado
  */
-function validateTeamScheduleDeadline(jornada, realTeam, schedules) {
+function validateTeamScheduleDeadline(jornada, realTeam, schedules, ss) {
   if (!realTeam) return { isOpen: true };
 
-  // 0. Si la jornada completa ya está jugada (con puntuaciones oficiales)
-  var maxPlayedJ = getMaxJornada();
-  if (maxPlayedJ > 0 && Number(jornada) <= maxPlayedJ) {
+  // 0. Si la jornada completa ya está 100% finalizada (todos los partidos jugados)
+  if (isJornadaFullyPlayedInSheet(ss, jornada)) {
     return {
       isOpen: false,
-      reason: 'La Jornada ' + jornada + ' ya ha sido disputada (cuenta con puntuaciones oficiales registradas).'
+      reason: 'La Jornada ' + jornada + ' ya está finalizada (todos los partidos se han disputado).'
+    };
+  }
+
+  // 0.1 Si este equipo específico ya tiene puntos registrados en esta jornada
+  var teamPlayed = isTeamPlayedInSheet(ss, realTeam, jornada);
+  if (teamPlayed.isPlayed) {
+    return {
+      isOpen: false,
+      reason: teamPlayed.reason
     };
   }
 
@@ -2682,15 +2819,6 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
     return { success: false, message: 'Jornada no válida: ' + jornada };
   }
 
-  // 0. Validar si la jornada completa ya ha sido disputada
-  var maxPlayedJ = getMaxJornada();
-  if (maxPlayedJ > 0 && jornada <= maxPlayedJ) {
-    return {
-      success: false,
-      message: 'Fichaje denegado: La Jornada ' + jornada + ' ya ha sido disputada (cuenta con puntuaciones oficiales registradas hasta la Jornada ' + maxPlayedJ + ').'
-    };
-  }
-
   if (typeof transfers === 'string') {
     try {
       transfers = JSON.parse(transfers);
@@ -2703,6 +2831,14 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
   }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 0. Validar si la jornada completa ya está 100% finalizada (todos los partidos jugados)
+  if (isJornadaFullyPlayedInSheet(ss, jornada)) {
+    return {
+      success: false,
+      message: 'Fichaje denegado: La Jornada ' + jornada + ' ya ha finalizado (todos los partidos se han disputado).'
+    };
+  }
 
   // 1. Validación individual de fichajes según la fecha y hora de Horarios_Equipos para los equipos implicados
   var schedules = getHorariosEquipos(ss);
@@ -2742,8 +2878,8 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
     var realOut = tr.realTeamOut || playerTeamMap[pOut.toLowerCase()] || '';
     var realIn = tr.realTeamIn || playerTeamMap[pIn.toLowerCase()] || '';
 
-    // Validar equipo del jugador saliente
-    var checkOut = validateTeamScheduleDeadline(jornada, realOut, schedules);
+    // Validar equipo del jugador saliente según Horarios_Equipos
+    var checkOut = validateTeamScheduleDeadline(jornada, realOut, schedules, ss);
     if (!checkOut.isOpen) {
       return {
         success: false,
@@ -2751,8 +2887,8 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       };
     }
 
-    // Validar equipo del jugador entrante
-    var checkIn = validateTeamScheduleDeadline(jornada, realIn, schedules);
+    // Validar equipo del jugador entrante según Horarios_Equipos
+    var checkIn = validateTeamScheduleDeadline(jornada, realIn, schedules, ss);
     if (!checkIn.isOpen) {
       return {
         success: false,

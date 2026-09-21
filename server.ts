@@ -532,78 +532,103 @@ async function startServer() {
     }
   });
 
-  // GET /api/pending-sheets-status - Devuelve el estado de fichajes pendientes de sincronizar con Google Sheets
-  app.get('/api/pending-sheets-status', (req, res) => {
-    const persisted = getPersistedLeagueData();
-    res.json({
-      success: true,
-      count: persisted.pendingTransfers.length,
-      pending: persisted.pendingTransfers
-    });
+  // ALL /api/pending-sheets-status - Devuelve el estado de fichajes pendientes de sincronizar con Google Sheets
+  app.all('/api/pending-sheets-status', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      const persisted = getPersistedLeagueData();
+      res.json({
+        success: true,
+        count: (persisted.pendingTransfers || []).length,
+        pending: persisted.pendingTransfers || []
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        count: 0,
+        pending: [],
+        message: 'Error al consultar estado: ' + (err?.message || 'Error interno')
+      });
+    }
   });
 
-  // POST /api/sync-pending-sheets - Permite al Admin reintentar el volcado de fichajes pendientes a Google Sheets
-  app.post('/api/sync-pending-sheets', async (req, res) => {
-    const config = getGasConfig();
-    const targetUrl = (config.gasUrl || '').trim();
-    if (!targetUrl) {
-      return res.status(400).json({ success: false, message: 'No hay URL de Google Apps Script configurada.' });
-    }
+  // ALL /api/sync-pending-sheets - Permite al Admin reintentar el volcado de fichajes pendientes a Google Sheets
+  app.all('/api/sync-pending-sheets', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      const config = getGasConfig();
+      const targetUrl = (config.gasUrl || '').trim();
+      if (!targetUrl) {
+        return res.status(400).json({ success: false, message: 'No hay URL de Google Apps Script configurada en el panel Admin.' });
+      }
 
-    const persisted = getPersistedLeagueData();
-    if (persisted.pendingTransfers.length === 0) {
-      return res.json({ success: true, count: 0, message: 'No hay fichajes pendientes de sincronizar.' });
-    }
+      const persisted = getPersistedLeagueData();
+      if (!persisted.pendingTransfers || persisted.pendingTransfers.length === 0) {
+        return res.json({ success: true, count: 0, synced: 0, remaining: 0, message: 'No hay fichajes pendientes de sincronizar con Google Sheets.' });
+      }
 
-    let syncedCount = 0;
-    const remaining: any[] = [];
+      let syncedCount = 0;
+      const remaining: any[] = [];
 
-    for (const item of persisted.pendingTransfers) {
-      try {
-        const url = new URL(targetUrl);
-        url.searchParams.set('action', String(item.action || 'transfer'));
-        if (item.team) url.searchParams.set('team', String(item.team));
-        if (item.token) url.searchParams.set('token', String(item.token));
-        if (item.jornada !== undefined) url.searchParams.set('jornada', String(item.jornada));
-        if (item.transfers !== undefined) {
-          url.searchParams.set('transfers', typeof item.transfers === 'string' ? item.transfers : JSON.stringify(item.transfers));
-        }
-        if (item.requestId) url.searchParams.set('requestId', String(item.requestId));
-        url.searchParams.set('_t', String(Date.now()));
+      for (const item of persisted.pendingTransfers) {
+        try {
+          const url = new URL(targetUrl);
+          url.searchParams.set('action', String(item.action || 'transfer'));
+          if (item.team) url.searchParams.set('team', String(item.team));
+          if (item.token) url.searchParams.set('token', String(item.token));
+          if (item.jornada !== undefined) url.searchParams.set('jornada', String(item.jornada));
+          if (item.transfers !== undefined) {
+            url.searchParams.set('transfers', typeof item.transfers === 'string' ? item.transfers : JSON.stringify(item.transfers));
+          }
+          if (item.requestId) url.searchParams.set('requestId', String(item.requestId));
+          url.searchParams.set('_t', String(Date.now()));
 
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000);
-        const resp = await fetch(url.toString(), {
-          method: 'GET',
-          redirect: 'follow',
-          signal: controller.signal
-        });
-        clearTimeout(timeout);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 20000);
+          const resp = await fetch(url.toString(), {
+            method: 'GET',
+            redirect: 'follow',
+            signal: controller.signal
+          });
+          clearTimeout(timeout);
 
-        const text = await resp.text();
-        const json = JSON.parse(text);
-        if (json && json.success) {
-          syncedCount++;
-        } else {
+          const text = await resp.text();
+          let json: any = null;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            json = null;
+          }
+
+          if (json && json.success) {
+            syncedCount++;
+          } else {
+            remaining.push(item);
+          }
+        } catch (err) {
           remaining.push(item);
         }
-      } catch (err) {
-        remaining.push(item);
       }
+
+      persisted.pendingTransfers = remaining;
+      savePersistedLeagueData(persisted);
+      syncCache = null;
+
+      res.json({
+        success: true,
+        synced: syncedCount,
+        remaining: remaining.length,
+        message: syncedCount > 0
+          ? `Se han sincronizado ${syncedCount} fichaje(s) con Google Sheets exitosamente.`
+          : 'Google Sheets aún no reconoce la acción transfer o hubo un error de validación. Copia el Código.gs en Apps Script y despliega Nueva Versión.'
+      });
+    } catch (globalErr: any) {
+      res.status(500).json({
+        success: false,
+        synced: 0,
+        message: 'Error al sincronizar con Google Sheets: ' + (globalErr?.message || 'Error del servidor')
+      });
     }
-
-    persisted.pendingTransfers = remaining;
-    savePersistedLeagueData(persisted);
-    syncCache = null;
-
-    res.json({
-      success: true,
-      synced: syncedCount,
-      remaining: remaining.length,
-      message: syncedCount > 0
-        ? `Se han sincronizado ${syncedCount} fichaje(s) con Google Sheets exitosamente.`
-        : 'Google Sheets aún no reconoce la acción transfer. Copia el Código.gs en Apps Script y despliega Nueva Versión.'
-    });
   });
 
   // POST /api/gas-action - Ejecuta mutaciones en tiempo real en Google Sheets (Draft, Fichajes, Orden Draft)

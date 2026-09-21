@@ -275,7 +275,12 @@ export const FichajesView: React.FC = () => {
                 </label>
                 {selectedJornadaCheck.isPlayed && (
                   <span className="text-[10px] font-bold text-rose-400 bg-rose-950/60 border border-rose-500/30 px-2 py-0.5 rounded-md">
-                    Cerrada / Disputada
+                    Finalizada
+                  </span>
+                )}
+                {!selectedJornadaCheck.isPlayed && selectedJornadaCheck.isPartiallyPlayed && (
+                  <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                    Partidos Pendientes
                   </span>
                 )}
               </div>
@@ -287,15 +292,23 @@ export const FichajesView: React.FC = () => {
                 className={`w-full bg-slate-950 border text-white font-semibold text-xs sm:text-sm py-2.5 px-3.5 rounded-xl focus:outline-none transition font-mono cursor-pointer ${
                   selectedJornadaCheck.isPlayed
                     ? 'border-rose-500/60 text-rose-300'
+                    : selectedJornadaCheck.isPartiallyPlayed
+                    ? 'border-amber-500/60 text-amber-200'
                     : 'border-slate-700 focus:border-amber-500'
                 }`}
               >
                 <option value="">-- Selecciona Jornada --</option>
                 {Array.from({ length: 38 }, (_, i) => i + 1).map(j => {
                   const check = gasEngine.isJornadaPlayed(j);
+                  let label = `Jornada ${j} (Abierta)`;
+                  if (check.isPlayed) {
+                    label = `Jornada ${j} (Finalizada)`;
+                  } else if (check.isPartiallyPlayed) {
+                    label = `Jornada ${j} (Partidos Pendientes)`;
+                  }
                   return (
                     <option key={`fich-jornada-${j}`} value={j}>
-                      Jornada {j} {check.isPlayed ? '(Disputada / Cerrada)' : '(Abierta)'}
+                      {label}
                     </option>
                   );
                 })}
@@ -304,6 +317,18 @@ export const FichajesView: React.FC = () => {
                 <p className="mt-1 text-[11px] text-rose-400 font-medium">
                   {selectedJornadaCheck.reason || `La Jornada ${selectedJornada} ya fue disputada.`}
                 </p>
+              )}
+              {!selectedJornadaCheck.isPlayed && selectedJornadaCheck.isPartiallyPlayed && (
+                <div className="mt-1.5 p-2 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-300 flex items-start gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Partidos aplazados o pendientes: </span>
+                    {selectedJornadaCheck.pendingTeams && selectedJornadaCheck.pendingTeams.length > 0
+                      ? selectedJornadaCheck.pendingTeams.join(', ')
+                      : 'Equipos pendientes'}
+                    . Se permiten fichajes únicamente de jugadores de estos equipos antes de su horario.
+                  </div>
+                </div>
               )}
             </div>
           </div>
