@@ -49,7 +49,8 @@ export const DEFAULT_CLUB_STYLES: ClubStyle[] = [
   { code: 'LEG', name: 'CD Leganés', bgColor: '#0055a5', textColor: '#ffffff', borderColor: '#ffffff' },
   { code: 'LGD', name: 'CD Leganés', bgColor: '#0055a5', textColor: '#ffffff', borderColor: '#ffffff' },
   { code: 'VLD', name: 'Real Valladolid', bgColor: '#660099', textColor: '#ffffff', borderColor: '#ffffff' },
-  { code: 'OVI', name: 'Real Oviedo', bgColor: '#0047ab', textColor: '#ffffff', borderColor: '#ffffff' }
+  { code: 'OVI', name: 'Real Oviedo', bgColor: '#0047ab', textColor: '#ffffff', borderColor: '#ffffff' },
+  { code: 'ESP', name: 'RCD Espanyol', bgColor: '#007fc8', textColor: '#ffffff', borderColor: '#ffffff' }
 ];
 
 export function parseCleanNumber(val: any): number {
@@ -203,8 +204,10 @@ const INITIAL_PLAYERS: Player[] = [
   { name: 'Juanmi Latasa', realTeam: 'VLD', position: 'Delantero', value: 9, status: 'Disponible', jornadasPoints: { 1: 5, 2: 6, 3: 5, 4: 6, 5: 5 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
 ];
 
+// Initial Lineups (empty until loaded from Google Sheets / central server)
 const INITIAL_LINEUPS: LineupEntry[] = [];
 
+// Lista de equipos de demo para purgar residuos de localStorage
 export const DEMO_TEAM_NAMES = [
   'galácticos fc',
   'galacticos fc',
@@ -216,12 +219,15 @@ export const DEMO_TEAM_NAMES = [
 ];
 
 const INITIAL_TRANSFERS: TransferRecord[] = [];
+
 const INITIAL_DRAFTS: DraftRecord[] = [];
+
 const INITIAL_SCHEDULES: ScheduleRecord[] = [];
 
 export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec';
 
-export class GasEngineService {
+// Engine Class with LocalStorage persistence to ensure live mutations work 100%
+class GasEngineService {
   private teams: string[] = [];
   private tokens: TeamToken[] = [];
   private players: Player[] = [];
@@ -242,6 +248,7 @@ export class GasEngineService {
     freeTransfers: 3
   };
   private customCodeGs: string = '';
+  private playerModeActive: boolean = false;
   private customClubStyles: ClubStyle[] = [...DEFAULT_CLUB_STYLES];
   private notificationConfig: NotificationConfig = {
     githubRepo: '',
@@ -256,6 +263,7 @@ export class GasEngineService {
   private isDraftHiddenState: boolean = false;
   private remoteMaxJornada: number = 0;
   private isSyncingRemote: boolean = false;
+  private lastRemoteDataSig: string = '';
   private listeners: Array<() => void> = [];
 
   constructor() {
@@ -263,96 +271,11 @@ export class GasEngineService {
     this.initCentralizedSync();
   }
 
-  private loadState(): void {
-    if (typeof window === 'undefined') return;
-    try {
-      const savedGasUrl = localStorage.getItem('lfa_gas_url');
-      if (savedGasUrl) this.gasUrl = savedGasUrl;
-
-      const savedContrib = localStorage.getItem('lfa_first_contribution_jornada');
-      if (savedContrib) this.firstContributionJornada = Number(savedContrib) || 5;
-
-      const savedAdmin = localStorage.getItem('lfa_admin_password');
-      if (savedAdmin) this.adminPassword = savedAdmin;
-
-      const savedTeams = localStorage.getItem('lfa_teams');
-      this.teams = savedTeams ? JSON.parse(savedTeams) : [...INITIAL_TEAMS];
-
-      const savedTokens = localStorage.getItem('lfa_tokens');
-      this.tokens = savedTokens ? JSON.parse(savedTokens) : [...INITIAL_TOKENS];
-
-      const savedPlayers = localStorage.getItem('lfa_players');
-      this.players = savedPlayers ? JSON.parse(savedPlayers) : [...INITIAL_PLAYERS];
-
-      const savedLineups = localStorage.getItem('lfa_lineups');
-      this.lineups = savedLineups ? JSON.parse(savedLineups) : [...INITIAL_LINEUPS];
-
-      const savedTransfers = localStorage.getItem('lfa_transfers');
-      this.transfers = savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS];
-
-      const savedDrafts = localStorage.getItem('lfa_drafts');
-      this.drafts = savedDrafts ? JSON.parse(savedDrafts) : [...INITIAL_DRAFTS];
-
-      const savedSchedules = localStorage.getItem('lfa_schedules');
-      this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
-
-      const savedStyles = localStorage.getItem('lfa_club_styles');
-      this.customClubStyles = savedStyles ? JSON.parse(savedStyles) : [...DEFAULT_CLUB_STYLES];
-
-      const savedNotif = localStorage.getItem('lfa_notification_config');
-      if (savedNotif) this.notificationConfig = JSON.parse(savedNotif);
-
-      const savedTexts = localStorage.getItem('lfa_league_texts');
-      if (savedTexts) this.leagueTexts = JSON.parse(savedTexts);
-
-      const savedDraftOrder = localStorage.getItem('lfa_draft_order');
-      if (savedDraftOrder) this.draftOrder = JSON.parse(savedDraftOrder);
-
-      const savedDraftHidden = localStorage.getItem('lfa_is_draft_hidden');
-      if (savedDraftHidden) this.isDraftHiddenState = savedDraftHidden === 'true';
-
-      this.ensureTokensMatchTeams();
-    } catch (e) {
-      console.error('Error cargando estado desde localStorage:', e);
-    }
-  }
-
-  private saveState(): void {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem('lfa_teams', JSON.stringify(this.teams));
-      localStorage.setItem('lfa_tokens', JSON.stringify(this.tokens));
-      localStorage.setItem('lfa_players', JSON.stringify(this.players));
-      localStorage.setItem('lfa_lineups', JSON.stringify(this.lineups));
-      localStorage.setItem('lfa_transfers', JSON.stringify(this.transfers));
-      localStorage.setItem('lfa_drafts', JSON.stringify(this.drafts));
-      localStorage.setItem('lfa_schedules', JSON.stringify(this.schedules));
-      localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
-      localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
-      localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
-      localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
-      localStorage.setItem('lfa_is_draft_hidden', String(this.isDraftHiddenState));
-    } catch (e) {
-      console.error('Error guardando estado en localStorage:', e);
-    }
-  }
-
-  private ensureTokensMatchTeams(): boolean {
-    let changed = false;
-    const existingTeamNames = new Set(this.tokens.map(t => t.team.toLowerCase().trim()));
-    for (const team of this.teams) {
-      if (!existingTeamNames.has(team.toLowerCase().trim())) {
-        this.tokens.push({ team, token: 'titular' });
-        changed = true;
-      }
-    }
-    return changed;
-  }
-
   private initCentralizedSync() {
     if (typeof window === 'undefined') return;
 
     try {
+      // 1. Detectar si viene una URL en los parámetros de la página (?gasUrl=... o ?gas_url=...)
       const urlParams = new URLSearchParams(window.location.search);
       const urlFromParam = urlParams.get('gasUrl') || urlParams.get('gas_url');
       if (urlFromParam && urlFromParam.trim()) {
@@ -360,6 +283,7 @@ export class GasEngineService {
         this.gasUrl = cleanParamUrl;
         localStorage.setItem('lfa_gas_url', cleanParamUrl);
         this.pushGasConfigToServer(cleanParamUrl).catch(() => {});
+        // Limpiar parámetro de la barra de direcciones sin recargar
         try {
           const cleanUrl = window.location.pathname + window.location.hash;
           window.history.replaceState({}, document.title, cleanUrl);
@@ -367,6 +291,7 @@ export class GasEngineService {
       }
     } catch {}
 
+    // 2. Comprobación inicial contra el servidor central (/api/gas-config) y sincronización inmediata de datos
     this.fetchServerGasConfig(true)
       .then(() => {
         if (this.getGasUrl()) {
@@ -374,11 +299,13 @@ export class GasEngineService {
         }
       })
       .catch(() => {
+        // En caso de que el backend local no responda (ej: GitHub Pages o sin conexión), sincronizar directamente con Sheets
         if (this.getGasUrl()) {
           this.syncFromRemote().catch(() => {});
         }
       });
 
+    // 3. Sincronización al volver a enfocar la ventana o pestaña (tiempo real)
     window.addEventListener('focus', () => {
       this.fetchServerGasConfig(true).catch(() => {});
       if (this.getGasUrl()) {
@@ -394,10 +321,12 @@ export class GasEngineService {
       });
     }
 
+    // 4. Sondeo periódico de URL en servidor (cada 60 segundos)
     setInterval(() => {
       this.fetchServerGasConfig(true).catch(() => {});
     }, 60000);
 
+    // 5. Sondeo en tiempo real de Google Sheets (cada 45 segundos) para reflejar cambios en vivo sin saturar la cuota
     setInterval(() => {
       if (this.getGasUrl() && !this.isSyncingRemote && (typeof document === 'undefined' || !document.hidden)) {
         this.syncFromRemote().catch(() => {});
@@ -430,6 +359,11 @@ export class GasEngineService {
     return this.serverUpdatedAt;
   }
 
+  /**
+   * Consulta el servidor central para obtener la URL oficial de Google Sheets.
+   * Si la URL en el servidor ha cambiado respecto a la local, se actualiza automáticamente
+   * y se lanza la sincronización de datos con Google Sheets.
+   */
   public async fetchServerGasConfig(triggerSyncIfNew = true): Promise<{ gasUrl: string; updatedAt: string | null } | null> {
     try {
       const resp = await fetch('/api/gas-config', { cache: 'no-store' });
@@ -439,6 +373,7 @@ export class GasEngineService {
         let changed = false;
         this.serverUpdatedAt = data.updatedAt || null;
 
+        // URL Sheets
         if (typeof data.gasUrl === 'string') {
           const serverUrl = data.gasUrl.trim();
           if (serverUrl) {
@@ -458,6 +393,7 @@ export class GasEngineService {
           }
         }
 
+        // Jornada de aportes
         if (typeof data.firstContributionJornada === 'number') {
           const sJ = data.firstContributionJornada === 4 ? 5 : data.firstContributionJornada;
           if (sJ !== this.firstContributionJornada) {
@@ -467,12 +403,14 @@ export class GasEngineService {
           }
         }
 
+        // Equipos y colores personalizados
         if (Array.isArray(data.customClubStyles) && data.customClubStyles.length > 0) {
           this.customClubStyles = data.customClubStyles;
           localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
           changed = true;
         }
 
+        // Equipos y tokens desde el servidor central (deduplicados)
         if (Array.isArray(data.teams) && data.teams.length > 0) {
           const seenT = new Set<string>();
           const validTeams: string[] = [];
@@ -501,6 +439,7 @@ export class GasEngineService {
           changed = true;
         }
 
+        // Configuración de notificaciones
         if (data.notificationConfig && typeof data.notificationConfig === 'object') {
           this.notificationConfig = {
             ...this.notificationConfig,
@@ -510,6 +449,7 @@ export class GasEngineService {
           changed = true;
         }
 
+        // Contraseña de administrador
         if (data.adminPassword && typeof data.adminPassword === 'string') {
           const sAdmin = data.adminPassword.trim();
           if (sAdmin && sAdmin !== this.adminPassword) {
@@ -519,6 +459,7 @@ export class GasEngineService {
           }
         }
 
+        // Textos y parámetros de la liga
         if (data.leagueTexts && typeof data.leagueTexts === 'object') {
           this.leagueTexts = {
             ...this.leagueTexts,
@@ -528,18 +469,21 @@ export class GasEngineService {
           changed = true;
         }
 
+        // Código.gs personalizado guardado
         if (typeof data.customCodeGs === 'string' && data.customCodeGs !== this.customCodeGs) {
           this.customCodeGs = data.customCodeGs;
           localStorage.setItem('lfa_custom_code_gs', data.customCodeGs);
           changed = true;
         }
 
+        // Orden de elección del Draft (11 rondas)
         if (Array.isArray(data.draftOrder) && data.draftOrder.length > 0) {
           this.draftOrder = data.draftOrder;
           localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
           changed = true;
         }
 
+        // Estado de visibilidad de la pestaña Draft
         if (typeof data.isDraftHidden === 'boolean') {
           if (this.isDraftHiddenState !== data.isDraftHidden) {
             this.isDraftHiddenState = data.isDraftHidden;
@@ -548,6 +492,7 @@ export class GasEngineService {
           }
         }
 
+        // Sincronizar transferencias y alineaciones persistidas centralmente en el servidor
         try {
           const pResp = await fetch('/api/persisted-league', { cache: 'no-store' });
           if (pResp.ok) {
@@ -575,6 +520,7 @@ export class GasEngineService {
               }
             }
 
+            // Aplicar lineupOverrides persistidos centralmente
             if (pData && Array.isArray(pData.lineupOverrides) && pData.lineupOverrides.length > 0) {
               let appliedOverrides = false;
               for (const ov of pData.lineupOverrides) {
@@ -601,7 +547,9 @@ export class GasEngineService {
               }
             }
           }
-        } catch {}
+        } catch {
+          // Ignorar fallo de red
+        }
 
         if (changed) {
           this.notify();
@@ -609,10 +557,15 @@ export class GasEngineService {
 
         return data;
       }
-    } catch (err) {}
+    } catch (err) {
+      // Entorno sin backend o fuera de línea, se continúa con localStorage
+    }
     return null;
   }
 
+  /**
+   * Envía toda la configuración de la liga al servidor central (o URL de Sheets)
+   */
   public async pushLeagueConfigToServer(partial?: Partial<LeagueConfig>, adminPassword?: string): Promise<boolean> {
     const effectiveGasUrl = (partial?.gasUrl !== undefined && String(partial.gasUrl).trim())
       ? String(partial.gasUrl).trim()
@@ -652,6 +605,10 @@ export class GasEngineService {
     return false;
   }
 
+  /**
+   * Envía la URL oficial al servidor central para que todos los dispositivos
+   * (móviles, ordenadores, tablets) la reciban automáticamente.
+   */
   public async pushGasConfigToServer(url: string, adminPassword?: string): Promise<boolean> {
     const clean = (url || '').trim();
     return this.pushLeagueConfigToServer({ gasUrl: clean }, adminPassword);
@@ -660,10 +617,12 @@ export class GasEngineService {
   public setGasUrl(url: string) {
     this.gasUrl = url.trim();
     localStorage.setItem('lfa_gas_url', this.gasUrl);
+    // Propagar inmediatamente al servidor central para todos los dispositivos
     this.pushGasConfigToServer(this.gasUrl).catch(() => {});
     this.notify();
   }
 
+  // --- Métodos de Primera Jornada con Aportes ---
   public getFirstContributionJornada(): number {
     return this.firstContributionJornada;
   }
@@ -681,6 +640,7 @@ export class GasEngineService {
     };
   }
 
+  // --- Métodos de Equipos y Colores de LaLiga (Mercado) ---
   public getClubStyles(): ClubStyle[] {
     return [...this.customClubStyles];
   }
@@ -698,6 +658,7 @@ export class GasEngineService {
     );
     if (found) return found;
 
+    // Colores deterministas según el nombre si no está registrado
     let hash = 0;
     for (let i = 0; i < clean.length; i++) {
       hash = clean.charCodeAt(i) + ((hash << 5) - hash);
@@ -754,6 +715,7 @@ export class GasEngineService {
     this.pushLeagueConfigToServer({ customClubStyles: this.customClubStyles }, adminPassword).catch(() => {});
   }
 
+  // --- Métodos de Notificaciones (Telegram & GitHub Actions) ---
   public getNotificationConfig(): NotificationConfig {
     return { ...this.notificationConfig };
   }
@@ -842,6 +804,7 @@ export class GasEngineService {
       const footer = isRealFichaje ? '🏆 _Liga Fantástica App_' : '✅ _Conexión directa con Telegram verificada correctamente._';
       const text = `${title}\n━━━━━━━━━━━━━━━━━━━━\n🏟 *Equipo:* ${sample.equipo}\n🟢 *Alta:* ${sample.jugadorEntra}\n🔴 *Baja:* ${sample.jugadorSale}\n💰 *Coste:* ${sample.coste} €\n📅 *Jornada:* J${sample.jornada}\n📝 *Tipo:* ${sample.tipo}\n━━━━━━━━━━━━━━━━━━━━\n${footer}`;
 
+      // 1. Envío prioritario vía Servidor Backend Proxy (sin bloqueos CORS ni errores 405)
       try {
         const resp = await fetch('/api/notify-fichaje-test', {
           method: 'POST',
@@ -866,10 +829,15 @@ export class GasEngineService {
         if (data?.error) {
           return { success: false, error: data.error };
         }
+        if (resp.status === 405) {
+          // Si el servidor devolvió 405, intentamos conexión directa o damos mensaje claro
+          console.warn('[gasEngine] Proxy devolvió 405, probando envío directo');
+        }
       } catch (proxyErr) {
         console.warn('[gasEngine] Falló proxy de telegram, probando llamada directa:', proxyErr);
       }
 
+      // 2. Envío directo a la API de Telegram como alternativa
       try {
         const tgResp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST',
@@ -907,7 +875,7 @@ export class GasEngineService {
           };
         }
 
-        return { success: false, error: `Telegram error (${tgData?.error_code || tgResp.status}):${desc}` };
+        return { success: false, error: `Telegram error (${tgData?.error_code || tgResp.status}): ${desc}` };
       } catch (directErr: any) {
         return {
           success: false,
@@ -924,6 +892,7 @@ export class GasEngineService {
         };
       }
 
+      // 1. Intento directo a GitHub API (soporta CORS)
       try {
         const ghResp = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
           method: 'POST',
@@ -950,8 +919,9 @@ export class GasEngineService {
         }
 
         const ghData = await ghResp.json().catch(() => null);
-        return { success: false, error: `GitHub API (${ghResp.status}):${ghData?.message || 'Error al disparar workflow'}` };
+        return { success: false, error: `GitHub API (${ghResp.status}): ${ghData?.message || 'Error al disparar workflow'}` };
       } catch (ghErr: any) {
+        // Fallback a través del servidor
         try {
           const resp = await fetch('/api/notify-fichaje-test', {
             method: 'POST',
@@ -1008,6 +978,7 @@ export class GasEngineService {
       return { success: false, error: 'Telegram no configurado' };
     }
 
+    // 1. Intento vía backend server proxy
     try {
       const resp = await fetch('/api/send-telegram', {
         method: 'POST',
@@ -1024,6 +995,7 @@ export class GasEngineService {
       }
     } catch {}
 
+    // 2. Intento directo a Telegram Bot API (con fallback de texto plano)
     try {
       let tgResp = await fetch(`https://api.telegram.org/bot${cleanBotToken}/sendMessage`, {
         method: 'POST',
@@ -1119,6 +1091,11 @@ export class GasEngineService {
     return Boolean(this.getGasUrl());
   }
 
+  /**
+   * Ejecuta peticiones contra la Web App de Google Apps Script.
+   * Lanza Fetch estándar y JSONP de forma concurrente para resolver en el mínimo tiempo posible
+   * y superar cualquier bloqueo de CORS o retraso por redirects en iframes.
+   */
   private async fetchGasData(baseUrl: string, params: Record<string, string>, timeoutMs = 25000): Promise<any> {
     const cleanUrl = baseUrl.trim();
     if (!cleanUrl) throw new Error('EMPTY_URL');
@@ -1138,6 +1115,7 @@ export class GasEngineService {
       let jsonpDone = false;
       let lastErr: any = null;
 
+      // Timer único para evitar esperas eternas
       const masterTimer = setTimeout(() => {
         if (!isDone) {
           isDone = true;
@@ -1162,7 +1140,9 @@ export class GasEngineService {
         if (abortController) {
           try {
             abortController.abort();
-          } catch {}
+          } catch {
+            // Ignorar
+          }
         }
       }
 
@@ -1179,6 +1159,7 @@ export class GasEngineService {
         if (source === 'fetch') fetchDone = true;
         if (source === 'jsonp') jsonpDone = true;
 
+        // Errores deterministas: Google exige autenticación, URL dev o código HTML antiguo
         if (err && ['AUTH_REQUIRED', 'OLD_GAS_CODE', 'RETURNED_HTML', 'DEV_URL_ERROR'].includes(err.message)) {
           isDone = true;
           cleanup();
@@ -1186,6 +1167,7 @@ export class GasEngineService {
           return;
         }
 
+        // Si ambas estrategias han fallado, rechazar
         if (fetchDone && jsonpDone) {
           isDone = true;
           cleanup();
@@ -1193,9 +1175,12 @@ export class GasEngineService {
         }
       }
 
+      // 1. Iniciar JSONP (inmune a CORS, pasa el redirect 302 sin preflight)
       const isMutatingAction = !!(params && ['transfer', 'draft', 'saveDraftOrder', 'resetSeason'].includes(String(params.action || '')));
 
       if (isMutatingAction) {
+        // En acciones de mutación, NUNCA disparar JSONP y Fetch simultáneamente para evitar duplicados en Google Sheets.
+        // Se prueba Fetch primero; si falla, se recurre a JSONP de forma secuencial.
         fetchDone = false;
         jsonpDone = false;
 
@@ -1275,6 +1260,7 @@ export class GasEngineService {
         jsonpDone = true;
       }
 
+      // 2. Iniciar Fetch en paralelo (para soportar respuestas JSON directas si CORS lo permite)
       try {
         abortController = new AbortController();
         fetch(fullUrl, {
@@ -1376,7 +1362,7 @@ export class GasEngineService {
         return {
           success: false,
           code: 'OLD_CODE',
-          message: '⚠️ Tu Web App devolvió la página HTML antigua. En Google Apps Script debes: 1) Pegar el nuevo "Código.gs", 2) Guardar (Ctrl+S), y 3) Ir a "Implementar > Administrar implementaciones > Editar > Versión: Nueva versión > Implementar".'
+          message: '⚠️ Tu Web App devolvió la página HTML antigua. En Google Apps Script debes: 1) Pegar el nuevo "Código.gs" (cópialo desde el botón "Código Apps Script"), 2) Guardar (Ctrl+S), y 3) Ir a "Implementar > Administrar implementaciones > Editar > Versión: Nueva versión > Implementar".'
         };
       }
       if (err.message === 'RETURNED_HTML') {
@@ -1401,6 +1387,7 @@ export class GasEngineService {
     }
     this.isSyncingRemote = true;
 
+    // Temporizador de seguridad para evitar bloqueos indefinidos del flag
     const safetyTimer = setTimeout(() => {
       this.isSyncingRemote = false;
     }, 32000);
@@ -1415,6 +1402,7 @@ export class GasEngineService {
     try {
       let data: any = null;
 
+      // 1. Intento prioritario a través del servidor backend (/api/gas-sync) para evitar CORS y acelerar respuesta
       try {
         const proxyUrl = `/api/gas-sync?customGasUrl=${encodeURIComponent(targetUrl)}&force=${force ? 'true' : 'false'}&_t=${Date.now()}`;
         const ctrl = new AbortController();
@@ -1432,8 +1420,11 @@ export class GasEngineService {
         } finally {
           clearTimeout(tId);
         }
-      } catch {}
+      } catch {
+        // Si el proxy falla, recurrir al método de conexión directa de gasEngine
+      }
 
+      // 2. Método de contingencia: Fetch directo / JSONP
       if (!data) {
         try {
           data = await this.fetchGasData(targetUrl, { action: 'getFullSync' }, 25000);
@@ -1449,6 +1440,7 @@ export class GasEngineService {
         return { success: false, message: 'Error de Google Apps Script: ' + data.error };
       }
 
+      // Guardar jornada máxima remota si la proporciona Google Sheets
       if (data && data.maxJornada !== undefined) {
         const parsedMax = Number(data.maxJornada);
         if (!isNaN(parsedMax) && parsedMax > 0) {
@@ -1459,6 +1451,7 @@ export class GasEngineService {
       let updatedTeamsCount = 0;
       let updatedPlayersCount = 0;
 
+      // Actualizar lista de equipos si viene en la respuesta (deduplicada)
       if (Array.isArray(data.teams) && data.teams.length > 0) {
         const seenTeams = new Set<string>();
         const remoteTeams: string[] = [];
@@ -1476,67 +1469,3506 @@ export class GasEngineService {
         }
       }
 
+      // Actualizar tokens si vienen de la hoja de cálculo
       if (Array.isArray(data.tokens) && data.tokens.length > 0) {
-        this.tokens = data.tokens;
+        data.tokens.forEach((tk: any) => {
+          const tTeam = String(tk.team || '').trim();
+          const tVal = String(tk.token || '').trim();
+          if (tTeam && tVal) {
+            const idx = this.tokens.findIndex(t => t.team.toLowerCase() === tTeam.toLowerCase());
+            if (idx !== -1) {
+              this.tokens[idx].token = tVal;
+              this.tokens[idx].team = tTeam;
+            } else {
+              this.tokens.push({ team: tTeam, token: tVal });
+            }
+          }
+        });
       }
 
+      // Garantizar que todos los equipos de la liga tengan su token
+      this.ensureTokensMatchTeams();
+
+      // Actualizar jugadores si vienen en la respuesta (con deduplicación por nombre)
       if (Array.isArray(data.players) && data.players.length > 0) {
-        this.players = data.players;
+        const seenPlayers = new Set<string>();
+        const uniquePlayers: Player[] = [];
+
+        for (const p of data.players) {
+          const rawName = String(p.name || p.Nombre || '').trim();
+          if (!rawName) continue;
+          const key = rawName.toLowerCase();
+          if (!seenPlayers.has(key)) {
+            seenPlayers.add(key);
+            uniquePlayers.push({
+              name: rawName,
+              realTeam: String(p.realTeam || p.Equipo_Liga || '').trim(),
+              position: p.position || p.Posicion || 'Medio',
+              value: Number(p.value || p.Valor) || 10,
+              status: (p.status || p.Estado || 'Disponible') as any,
+              jornadasPoints: p.jornadasPoints || {},
+              jornadasGoals: p.jornadasGoals || {},
+              jornadasDef: p.jornadasDef || {}
+            });
+          }
+        }
+        this.players = uniquePlayers;
         updatedPlayersCount = this.players.length;
       }
 
+      // Actualizar alineaciones si vienen en la respuesta (procesamiento flexible de jornadas)
       if (Array.isArray(data.lineups)) {
-        this.lineups = data.lineups;
+        this.lineups = data.lineups.map((l: any) => {
+          const rawJ = l.jornada !== undefined ? l.jornada : (l.Jornada !== undefined ? l.Jornada : 1);
+          const parsedJ = typeof rawJ === 'number' ? rawJ : parseInt(String(rawJ || '').replace(/[^0-9]/g, ''), 10);
+          const finalJ = (!isNaN(parsedJ) && parsedJ > 0) ? parsedJ : 1;
+          return {
+            team: String(l.teamName || l.team || l.Equipo || '').trim(),
+            jornada: finalJ,
+            playerName: String(l.playerName || l.player || l.Jugador || '').trim(),
+            realTeam: String(l.realTeam || l.Equipo_Liga || '').trim(),
+            position: String(l.position || l.Posicion || 'Medio').trim(),
+            value: l.value !== undefined ? Number(l.value) : undefined
+          };
+        }).filter((l: any) => l.team && l.playerName);
       }
 
-      if (Array.isArray(data.transfers)) {
-        this.transfers = data.transfers;
+      // Sincronizar estado de los jugadores: si están en las alineaciones activas pasan a 'Fichado', si no a 'Disponible'
+      const assignedPlayerNames = new Set(
+        this.lineups
+          .filter(l => l.playerName && l.playerName.trim() !== '')
+          .map(l => l.playerName.trim().toLowerCase())
+      );
+      this.players.forEach(p => {
+        const lower = (p.name || '').trim().toLowerCase();
+        if (p.status !== 'Abandona Liga') {
+          p.status = assignedPlayerNames.has(lower) ? 'Fichado' : 'Disponible';
+        }
+      });
+
+      let updatedTransfersCount = 0;
+      let updatedDraftsCount = 0;
+
+      // Actualizar historial de fichajes si viene en la respuesta
+      const rawTransfers = Array.isArray(data.transfers) ? data.transfers :
+                           (Array.isArray(data.transferHistory) ? data.transferHistory :
+                           (Array.isArray(data.fichajes) ? data.fichajes :
+                           (data.data && Array.isArray(data.data.transfers) ? data.data.transfers :
+                           (data.data && Array.isArray(data.data.fichajes) ? data.data.fichajes : null))));
+
+      if (rawTransfers !== null && Array.isArray(rawTransfers)) {
+        const seenTransfers = new Set<string>();
+        const parsedTransfers: TransferRecord[] = [];
+        rawTransfers.forEach((t: any) => {
+          const timestamp = String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || t.Hora || '').trim();
+          const team = String(t.team || t.Equipo || t.Team || t.Club || t['Nombre Equipo'] || '').trim();
+          if (DEMO_TEAM_NAMES.includes(team.toLowerCase())) return;
+
+          const jornada = Number(t.jornada || t.Jornada || t.Jor || t.Semana || 1) || 1;
+          const playerOut = String(t.playerOut || t.Jugador_Sale || t.JugadorSale || t['Jugador Sale'] || t['Jugador que sale'] || t.Sale || t.Baja || t['Jugador Baja'] || t.Saliente || '').trim();
+          const playerIn = String(t.playerIn || t.Jugador_Entra || t.JugadorEntra || t['Jugador Entra'] || t['Jugador que entra'] || t.Entra || t.Alta || t['Jugador Alta'] || t.Entrante || t.Fichaje || '').trim();
+          const cost = parseCleanNumber(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : (t.Precio !== undefined ? t.Precio : 0)));
+          const type = ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono');
+
+          const key = `${team.toLowerCase()}:::${jornada}:::${playerOut.toLowerCase()}:::${playerIn.toLowerCase()}`;
+          if ((team || playerOut || playerIn) && !seenTransfers.has(key)) {
+            seenTransfers.add(key);
+            parsedTransfers.push({ timestamp, team, jornada, playerOut, playerIn, cost, type });
+          }
+        });
+
+        // Unificar también con las transferencias locales existentes que pudieran no estar aún en Sheets (excluyendo datos demo)
+        this.transfers.forEach(existing => {
+          const tLower = existing.team.toLowerCase().trim();
+          if (DEMO_TEAM_NAMES.includes(tLower)) return;
+
+          const key = `${tLower}:::${existing.jornada}:::${existing.playerOut.toLowerCase()}:::${existing.playerIn.toLowerCase()}`;
+          if (!seenTransfers.has(key)) {
+            seenTransfers.add(key);
+            parsedTransfers.unshift(existing);
+          }
+        });
+
+        this.transfers = parsedTransfers;
+        updatedTransfersCount = this.transfers.length;
+
+        // Re-aplicar cualquier fichaje sobre las alineaciones si Sheets todavía mostraba al jugador saliente
+        this.transfers.forEach(tr => {
+          const trTeam = tr.team.trim().toLowerCase();
+          const trJor = tr.jornada;
+          const trOut = tr.playerOut.trim().toLowerCase();
+          const trIn = tr.playerIn.trim();
+
+          const lEntry = this.lineups.find(l =>
+            l.team.trim().toLowerCase() === trTeam &&
+            l.jornada === trJor &&
+            l.playerName.trim().toLowerCase() === trOut
+          );
+          if (lEntry) {
+            const pDetails = this.players.find(p => p.name.trim().toLowerCase() === trIn.toLowerCase());
+            lEntry.playerName = trIn;
+            if (pDetails) {
+              lEntry.realTeam = pDetails.realTeam;
+              lEntry.position = pDetails.position;
+              lEntry.value = pDetails.value;
+            }
+          }
+        });
       }
 
-      if (Array.isArray(data.drafts)) {
-        this.drafts = data.drafts;
+      // Actualizar historial de draft si viene en la respuesta
+      const rawDrafts = Array.isArray(data.drafts) ? data.drafts :
+                        (Array.isArray(data.draftHistory) ? data.draftHistory :
+                        (Array.isArray(data.draft) ? data.draft :
+                        (data.data && Array.isArray(data.data.drafts) ? data.data.drafts :
+                        (data.data && Array.isArray(data.data.draftHistory) ? data.data.draftHistory : null))));
+
+      if (rawDrafts !== null && Array.isArray(rawDrafts)) {
+        const seenDrafts = new Set<string>();
+        const parsedDrafts: DraftRecord[] = [];
+        rawDrafts.forEach((d: any) => {
+          const pName = String(d.playerName || d.Nombre_Jugador || d['Nombre del Jugador'] || d['Nombre Jugador'] || d.Jugador || d.Nombre || d.Futbolista || d.Player || '').trim();
+          let pReal = String(d.realTeam || d.Equipo_Liga || d['Equipo Real'] || d['Equipo_Real'] || d.Club || d['Equipo de la Liga'] || '').trim();
+          let pPos = String(d.position || d.Posicion || d['Posición'] || '').trim();
+          let pVal = parseCleanNumber(d.value !== undefined ? d.value : (d.Valor !== undefined ? d.Valor : (d.Precio !== undefined ? d.Precio : 0)));
+
+          // Si faltan datos en la hoja, autocompletar desde el catálogo maestro de jugadores
+          if ((!pReal || !pPos || pVal === 0) && pName) {
+            const matchPlayer = this.players.find(p => p.name.toLowerCase() === pName.toLowerCase());
+            if (matchPlayer) {
+              if (!pReal) pReal = matchPlayer.realTeam;
+              if (!pPos) pPos = matchPlayer.position;
+              if (pVal === 0 && matchPlayer.value) pVal = matchPlayer.value;
+            }
+          }
+
+          const tName = String(d.team || d.Equipo || d.Team || d.Club || d['Nombre Equipo'] || '').trim();
+          if (DEMO_TEAM_NAMES.includes(tName.toLowerCase())) return;
+          const dKey = `${tName.toLowerCase()}:::${pName.toLowerCase()}`;
+
+          if ((tName || pName) && !seenDrafts.has(dKey)) {
+            seenDrafts.add(dKey);
+            parsedDrafts.push({
+              timestamp: String(d.timestamp || d.date || d['Marca temporal'] || d.Fecha || d['Fecha/Hora'] || '').trim(),
+              team: tName,
+              playerName: pName,
+              realTeam: pReal,
+              position: pPos || 'Medio',
+              value: pVal
+            });
+          }
+        });
+        this.drafts = parsedDrafts;
+        updatedDraftsCount = this.drafts.length;
+
+        // Reconciliación automática: asegurar que todas las elecciones del Draft estén inscritas en las alineaciones de la Jornada 1
+        this.drafts.forEach(d => {
+          if (d.team && d.playerName) {
+            const normP = d.playerName.trim().toLowerCase();
+            const normT = d.team.trim().toLowerCase();
+            const existsInJ1 = this.lineups.some(
+              l => l.jornada === 1 && l.team.trim().toLowerCase() === normT && l.playerName.trim().toLowerCase() === normP
+            );
+            if (!existsInJ1) {
+              this.lineups.push({
+                team: d.team,
+                jornada: 1,
+                playerName: d.playerName,
+                realTeam: d.realTeam,
+                position: d.position,
+                value: d.value
+              });
+            }
+          }
+        });
       }
 
-      if (Array.isArray(data.schedules)) {
-        this.schedules = data.schedules;
+      // Actualizar orden del draft si viene en la respuesta de Google Sheets
+      const rawDraftOrder = Array.isArray(data.draftOrder) ? data.draftOrder :
+                            (data.data && Array.isArray(data.data.draftOrder) ? data.data.draftOrder : null);
+      if (Array.isArray(rawDraftOrder) && rawDraftOrder.length > 0) {
+        this.setDraftOrder(rawDraftOrder, false);
       }
 
-      this.ensureTokensMatchTeams();
-      this.saveState();
-      this.lastSyncTime = new Date().toISOString();
+      // Actualizar horarios de equipos si vienen en la respuesta (pestaña Horarios_Equipos)
+      const rawSchedules = Array.isArray(data.schedules) ? data.schedules :
+                           (Array.isArray(data.horarios) ? data.horarios :
+                           (data.data && Array.isArray(data.data.schedules) ? data.data.schedules :
+                           (data.data && Array.isArray(data.data.horarios) ? data.data.horarios : null)));
+
+      if (Array.isArray(rawSchedules) && rawSchedules.length > 0) {
+        const parsedSchedules: ScheduleRecord[] = [];
+        rawSchedules.forEach((s: any) => {
+          const j = Number(s.jornada || s.Jornada || 1) || 1;
+          const rt = String(s.realTeam || s.Equipo || s.Club || s.team || '').trim();
+          const dIso = String(s.deadlineIsoString || s.deadline || s.isoString || '').trim();
+          const f = String(s.fecha || s.Fecha || '').trim();
+          const h = String(s.hora || s.Hora || '').trim();
+          if (rt) {
+            parsedSchedules.push({
+              jornada: j,
+              realTeam: rt,
+              deadlineIsoString: dIso,
+              fecha: f,
+              hora: h
+            });
+          }
+        });
+        if (parsedSchedules.length > 0) {
+          this.schedules = parsedSchedules;
+          localStorage.setItem('lfa_schedules', JSON.stringify(this.schedules));
+        }
+      }
+
+      const now = new Date();
+      this.lastSyncTime = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' +
+                          now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
       localStorage.setItem('lfa_last_sync_time', this.lastSyncTime);
+      this.saveState();
       this.notify();
 
       return {
         success: true,
-        message: 'Sincronización remota completada con éxito.',
+        message: `Sincronización completada: ${updatedTeamsCount || this.teams.length} equipos, ${updatedPlayersCount || this.players.length} jugadores, ${this.transfers.length} fichajes y ${this.drafts.length} elecciones de draft sincronizados desde Google Sheets.`,
         stats: {
-          teams: updatedTeamsCount,
-          players: updatedPlayersCount
+          teams: this.teams.length,
+          players: this.players.length,
+          transfers: this.transfers.length,
+          drafts: this.drafts.length,
+          maxJornada: data.maxJornada || this.getMaxJornada()
         }
       };
     } catch (err: any) {
+      if (err.message === 'DEV_URL_ERROR') {
+        return { success: false, message: 'La URL termina en "/dev". Usa la URL de implementación que termina en "/exec".' };
+      }
+      if (err.message === 'AUTH_REQUIRED') {
+        return { success: false, message: 'Google exige autenticación. Configura "Quién tiene acceso" en "Cualquiera" (Anyone).' };
+      }
+      if (err.message === 'OLD_GAS_CODE' || err.message === 'RETURNED_HTML') {
+        return { success: false, message: 'La Web App devolvió HTML en vez de datos. Pega el nuevo "Código.gs" en Apps Script y publica una "Nueva versión".' };
+      }
+      if (err.message === 'TIMEOUT_GAS') {
+        return {
+          success: false,
+          message: '⏱️ Tiempo de espera agotado: La versión actual de tu Google Apps Script tarda demasiado en procesar las hojas. Copia el nuevo "Código.gs" optimizado desde la pestaña Conectar, pégalo en tu Apps Script y publica una "Nueva versión". Con el nuevo código tarda menos de 1 segundo.'
+        };
+      }
       return {
         success: false,
-        message: 'Fallo al sincronizar datos remotos: ' + (err.message || 'Error de red')
+        message: 'Fallo al sincronizar con Google Sheets: ' + (err.message || 'Verifica la URL y permisos.')
       };
     } finally {
-      clearTimeout(safetyTimer);
       this.isSyncingRemote = false;
     }
   }
 
-  // Getters para exponer datos a la app
-  public getTeams(): string[] { return [...this.teams]; }
-  public getTokens(): TeamToken[] { return [...this.tokens]; }
-  public getPlayers(): Player[] { return [...this.players]; }
-  public getLineups(): LineupEntry[] { return [...this.lineups]; }
-  public getTransfers(): TransferRecord[] { return [...this.transfers]; }
-  public getDrafts(): DraftRecord[] { return [...this.drafts]; }
-  public getSchedules(): ScheduleRecord[] { return [...this.schedules]; }
-  public getLeagueTexts(): LeagueTexts { return { ...this.leagueTexts }; }
-  public getDraftOrder(): DraftRoundOrder[] { return [...this.draftOrder]; }
-  public isDraftHidden(): boolean { return this.isDraftHiddenState; }
+  private loadState() {
+    try {
+      const savedGasUrl = localStorage.getItem('lfa_gas_url');
+      this.gasUrl = (savedGasUrl && savedGasUrl.trim()) ? savedGasUrl.trim() : DEFAULT_GAS_URL;
+
+      const savedTeams = localStorage.getItem('lfa_teams');
+      const savedTokens = localStorage.getItem('lfa_tokens');
+      const savedPlayers = localStorage.getItem('lfa_players');
+      const savedLineups = localStorage.getItem('lfa_lineups');
+      const savedTransfers = localStorage.getItem('lfa_transfers');
+      const savedDrafts = localStorage.getItem('lfa_drafts');
+      const savedSchedules = localStorage.getItem('lfa_schedules');
+
+      this.teams = savedTeams ? JSON.parse(savedTeams) : [...INITIAL_TEAMS];
+      if (Array.isArray(this.teams)) {
+        const seenTeams = new Set<string>();
+        const deduped: string[] = [];
+        for (const t of this.teams) {
+          const trimmed = String(t || '').trim();
+          const lower = trimmed.toLowerCase();
+          if (trimmed && !seenTeams.has(lower)) {
+            seenTeams.add(lower);
+            deduped.push(trimmed);
+          }
+        }
+        this.teams = deduped.length > 0 ? deduped : [...INITIAL_TEAMS];
+      }
+      this.tokens = savedTokens ? JSON.parse(savedTokens) : [...INITIAL_TOKENS];
+
+      // Purge old demo teams if they were saved in localStorage
+      const demoNames = new Set(['galácticos fc', 'tiki-taka united', 'la saeta rubia', 'furia rojiblanca', 'boquerones cf', 'dream team 92']);
+      if (!Array.isArray(this.teams) || this.teams.length === 0 || this.teams.every(t => demoNames.has(String(t).trim().toLowerCase()))) {
+        this.teams = [...INITIAL_TEAMS];
+      }
+      this.ensureTokensMatchTeams();
+      if (savedPlayers) {
+        try {
+          const parsed = JSON.parse(savedPlayers);
+          if (Array.isArray(parsed)) {
+            const seen = new Set<string>();
+            const unique: Player[] = [];
+            for (const p of parsed) {
+              const name = String(p.name || '').trim();
+              if (!name) continue;
+              const key = name.toLowerCase();
+              if (!seen.has(key)) {
+                seen.add(key);
+                unique.push(p);
+              }
+            }
+            this.players = unique;
+          } else {
+            this.players = [...INITIAL_PLAYERS];
+          }
+        } catch {
+          this.players = [...INITIAL_PLAYERS];
+        }
+      } else {
+        this.players = [...INITIAL_PLAYERS];
+      }
+      this.lineups = (savedLineups ? JSON.parse(savedLineups) : [...INITIAL_LINEUPS]).filter(
+        (l: LineupEntry) => !DEMO_TEAM_NAMES.includes(String(l.team || '').toLowerCase().trim())
+      );
+      this.transfers = (savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS]).filter(
+        (t: TransferRecord) => !DEMO_TEAM_NAMES.includes(String(t.team || '').toLowerCase().trim())
+      );
+      if (savedDrafts) {
+        try {
+          const parsed = JSON.parse(savedDrafts);
+          if (Array.isArray(parsed)) {
+            const seenD = new Set<string>();
+            const uniqueD: DraftRecord[] = [];
+            for (const d of parsed) {
+              const tNorm = String(d.team || '').trim().toLowerCase();
+              if (DEMO_TEAM_NAMES.includes(tNorm)) continue;
+              const pNorm = String(d.playerName || '').trim().toLowerCase();
+              const key = `${tNorm}:::${pNorm}`;
+              if (pNorm && !seenD.has(key)) {
+                seenD.add(key);
+                uniqueD.push(d);
+              }
+            }
+            this.drafts = uniqueD;
+          } else {
+            this.drafts = [...INITIAL_DRAFTS];
+          }
+        } catch {
+          this.drafts = [...INITIAL_DRAFTS];
+        }
+      } else {
+        this.drafts = [...INITIAL_DRAFTS];
+      }
+      this.drafts = this.drafts.filter(
+        (d: DraftRecord) => !DEMO_TEAM_NAMES.includes(String(d.team || '').toLowerCase().trim())
+      );
+
+      // Guardar de inmediato en localStorage para purgar datos demo de navegadores que los tenían cacheados
+      if (savedTransfers && JSON.parse(savedTransfers).length !== this.transfers.length) {
+        localStorage.setItem('lfa_transfers', JSON.stringify(this.transfers));
+      }
+      if (savedDrafts && JSON.parse(savedDrafts).length !== this.drafts.length) {
+        localStorage.setItem('lfa_drafts', JSON.stringify(this.drafts));
+      }
+      if (savedLineups && JSON.parse(savedLineups).length !== this.lineups.length) {
+        localStorage.setItem('lfa_lineups', JSON.stringify(this.lineups));
+      }
+      this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
+
+      // Reconciliar automáticamente las elecciones del draft con las alineaciones de Jornada 1
+      if (Array.isArray(this.drafts) && this.drafts.length > 0) {
+        this.drafts.forEach(d => {
+          if (d.team && d.playerName) {
+            const normP = d.playerName.trim().toLowerCase();
+            const normT = d.team.trim().toLowerCase();
+            const existsInJ1 = this.lineups.some(
+              l => l.jornada === 1 && l.team.trim().toLowerCase() === normT && l.playerName.trim().toLowerCase() === normP
+            );
+            if (!existsInJ1) {
+              this.lineups.push({
+                team: d.team,
+                jornada: 1,
+                playerName: d.playerName,
+                realTeam: d.realTeam,
+                position: d.position,
+                value: d.value
+              });
+            }
+          }
+        });
+      }
+
+      const savedJornada = localStorage.getItem('lfa_first_contribution_jornada');
+      if (savedJornada) {
+        const parsedJ = parseInt(savedJornada, 10);
+        if (!isNaN(parsedJ) && parsedJ >= 1) {
+          this.firstContributionJornada = parsedJ === 4 ? 5 : parsedJ;
+        }
+      } else {
+        this.firstContributionJornada = 5;
+      }
+      localStorage.setItem('lfa_first_contribution_jornada', String(this.firstContributionJornada));
+
+      const savedClubStyles = localStorage.getItem('lfa_club_styles');
+      if (savedClubStyles) {
+        try {
+          const parsedStyles = JSON.parse(savedClubStyles);
+          if (Array.isArray(parsedStyles) && parsedStyles.length > 0) {
+            this.customClubStyles = parsedStyles;
+          }
+        } catch {}
+      }
+
+      const savedNotif = localStorage.getItem('lfa_notification_config');
+      if (savedNotif) {
+        try {
+          const parsedNotif = JSON.parse(savedNotif);
+          if (parsedNotif && typeof parsedNotif === 'object') {
+            this.notificationConfig = {
+              ...this.notificationConfig,
+              ...parsedNotif
+            };
+          }
+        } catch {}
+      }
+
+      const savedAdminPass = localStorage.getItem('lfa_admin_password');
+      if (savedAdminPass) {
+        this.adminPassword = savedAdminPass.trim();
+      }
+
+      const savedTexts = localStorage.getItem('lfa_league_texts');
+      if (savedTexts) {
+        try {
+          const parsedTexts = JSON.parse(savedTexts);
+          if (parsedTexts && typeof parsedTexts === 'object') {
+            this.leagueTexts = {
+              ...this.leagueTexts,
+              ...parsedTexts
+            };
+          }
+        } catch {}
+      }
+
+      const savedCustomCode = localStorage.getItem('lfa_custom_code_gs');
+      if (savedCustomCode) {
+        this.customCodeGs = savedCustomCode;
+      }
+
+      const savedDraftOrder = localStorage.getItem('lfa_draft_order');
+      if (savedDraftOrder) {
+        try {
+          const parsed = JSON.parse(savedDraftOrder);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.draftOrder = parsed.map((ro: any) => {
+              const seenInRound = new Set<string>();
+              const uniqueTeams: string[] = [];
+              for (const t of (ro.teams || [])) {
+                const trimmed = String(t || '').trim();
+                const lower = trimmed.toLowerCase();
+                if (trimmed && !seenInRound.has(lower)) {
+                  seenInRound.add(lower);
+                  uniqueTeams.push(trimmed);
+                }
+              }
+              return {
+                ...ro,
+                teams: uniqueTeams
+              };
+            });
+          }
+        } catch {}
+      }
+
+      const savedDraftHidden = localStorage.getItem('lfa_is_draft_hidden');
+      if (savedDraftHidden !== null) {
+        this.isDraftHiddenState = savedDraftHidden === 'true';
+      }
+
+      // Comprobar si se ha entrado mediante enlace de jugador (?mode=player o ?player=1)
+      if (typeof window !== 'undefined') {
+        const p = new URLSearchParams(window.location.search);
+        const m = p.get('mode');
+        const pl = p.get('player');
+        const rol = p.get('rol');
+        if (m === 'player' || pl === '1' || rol === 'jugador') {
+          this.playerModeActive = true;
+        }
+      }
+    } catch {
+      this.teams = [...INITIAL_TEAMS];
+      this.tokens = [...INITIAL_TOKENS];
+      this.players = [...INITIAL_PLAYERS];
+      this.lineups = [...INITIAL_LINEUPS];
+      this.transfers = [...INITIAL_TRANSFERS];
+      this.drafts = [...INITIAL_DRAFTS];
+      this.schedules = [...INITIAL_SCHEDULES];
+      this.firstContributionJornada = 5;
+      this.customClubStyles = [...DEFAULT_CLUB_STYLES];
+    }
+  }
+
+  private saveState() {
+    try {
+      localStorage.setItem('lfa_teams', JSON.stringify(this.teams));
+      localStorage.setItem('lfa_tokens', JSON.stringify(this.tokens));
+      localStorage.setItem('lfa_players', JSON.stringify(this.players));
+      localStorage.setItem('lfa_lineups', JSON.stringify(this.lineups));
+      localStorage.setItem('lfa_transfers', JSON.stringify(this.transfers));
+      localStorage.setItem('lfa_drafts', JSON.stringify(this.drafts));
+      localStorage.setItem('lfa_schedules', JSON.stringify(this.schedules));
+      localStorage.setItem('lfa_first_contribution_jornada', String(this.firstContributionJornada));
+      localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
+      localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
+      localStorage.setItem('lfa_admin_password', this.adminPassword);
+      localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
+      localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
+      localStorage.setItem('lfa_is_draft_hidden', String(this.isDraftHiddenState));
+      if (this.customCodeGs) {
+        localStorage.setItem('lfa_custom_code_gs', this.customCodeGs);
+      } else {
+        localStorage.removeItem('lfa_custom_code_gs');
+      }
+    } catch (e) {
+      console.warn('LocalStorage save failed:', e);
+    }
+  }
+
+  public resetToDefaults() {
+    this.teams = [...INITIAL_TEAMS];
+    this.tokens = [...INITIAL_TOKENS];
+    this.players = [...INITIAL_PLAYERS];
+    this.lineups = [];
+    this.transfers = [];
+    this.drafts = [];
+    this.schedules = [...INITIAL_SCHEDULES];
+    this.draftOrder = [];
+    this.isDraftHiddenState = false;
+    this.saveState();
+  }
+
+  // --- Identical GAS Backend Functions ---
+
+  public getTeamNames(): string[] {
+    const seen = new Set<string>();
+    const cleanTeams: string[] = [];
+    for (const t of this.teams) {
+      const trimmed = String(t || '').trim();
+      const lower = trimmed.toLowerCase();
+      if (trimmed && !seen.has(lower)) {
+        seen.add(lower);
+        cleanTeams.push(trimmed);
+      }
+    }
+    return cleanTeams.sort();
+  }
+
+  public getTeams(): string[] {
+    return this.getTeamNames();
+  }
+
+  public getTokens(): TeamToken[] {
+    return [...this.tokens];
+  }
+
+  public getNumberOfTeams(): number {
+    return this.getTeamNames().length;
+  }
+
+  public getMaxJornadaFromPlayersSheet(): number {
+    let maxJ = 0;
+    const jornadaPointsSum = new Map<number, number>();
+
+    this.players.forEach(p => {
+      if (p.jornadasPoints) {
+        Object.entries(p.jornadasPoints).forEach(([k, pts]) => {
+          const num = parseInt(k, 10);
+          const val = typeof pts === 'number' ? pts : parseFloat(String(pts));
+          if (!isNaN(num) && !isNaN(val)) {
+            jornadaPointsSum.set(num, (jornadaPointsSum.get(num) || 0) + val);
+          }
+        });
+      }
+    });
+
+    // Encontrar la jornada más alta con puntos registrados (> 0) en la columna de Jugadores
+    jornadaPointsSum.forEach((totalPts, j) => {
+      if (j > maxJ && totalPts > 0) {
+        maxJ = j;
+      }
+    });
+
+    // Si ninguna jornada sumó puntos > 0 pero hay columnas numéricas registradas
+    if (maxJ === 0 && jornadaPointsSum.size > 0) {
+      maxJ = Math.max(...Array.from(jornadaPointsSum.keys()));
+    }
+
+    return maxJ;
+  }
+
+  /**
+   * Devuelve la última jornada efectivamente disputada según la última jornada con puntos en la columna de la Hoja Jugadores.
+   */
+  public getLastPlayedJornada(): number {
+    const pMax = this.getMaxJornadaFromPlayersSheet();
+    return pMax > 0 ? pMax : 5;
+  }
+
+  public getMaxJornadaFromAlineacionesSheet(): number {
+    if (this.lineups.length === 0) return 0;
+    const jNums = this.lineups.map(l => l.jornada).filter(j => !isNaN(j) && j > 0);
+    return jNums.length > 0 ? Math.max(...jNums) : 0;
+  }
+
+  public getMaxJornada(): number {
+    const pMax = this.getMaxJornadaFromPlayersSheet();
+    const lMax = this.getMaxJornadaFromAlineacionesSheet();
+    const rMax = this.remoteMaxJornada || 0;
+    const overall = Math.max(pMax, lMax, rMax);
+    return overall > 0 ? overall : 5;
+  }
+
+  public validateTeamToken(teamName: string, token: string): boolean {
+    if (!teamName || !token) return false;
+    return this.tokens.some(
+      t => t.team.trim().toLowerCase() === teamName.trim().toLowerCase() &&
+           t.token.trim() === token.trim()
+    );
+  }
+
+  public getAllPlayersWithDetails(): Player[] {
+    return this.players.filter(p => p.name && p.name.trim() !== '');
+  }
+
+  public getPlayers(): Player[] {
+    return this.getAllPlayersWithDetails();
+  }
+
+  public calculateTeamValue(teamName: string, jornada: number): number {
+    const normT = teamName.trim().toLowerCase();
+    const playersInLineup = this.lineups
+      .filter(l => l.team.trim().toLowerCase() === normT && l.jornada === jornada && l.playerName.trim() !== '')
+      .map(l => l.playerName.trim());
+
+    if (playersInLineup.length === 0) return 0;
+
+    const pMap = new Map(this.players.map(p => [p.name.toLowerCase(), typeof p.value === 'number' ? p.value : 0]));
+    return playersInLineup.reduce((acc, name) => acc + (pMap.get(name.toLowerCase()) || 0), 0);
+  }
+
+  public getRealTeamOfPlayer(playerName: string): string | null {
+    const player = this.players.find(p => p.name.trim().toLowerCase() === playerName.trim().toLowerCase());
+    return player ? player.realTeam : null;
+  }
+
+  /**
+   * Obtiene la lista de equipos reales de la liga (de jugadores y horarios)
+   */
+  public getLeagueRealTeams(): string[] {
+    const teamsSet = new Set<string>();
+    this.players.forEach(p => {
+      const rt = canonicalizeRealTeam(p.realTeam);
+      if (rt && rt !== 'LIBRE' && rt !== 'SIN EQUIPO') {
+        teamsSet.add(rt);
+      }
+    });
+    this.schedules.forEach(s => {
+      const rt = canonicalizeRealTeam(s.realTeam);
+      if (rt && rt !== 'TODOS' && rt !== 'GENERAL') {
+        teamsSet.add(rt);
+      }
+    });
+    if (teamsSet.size >= 10) {
+      return Array.from(teamsSet).sort();
+    }
+    return [
+      'ALV', 'ATH', 'ATM', 'BAR', 'BET', 'CEL', 'DEP', 'ELC',
+      'ESP', 'GET', 'LEV', 'MAL', 'OSA', 'RAC', 'RAY', 'RMA',
+      'RSO', 'SEV', 'VAL', 'VIL'
+    ];
+  }
+
+  /**
+   * Evalúa el estado detallado de una jornada:
+   * Una jornada está FINALIZADA ÚNICAMENTE cuando todos sus partidos se han jugado.
+   * Si tiene partidos suspendidos o aplazados (como la J6), está parcialmente jugada y abierta para esos equipos.
+   */
+  public getJornadaMatchStatus(jornada: number): {
+    jornada: number;
+    isFullyPlayed: boolean;
+    isPartiallyPlayed: boolean;
+    isOpen: boolean;
+    pendingTeams: string[];
+    playedTeams: string[];
+    hasSuspendedMatches: boolean;
+    reason?: string;
+  } {
+    jornada = parseInt(String(jornada), 10);
+    if (isNaN(jornada) || jornada <= 0) {
+      return {
+        jornada,
+        isFullyPlayed: true,
+        isPartiallyPlayed: false,
+        isOpen: false,
+        pendingTeams: [],
+        playedTeams: [],
+        hasSuspendedMatches: false,
+        reason: 'Jornada no válida.'
+      };
+    }
+
+    const allRealTeams = this.getLeagueRealTeams();
+    const playedTeams: string[] = [];
+    const pendingTeams: string[] = [];
+
+    allRealTeams.forEach(rt => {
+      const canonRt = canonicalizeRealTeam(rt);
+
+      // 1. Comprobar si los jugadores de este equipo real tienen puntuaciones registradas en esta jornada
+      const hasPoints = this.players.some(p =>
+        canonicalizeRealTeam(p.realTeam) === canonRt &&
+        p.jornadasPoints &&
+        p.jornadasPoints[jornada] !== undefined &&
+        p.jornadasPoints[jornada] !== null &&
+        typeof p.jornadasPoints[jornada] === 'number' &&
+        !isNaN(p.jornadasPoints[jornada] as number)
+      );
+
+      if (hasPoints) {
+        playedTeams.push(rt);
+        return;
+      }
+
+      // 2. Comprobar en Horarios_Equipos si ya ha pasado el horario límite
+      let matchSched = this.schedules.find(
+        s => s.jornada === jornada && canonicalizeRealTeam(s.realTeam) === canonRt
+      );
+      if (!matchSched) {
+        matchSched = this.schedules.find(
+          s => s.jornada === jornada && (s.realTeam.toUpperCase() === 'TODOS' || s.realTeam.toUpperCase() === 'GENERAL')
+        );
+      }
+
+      if (matchSched && matchSched.deadlineIsoString) {
+        const deadline = new Date(matchSched.deadlineIsoString);
+        if (!isNaN(deadline.getTime())) {
+          if (new Date() >= deadline) {
+            playedTeams.push(rt);
+            return;
+          }
+        }
+      }
+
+      // No tiene puntos registrados y su horario no ha vencido -> partido pendiente o aplazado
+      pendingTeams.push(rt);
+    });
+
+    // REGLA FUNDAMENTAL: Una jornada está finalizada ÚNICAMENTE cuando TODOS los partidos se han jugado
+    const isFullyPlayed = pendingTeams.length === 0 && playedTeams.length > 0;
+    const isPartiallyPlayed = playedTeams.length > 0 && pendingTeams.length > 0;
+    const isOpen = !isFullyPlayed;
+
+    let reason: string | undefined;
+    if (isFullyPlayed) {
+      reason = `La Jornada ${jornada} ya está completamente finalizada (todos los partidos se han disputado).`;
+    } else if (isPartiallyPlayed) {
+      reason = `La Jornada ${jornada} tiene partido(s) aplazados o pendientes de jugar (${pendingTeams.join(', ')}). Los fichajes entre jugadores de estos equipos están permitidos.`;
+    }
+
+    return {
+      jornada,
+      isFullyPlayed,
+      isPartiallyPlayed,
+      isOpen,
+      pendingTeams,
+      playedTeams,
+      hasSuspendedMatches: isPartiallyPlayed,
+      reason
+    };
+  }
+
+  /**
+   * Comprueba si una jornada ya ha sido disputada en su totalidad o si contiene partidos pendientes.
+   * isPlayed es TRUE ÚNICAMENTE cuando todos los partidos han concluido.
+   */
+  public isJornadaPlayed(jornada: number): {
+    isPlayed: boolean;
+    isPartiallyPlayed: boolean;
+    pendingTeams: string[];
+    playedTeams: string[];
+    hasSuspendedMatches: boolean;
+    reason?: string;
+  } {
+    const status = this.getJornadaMatchStatus(jornada);
+    return {
+      isPlayed: status.isFullyPlayed,
+      isPartiallyPlayed: status.isPartiallyPlayed,
+      pendingTeams: status.pendingTeams,
+      playedTeams: status.playedTeams,
+      hasSuspendedMatches: status.hasSuspendedMatches,
+      reason: status.reason
+    };
+  }
+
+  /**
+   * Obtiene la siguiente jornada abierta o con partidos pendientes disponible para fichajes
+   */
+  public getNextOpenJornada(): number {
+    for (let j = 1; j <= 38; j++) {
+      const status = this.getJornadaMatchStatus(j);
+      if (!status.isFullyPlayed) {
+        return j;
+      }
+    }
+    return 38;
+  }
+
+  public getTeamScheduleDeadline(jornada: number, realTeam: string): {
+    hasSchedule: boolean;
+    isOpen: boolean;
+    reason?: string;
+    fecha?: string;
+    hora?: string;
+    deadline?: Date;
+    scheduleRecord?: ScheduleRecord;
+  } {
+    jornada = parseInt(String(jornada), 10);
+    if (!realTeam || isNaN(jornada) || jornada <= 0) {
+      return { hasSchedule: false, isOpen: true };
+    }
+
+    // 0. Si la jornada completa ya fue disputada o cerrada (puntuaciones registradas)
+    const jPlayed = this.isJornadaPlayed(jornada);
+    if (jPlayed.isPlayed) {
+      return {
+        hasSchedule: true,
+        isOpen: false,
+        reason: jPlayed.reason || `La Jornada ${jornada} ya ha sido disputada (no se permiten modificaciones).`
+      };
+    }
+
+    const canonTarget = canonicalizeRealTeam(realTeam);
+
+    // 0.1 Comprobar si los jugadores de este equipo real ya tienen puntuaciones oficiales registradas en esta jornada
+    const teamHasPointsInJornada = this.players.some(p => 
+      canonicalizeRealTeam(p.realTeam) === canonTarget &&
+      p.jornadasPoints &&
+      p.jornadasPoints[jornada] !== undefined &&
+      p.jornadasPoints[jornada] !== null &&
+      typeof p.jornadasPoints[jornada] === 'number' &&
+      !isNaN(p.jornadasPoints[jornada] as number)
+    );
+    if (teamHasPointsInJornada) {
+      return {
+        hasSchedule: true,
+        isOpen: false,
+        reason: `El partido de ${realTeam} en la Jornada ${jornada} ya ha sido disputado (cuenta con puntuaciones oficiales registradas).`
+      };
+    }
+
+    // Buscar en this.schedules para esta jornada y equipo real específico
+    let matchSched = this.schedules.find(
+      s => s.jornada === jornada && canonicalizeRealTeam(s.realTeam) === canonTarget
+    );
+
+    // Si no se encuentra, buscar horario comodín TODOS o GENERAL
+    if (!matchSched) {
+      matchSched = this.schedules.find(
+        s => s.jornada === jornada && (s.realTeam.toUpperCase() === 'TODOS' || s.realTeam.toUpperCase() === 'GENERAL')
+      );
+    }
+
+    if (!matchSched) {
+      return { hasSchedule: false, isOpen: true };
+    }
+
+    let targetYear: number | null = null;
+    let targetMonth: number | null = null;
+    let targetDay: number | null = null;
+    let targetHours = 0;
+    let targetMinutes = 0;
+
+    if (matchSched.deadlineIsoString) {
+      const match = matchSched.deadlineIsoString.match(/([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})/);
+      if (match) {
+        targetYear = parseInt(match[1], 10);
+        targetMonth = parseInt(match[2], 10);
+        targetDay = parseInt(match[3], 10);
+        targetHours = parseInt(match[4], 10);
+        targetMinutes = parseInt(match[5], 10);
+      }
+    }
+
+    if (targetYear === null && matchSched.fecha) {
+      const matchF = matchSched.fecha.match(/([0-9]{1,4})[-/]([0-9]{1,2})[-/]([0-9]{1,4})/);
+      if (matchF) {
+        if (parseInt(matchF[1], 10) > 31) {
+          targetYear = parseInt(matchF[1], 10);
+          targetMonth = parseInt(matchF[2], 10);
+          targetDay = parseInt(matchF[3], 10);
+        } else {
+          targetDay = parseInt(matchF[1], 10);
+          targetMonth = parseInt(matchF[2], 10);
+          targetYear = parseInt(matchF[3], 10);
+        }
+      }
+      if (matchSched.hora) {
+        const matchH = matchSched.hora.match(/([0-9]{1,2})[:.h]([0-9]{2})/);
+        if (matchH) {
+          targetHours = parseInt(matchH[1], 10);
+          targetMinutes = parseInt(matchH[2], 10);
+        }
+      }
+    }
+
+    if (targetYear === null || targetMonth === null || targetDay === null) {
+      return { hasSchedule: false, isOpen: true, scheduleRecord: matchSched };
+    }
+
+    const pad = (n: number) => (n < 10 ? '0' : '') + n;
+    const fechaDisplay = matchSched.fecha || `${pad(targetDay)}/${pad(targetMonth)}/${targetYear}`;
+    const horaDisplay = matchSched.hora || `${pad(targetHours)}:${pad(targetMinutes)}h`;
+
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth() + 1;
+    const nowDay = now.getDate();
+    const nowHours = now.getHours();
+    const nowMinutes = now.getMinutes();
+
+    const nowDateNum = nowYear * 10000 + nowMonth * 100 + nowDay;
+    const targetDateNum = targetYear * 10000 + targetMonth * 100 + targetDay;
+
+    // Regla: "Si el fichaje es en una fecha posterior, el fichaje será invalido"
+    if (nowDateNum > targetDateNum) {
+      return {
+        hasSchedule: true,
+        isOpen: false,
+        reason: `El partido de ${matchSched.realTeam || realTeam} se disputó el ${fechaDisplay} a las ${horaDisplay} (fecha límite vencida).`,
+        fecha: fechaDisplay,
+        hora: horaDisplay,
+        scheduleRecord: matchSched
+      };
+    }
+
+    // Regla: "si es en la misma fecha pero posterior al horario indicado, el fichaje es inválido"
+    if (nowDateNum === targetDateNum) {
+      const nowTimeNum = nowHours * 60 + nowMinutes;
+      const targetTimeNum = targetHours * 60 + targetMinutes;
+      if (nowTimeNum >= targetTimeNum) {
+        return {
+          hasSchedule: true,
+          isOpen: false,
+          reason: `El partido de ${matchSched.realTeam || realTeam} ya ha comenzado hoy a las ${horaDisplay} (horario límite superado).`,
+          fecha: fechaDisplay,
+          hora: horaDisplay,
+          scheduleRecord: matchSched
+        };
+      }
+    }
+
+    // Regla: "Cada fichaje es individual y podrá hacerse antes del inicio del partido aun con la jornada en juego."
+    return {
+      hasSchedule: true,
+      isOpen: true,
+      fecha: fechaDisplay,
+      hora: horaDisplay,
+      scheduleRecord: matchSched
+    };
+  }
+
+  public isTeamOpenForJornada(jornada: number, realTeam: string): boolean {
+    const res = this.getTeamScheduleDeadline(jornada, realTeam);
+    return res.isOpen;
+  }
+
+  /**
+   * Comprueba si el partido de un jugador específico para una jornada ya ha sido disputado
+   * (por contar con puntos oficiales en la columna de Jugadores o por haber vencido el horario de su equipo)
+   */
+  public isPlayerMatchPlayed(playerName: string, jornada: number): { isPlayed: boolean; reason?: string } {
+    jornada = parseInt(String(jornada), 10);
+    if (isNaN(jornada) || jornada <= 0) {
+      return { isPlayed: true, reason: 'Jornada no válida.' };
+    }
+
+    const jPlayed = this.isJornadaPlayed(jornada);
+    if (jPlayed.isPlayed) {
+      return { isPlayed: true, reason: jPlayed.reason || `La Jornada ${jornada} ya ha sido disputada.` };
+    }
+
+    const norm = (s: string) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const targetNorm = norm(playerName);
+    const player = this.players.find(p => norm(p.name) === targetNorm);
+
+    if (player && player.jornadasPoints) {
+      const pts = player.jornadasPoints[jornada];
+      if (typeof pts === 'number' && !isNaN(pts)) {
+        return {
+          isPlayed: true,
+          reason: `El jugador "${player.name}" ya disputó su partido de la Jornada ${jornada} (puntuación registrada: ${pts} pts).`
+        };
+      }
+    }
+
+    const realTeam = player?.realTeam || this.getRealTeamOfPlayer(playerName);
+    if (realTeam) {
+      const sched = this.getTeamScheduleDeadline(jornada, realTeam);
+      if (!sched.isOpen) {
+        return {
+          isPlayed: true,
+          reason: sched.reason || `El partido de ${realTeam} ya ha comenzado o se ha disputado.`
+        };
+      }
+    }
+
+    return { isPlayed: false };
+  }
+
+  public getTeamLineupData(teamName: string, jornada: number): TeamLineupResponse {
+    if (!teamName || !jornada || isNaN(jornada) || jornada <= 0) {
+      return { players: [], totalPoints: '0.00', totalValue: '0', totalGoals: 0, totalDefensivePoints: 0, error: 'Selecciona un equipo y jornada válida.' };
+    }
+
+    const normT = teamName.trim().toLowerCase();
+    const teamLineups = this.lineups.filter(
+      l => l.team.trim().toLowerCase() === normT && l.jornada === jornada && l.playerName.trim() !== ''
+    );
+
+    const norm = (s: string) => (s || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    let teamTotalPoints = 0;
+    let teamTotalValue = 0;
+    let teamTotalGoals = 0;
+    let teamTotalDefensivePoints = 0;
+
+    const teamPlayers: {
+      entry: LineupEntry;
+      pData?: Player;
+    }[] = [];
+
+    teamLineups.forEach(l => {
+      const targetNorm = norm(l.playerName);
+      const pData = this.players.find(p => norm(p.name) === targetNorm);
+
+      const pPos = pData?.position || l.position || 'Medio';
+      const pReal = l.realTeam || pData?.realTeam || '';
+      const pVal = pData?.value ?? (typeof l.value === 'number' ? l.value : parseCleanNumber(l.value));
+      const pts = pData?.jornadasPoints?.[jornada] ?? '';
+      const g = pData?.jornadasGoals?.[jornada] ?? '';
+      const def = pData?.jornadasDef?.[jornada] ?? '';
+
+      teamPlayers.push({
+        entry: {
+          playerName: l.playerName,
+          realTeam: pReal,
+          position: pPos,
+          value: pVal,
+          team: l.team,
+          jornada: l.jornada
+        },
+        pData
+      });
+
+      if (typeof pts === 'number') teamTotalPoints += pts;
+      if (typeof pVal === 'number') teamTotalValue += pVal;
+      if (typeof g === 'number') teamTotalGoals += g;
+      if ((pPos === 'Portero' || pPos === 'Defensa') && typeof def === 'number') {
+        teamTotalDefensivePoints += def;
+      }
+    });
+
+    const positionOrder: Record<string, number> = { 'Portero': 1, 'Defensa': 2, 'Medio': 3, 'Delantero': 4 };
+    const playersDetailed: LineupPlayerDetail[] = teamPlayers.map(({ entry: l, pData }): LineupPlayerDetail => {
+      const pts = pData?.jornadasPoints?.[jornada];
+      const gls = pData?.jornadasGoals?.[jornada];
+      const pdf = pData?.jornadasDef?.[jornada];
+
+      return {
+        name: l.playerName,
+        realTeam: l.realTeam,
+        position: l.position,
+        value: l.value,
+        points: (typeof pts === 'number' ? pts : '') as number | '',
+        goals: (typeof gls === 'number' ? gls : '') as number | '',
+        pDef: (typeof pdf === 'number' ? pdf : '') as number | ''
+      };
+    }).sort((a, b) => (positionOrder[a.position] || 99) - (positionOrder[b.position] || 99) || a.name.localeCompare(b.name));
+
+    return {
+      players: playersDetailed,
+      totalPoints: teamTotalPoints.toFixed(2),
+      totalValue: teamTotalValue.toFixed(0),
+      totalGoals: teamTotalGoals,
+      totalDefensivePoints: teamTotalDefensivePoints
+    };
+  }
+
+  public calculateWeeklyScores(jornada: number): StandingScore[] {
+    if (isNaN(jornada) || jornada <= 0) return [];
+    const teamScores = new Map<string, number>(this.teams.map(t => [t, 0]));
+    const playerMap = new Map(this.players.map(p => [p.name, p]));
+
+    this.lineups.forEach(l => {
+      if (l.jornada === jornada && teamScores.has(l.team) && l.playerName) {
+        const p = playerMap.get(l.playerName);
+        const pts = p?.jornadasPoints?.[jornada] || 0;
+        teamScores.set(l.team, (teamScores.get(l.team) || 0) + pts);
+      }
+    });
+
+    return Array.from(teamScores.entries())
+      .map(([name, score]) => ({ teamName: name, score: score.toFixed(2) }))
+      .sort((a, b) => parseFloat(String(b.score)) - parseFloat(String(a.score)));
+  }
+
+  public calculateGeneralScores(maxJornada: number): StandingScore[] {
+    if (isNaN(maxJornada) || maxJornada <= 0) return [];
+    const teamTotalScores = new Map<string, number>(this.teams.map(t => [t, 0]));
+    const playerMap = new Map(this.players.map(p => [p.name, p]));
+
+    this.lineups.forEach(l => {
+      if (l.jornada <= maxJornada && teamTotalScores.has(l.team) && l.playerName) {
+        const p = playerMap.get(l.playerName);
+        const pts = p?.jornadasPoints?.[l.jornada] || 0;
+        teamTotalScores.set(l.team, (teamTotalScores.get(l.team) || 0) + pts);
+      }
+    });
+
+    return Array.from(teamTotalScores.entries())
+      .map(([name, score]) => ({ teamName: name, score: score.toFixed(2) }))
+      .sort((a, b) => parseFloat(String(b.score)) - parseFloat(String(a.score)));
+  }
+
+  public calculateMostGoalsTeams(maxJornada: number): StandingScore[] {
+    if (isNaN(maxJornada) || maxJornada <= 0) return [];
+    const teamTotalGoals = new Map<string, number>(this.teams.map(t => [t, 0]));
+    const playerMap = new Map(this.players.map(p => [p.name, p]));
+
+    this.lineups.forEach(l => {
+      if (l.jornada <= maxJornada && teamTotalGoals.has(l.team) && l.playerName) {
+        const p = playerMap.get(l.playerName);
+        const g = p?.jornadasGoals?.[l.jornada] || 0;
+        teamTotalGoals.set(l.team, (teamTotalGoals.get(l.team) || 0) + g);
+      }
+    });
+
+    return Array.from(teamTotalGoals.entries())
+      .map(([name, goals]) => ({ teamName: name, score: goals }))
+      .sort((a, b) => Number(b.score) - Number(a.score));
+  }
+
+  public calculateLeastConcededTeams(maxJornada: number): StandingScore[] {
+    if (isNaN(maxJornada) || maxJornada <= 0) return [];
+    const teamTotalPDef = new Map<string, number>(this.teams.map(t => [t, 0]));
+    const playerMap = new Map(this.players.map(p => [p.name, p]));
+
+    this.lineups.forEach(l => {
+      if (l.jornada <= maxJornada && teamTotalPDef.has(l.team) && l.playerName) {
+        const p = playerMap.get(l.playerName);
+        if (p && (p.position === 'Portero' || p.position === 'Defensa')) {
+          const def = p?.jornadasDef?.[l.jornada] || 0;
+          teamTotalPDef.set(l.team, (teamTotalPDef.get(l.team) || 0) + def);
+        }
+      }
+    });
+
+    return Array.from(teamTotalPDef.entries())
+      .map(([name, pDef]) => ({ teamName: name, score: pDef }))
+      .sort((a, b) => Number(a.score) - Number(b.score));
+  }
+
+  public getPlayersForMercado(): Player[] {
+    const positionOrder: Record<string, number> = { 'Portero': 1, 'Defensa': 2, 'Medio': 3, 'Delantero': 4, 'N/A': 99 };
+    const seen = new Set<string>();
+
+    const maxJ = this.getMaxJornada();
+    const activeLineups = this.lineups.filter(l => l.jornada === maxJ && l.playerName && l.playerName.trim() !== '');
+    const activeAssigned = new Set(activeLineups.map(l => l.playerName.trim().toLowerCase()));
+
+    return this.players
+      .filter(p => {
+        if (!p.name || !p.name.trim() || p.status === 'Abandona Liga') return false;
+        const key = `${p.name.trim().toLowerCase()}_${p.realTeam?.trim().toLowerCase() || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(p => {
+        let total = 0;
+        if (p.jornadasPoints) {
+          Object.values(p.jornadasPoints).forEach(val => {
+            if (typeof val === 'number') total += val;
+          });
+        }
+        const lowerName = p.name.trim().toLowerCase();
+        const computedStatus: 'Disponible' | 'Fichado' | 'Abandona Liga' = p.status === 'Abandona Liga'
+          ? 'Abandona Liga'
+          : (activeAssigned.has(lowerName) ? 'Fichado' : 'Disponible');
+
+        return {
+          ...p,
+          status: computedStatus,
+          totalPoints: parseFloat(total.toFixed(2))
+        };
+      })
+      .sort((a, b) => {
+        const eq = a.realTeam.localeCompare(b.realTeam);
+        if (eq !== 0) return eq;
+        return (positionOrder[a.position] || 99) - (positionOrder[b.position] || 99);
+      });
+  }
+
+  public getTeamPlayersForJornada(teamName: string, jornada: number): string[] {
+    if (!teamName || isNaN(jornada) || jornada <= 0) return [];
+    const seen = new Set<string>();
+    return this.lineups
+      .filter(l => l.team.trim() === teamName.trim() && l.jornada === jornada && l.playerName.trim() !== '')
+      .map(l => l.playerName.trim())
+      .filter(name => {
+        const key = name.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort();
+  }
+
+  public getAvailablePlayersForJornada(jornada: number): Player[] {
+    if (isNaN(jornada) || jornada <= 0) return [];
+    const assignedPlayers = new Set(
+      this.lineups
+        .filter(l => l.jornada === jornada && l.playerName)
+        .map(l => l.playerName.trim().toLowerCase())
+    );
+
+    const seen = new Set<string>();
+    return this.players
+      .filter(p => {
+        if (!p.name || !p.name.trim() || p.status === 'Abandona Liga') return false;
+        const lowerName = p.name.trim().toLowerCase();
+        if (assignedPlayers.has(lowerName)) return false;
+        const key = `${lowerName}_${p.realTeam?.trim().toLowerCase() || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(p => ({
+        ...p,
+        status: 'Disponible' as const
+      }))
+      .sort((a, b) => {
+        const teamComp = a.realTeam.localeCompare(b.realTeam);
+        if (teamComp !== 0) return teamComp;
+        return a.name.localeCompare(b.name);
+      });
+  }
+
+  public getAvailablePlayersForDraft(): Player[] {
+    return this.getAvailablePlayersForJornada(1);
+  }
+
+  public async processTransfer(
+    teamName: string,
+    token: string,
+    jornada: number,
+    playerOut: string | string[],
+    playerIn: string | string[],
+    isAbandonment: boolean | boolean[]
+  ): Promise<{ success: boolean; message: string; outdatedScript?: boolean }> {
+    if (Array.isArray(playerOut) && Array.isArray(playerIn)) {
+      const transfers = playerOut.map((pOut, idx) => ({
+        playerOut: pOut,
+        playerIn: playerIn[idx],
+        isAbandonment: Array.isArray(isAbandonment) ? isAbandonment[idx] : !!isAbandonment
+      }));
+      return await this.processMultipleTransfers(teamName, token, jornada, transfers);
+    }
+
+    return await this.processMultipleTransfers(teamName, token, jornada, [{
+      playerOut: String(playerOut),
+      playerIn: String(playerIn),
+      isAbandonment: !!isAbandonment
+    }]);
+  }
+
+  public async processMultipleTransfers(
+    teamName: string,
+    token: string,
+    jornada: number,
+    transfers: Array<{ playerOut: string; playerIn: string; isAbandonment?: boolean }>
+  ): Promise<{ success: boolean; message: string; outdatedScript?: boolean }> {
+    if (!this.validateTeamToken(teamName, token)) {
+      return { success: false, message: 'Error de autenticación: Token inválido o equipo incorrecto.' };
+    }
+
+    jornada = parseInt(String(jornada), 10);
+    teamName = teamName.trim();
+
+    if (!teamName || isNaN(jornada) || jornada <= 0 || !Array.isArray(transfers) || transfers.length === 0) {
+      return { success: false, message: 'Datos incompletos o lista de fichajes vacía.' };
+    }
+
+    // 0. Validar si la jornada completa ya ha sido disputada o cerrada (con puntuaciones oficiales)
+    const jornadaCheck = this.isJornadaPlayed(jornada);
+    if (jornadaCheck.isPlayed) {
+      return {
+        success: false,
+        message: `Fichaje denegado: ${jornadaCheck.reason || `La Jornada ${jornada} ya ha sido disputada.`}`
+      };
+    }
+
+    const playerMap = new Map(this.players.map(p => [p.name, p]));
+    const currentLineupsForJornada = this.lineups.filter(l => l.jornada === jornada);
+
+    // 1. Validar integridad de la solicitud y límite individual por equipo real según Horarios_Equipos y partidos disputados
+    const playersOutSet = new Set<string>();
+    const playersInSet = new Set<string>();
+
+    for (let i = 0; i < transfers.length; i++) {
+      const t = transfers[i];
+      const pOut = (t.playerOut || '').trim();
+      const pIn = (t.playerIn || '').trim();
+
+      if (!pOut || !pIn) {
+        return { success: false, message: `El fichaje #${i + 1} tiene datos incompletos.` };
+      }
+      if (pOut === pIn) {
+        return { success: false, message: `En el fichaje #${i + 1}, el jugador que entra (${pIn}) no puede ser el mismo que sale.` };
+      }
+      if (playersOutSet.has(pOut)) {
+        return { success: false, message: `El jugador saliente "${pOut}" está duplicado en la lista de fichajes.` };
+      }
+      if (playersInSet.has(pIn)) {
+        return { success: false, message: `El jugador entrante "${pIn}" está duplicado en la lista de fichajes.` };
+      }
+
+      playersOutSet.add(pOut);
+      playersInSet.add(pIn);
+
+      const isPlayerOutInTeam = currentLineupsForJornada.some(
+        l => l.team.trim() === teamName && l.playerName.trim() === pOut
+      );
+      if (!isPlayerOutInTeam) {
+        return { success: false, message: `El jugador "${pOut}" no está alineado en "${teamName}" para la Jornada ${jornada}.` };
+      }
+
+      const existingTeamForIn = currentLineupsForJornada.find(l => l.playerName.trim() === pIn);
+      if (existingTeamForIn && existingTeamForIn.team.trim() !== teamName) {
+        return { success: false, message: `El jugador "${pIn}" ya pertenece a "${existingTeamForIn.team}" en la Jornada ${jornada}.` };
+      }
+
+      // Validar si el partido del jugador saliente ya se disputó (cuenta con puntos o su horario ha vencido)
+      const outPlayed = this.isPlayerMatchPlayed(pOut, jornada);
+      if (outPlayed.isPlayed) {
+        return {
+          success: false,
+          message: `Fichaje cancelado: El jugador saliente "${pOut}" no se puede cambiar. ${outPlayed.reason}`
+        };
+      }
+
+      // Validar si el partido del jugador entrante ya se disputó (cuenta con puntos o su horario ha vencido)
+      const inPlayed = this.isPlayerMatchPlayed(pIn, jornada);
+      if (inPlayed.isPlayed) {
+        return {
+          success: false,
+          message: `Fichaje cancelado: El jugador entrante "${pIn}" no se puede fichar. ${inPlayed.reason}`
+        };
+      }
+
+      const realTeamOut = this.getRealTeamOfPlayer(pOut);
+      const realTeamIn = this.getRealTeamOfPlayer(pIn);
+
+      if (!realTeamOut || !realTeamIn) {
+        return { success: false, message: `Error: No se pudo verificar el equipo de procedencia o destino para "${pOut}" o "${pIn}".` };
+      }
+
+      const checkOut = this.getTeamScheduleDeadline(jornada, realTeamOut);
+      if (!checkOut.isOpen) {
+        return {
+          success: false,
+          message: `Fichaje cancelado: El jugador "${pOut}" (${realTeamOut}) no se puede transferir. ${checkOut.reason || 'El partido de su equipo ya ha comenzado o su fecha límite ha vencido.'}`
+        };
+      }
+
+      const checkIn = this.getTeamScheduleDeadline(jornada, realTeamIn);
+      if (!checkIn.isOpen) {
+        return {
+          success: false,
+          message: `Fichaje cancelado: El jugador "${pIn}" (${realTeamIn}) no se puede transferir. ${checkIn.reason || 'El partido de su equipo ya ha comenzado o su fecha límite ha vencido.'}`
+        };
+      }
+    }
+
+    // 2. Comprobar valor máximo de equipo
+    let totalOutVal = 0;
+    let totalInVal = 0;
+
+    transfers.forEach(t => {
+      const pOutD = playerMap.get(t.playerOut.trim());
+      const pInD = playerMap.get(t.playerIn.trim());
+      totalOutVal += typeof pOutD?.value === 'number' ? pOutD.value : 0;
+      totalInVal += typeof pInD?.value === 'number' ? pInD.value : 0;
+    });
+
+    const currentVal = this.calculateTeamValue(teamName, jornada);
+    const potentialNewVal = currentVal - totalOutVal + totalInVal;
+
+    if (potentialNewVal > MAX_TEAM_VALUE) {
+      return {
+        success: false,
+        message: `El total de fichajes excede el valor máximo del equipo (${MAX_TEAM_VALUE}). Valor actual: ${currentVal}, Nuevo valor previsto: ${potentialNewVal}.`
+      };
+    }
+
+    // 3. Conteo de fichajes normales para calcular costes previstos
+    let normalTransfersCount = this.transfers.filter(
+      tr => tr.team.trim() === teamName && tr.type === 'Normal'
+    ).length;
+
+    const plannedTransfers: Array<{
+      pOut: string;
+      pIn: string;
+      isAbandon: boolean;
+      cost: number;
+      type: 'Normal' | 'Abandono';
+      pInDetails: any;
+    }> = [];
+
+    const processedSummary: string[] = [];
+
+    for (const t of transfers) {
+      const pOut = t.playerOut.trim();
+      const pIn = t.playerIn.trim();
+      const isAbandon = !!t.isAbandonment;
+      const pInDetails = playerMap.get(pIn);
+
+      let cost = 0;
+      let transferType: 'Normal' | 'Abandono' = 'Normal';
+
+      if (isAbandon) {
+        transferType = 'Abandono';
+      } else {
+        if (normalTransfersCount >= FREE_TRANSFERS_PER_TEAM) {
+          cost = TRANSFER_COST;
+        }
+        normalTransfersCount++;
+      }
+
+      plannedTransfers.push({
+        pOut,
+        pIn,
+        isAbandon,
+        cost,
+        type: transferType,
+        pInDetails
+      });
+
+      processedSummary.push(`${pIn} por ${pOut} (${cost === 0 ? 'Gratis' : cost + '€'})`);
+    }
+
+    // 4. Validar y sincronizar con Google Sheets ANTES de alterar el historial o la alineación
+    let gasMessage = '';
+    let isOutdated = false;
+    const targetGasUrl = this.getGasUrl();
+    const requestId = 'tr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
+    if (targetGasUrl) {
+      try {
+        const enrichedTransfers = transfers.map(t => ({
+          ...t,
+          realTeamOut: this.getRealTeamOfPlayer(t.playerOut),
+          realTeamIn: this.getRealTeamOfPlayer(t.playerIn)
+        }));
+
+        const gasRes = await this.executeGasAction({
+          action: 'transfer',
+          team: teamName,
+          token: token,
+          jornada: Number(jornada),
+          transfers: enrichedTransfers,
+          requestId
+        });
+        if (gasRes.outdatedScript || gasRes.pendingSheetsSync) {
+          isOutdated = true;
+          gasMessage = ' (Guardado en el servidor central)';
+        } else if (gasRes.success) {
+          gasMessage = ' (Sincronizado con Google Sheets en tiempo real)';
+        } else {
+          // Si Google Sheets rechaza explícitamente (ej: partido comenzado, fecha posterior, o token no autorizado)
+          if (gasRes.message && (
+            gasRes.message.includes('denegado') ||
+            gasRes.message.includes('incorrecto') ||
+            gasRes.message.includes('no autorizado') ||
+            gasRes.message.includes('disputada') ||
+            gasRes.message.includes('no permitido') ||
+            gasRes.message.includes('inválido') ||
+            gasRes.message.includes('invalido') ||
+            gasRes.message.includes('partido') ||
+            gasRes.message.includes('comenzado') ||
+            gasRes.message.includes('horario') ||
+            gasRes.message.includes('fecha límite') ||
+            gasRes.message.includes('Token') ||
+            gasRes.message.includes('cerrada')
+          )) {
+            return {
+              success: false,
+              message: `Error de validación en Google Sheets: ${gasRes.message}`
+            };
+          }
+          // Si fue timeout o problema de conectividad temporal
+          gasMessage = '';
+        }
+      } catch (e: any) {
+        gasMessage = '';
+      }
+    }
+
+    // 5. SOLO tras la validación confirmada, aplicar cambios a la alineación, jugadores y registrar en Historial
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                    now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+
+    plannedTransfers.forEach(pt => {
+      const lineupEntry = this.lineups.find(
+        l => l.team.trim() === teamName && l.jornada === jornada && l.playerName.trim() === pt.pOut
+      );
+
+      if (lineupEntry && pt.pInDetails) {
+        lineupEntry.playerName = pt.pIn;
+        lineupEntry.realTeam = pt.pInDetails.realTeam;
+        lineupEntry.position = pt.pInDetails.position;
+        lineupEntry.value = pt.pInDetails.value;
+
+        const normOut = pt.pOut.toLowerCase();
+        const normIn = pt.pIn.toLowerCase();
+
+        this.players.forEach(p => {
+          const pNameLower = (p.name || '').trim().toLowerCase();
+          if (pNameLower === normIn) {
+            p.status = 'Fichado';
+          }
+          if (pNameLower === normOut) {
+            p.status = pt.isAbandon ? 'Abandona Liga' : 'Disponible';
+          }
+        });
+
+        // Registrar en el historial UNA SOLA VEZ tras la validación (evitar anotación doble)
+        const alreadyRecorded = this.transfers.some(existing =>
+          existing.team.trim().toLowerCase() === teamName.toLowerCase() &&
+          existing.jornada === jornada &&
+          existing.playerOut.trim().toLowerCase() === pt.pOut.toLowerCase() &&
+          existing.playerIn.trim().toLowerCase() === pt.pIn.toLowerCase() &&
+          existing.timestamp === dateStr
+        );
+
+        if (!alreadyRecorded) {
+          this.transfers.unshift({
+            timestamp: dateStr,
+            team: teamName,
+            jornada,
+            playerOut: pt.pOut,
+            playerIn: pt.pIn,
+            cost: pt.cost,
+            type: pt.type
+          });
+        }
+
+        // Disparar aviso automático (Telegram y GitHub Actions)
+        this.triggerFichajeNotification({
+          equipo: teamName,
+          jugadorEntra: pt.pIn,
+          jugadorSale: pt.pOut,
+          jornada,
+          coste: pt.cost.toFixed(2),
+          tipo: pt.type
+        }).catch(err => {
+          console.warn('[gasEngine] Error enviando notificación de fichaje:', err);
+        });
+      }
+    });
+
+    this.saveState();
+    this.notify();
+
+    return {
+      success: true,
+      outdatedScript: isOutdated,
+      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.${gasMessage}`
+    };
+  }
+
+  public async processDraftSelection(teamName: string, token: string, playerName: string): Promise<{ success: boolean; message: string; outdatedScript?: boolean }> {
+    const JORNADA_DRAFT = 1;
+    if (!this.validateTeamToken(teamName, token)) {
+      return { success: false, message: 'Error de autenticación: Token inválido o equipo incorrecto.' };
+    }
+
+    teamName = teamName.trim();
+    playerName = playerName.trim();
+
+    if (!teamName || !playerName) {
+      return { success: false, message: 'Datos incompletos. Selecciona equipo y jugador.' };
+    }
+
+    // Comprobar orden de elección y turnos del Draft (si hay orden configurado)
+    const turnValidation = this.canTeamPickInDraft(teamName);
+    if (!turnValidation.allowed) {
+      return {
+        success: false,
+        message: turnValidation.reason || `No es el turno de "${teamName}" para elegir en el Draft.`
+      };
+    }
+
+    const normPlayer = playerName.trim().toLowerCase();
+    const currentLineupsJ1 = this.lineups.filter(l => l.jornada === JORNADA_DRAFT);
+    const isAlreadyDrafted = currentLineupsJ1.some(l => l.playerName.trim().toLowerCase() === normPlayer);
+
+    if (isAlreadyDrafted) {
+      const draftingTeam = currentLineupsJ1.find(l => l.playerName.trim().toLowerCase() === normPlayer)?.team || 'otro equipo';
+      return { success: false, message: `El jugador "${playerName}" ya ha sido seleccionado por "${draftingTeam}".` };
+    }
+
+    const playersInTeam = currentLineupsJ1.filter(l => l.team.trim() === teamName);
+    if (playersInTeam.length >= MAX_DRAFT_PLAYERS_PER_TEAM) {
+      return { success: false, message: `El equipo "${teamName}" ya tiene ${MAX_DRAFT_PLAYERS_PER_TEAM} jugadores seleccionados para el Draft.` };
+    }
+
+    const playerDetails = this.players.find(p => p.name.trim().toLowerCase() === normPlayer);
+    if (!playerDetails) {
+      return { success: false, message: `Error: No se encontraron detalles para "${playerName}".` };
+    }
+    if (playerDetails.status === 'Abandona Liga') {
+      return { success: false, message: `El jugador "${playerName}" no está disponible en la liga.` };
+    }
+
+    const playerVal = typeof playerDetails.value === 'number' ? playerDetails.value : 0;
+    const currentTeamVal = this.calculateTeamValue(teamName, JORNADA_DRAFT);
+    const potentialNewVal = currentTeamVal + playerVal;
+
+    if (potentialNewVal > MAX_TEAM_VALUE) {
+      return { success: false, message: `La selección excede el valor máximo del equipo (${MAX_TEAM_VALUE}). Valor actual: ${currentTeamVal}, Jugador: ${playerVal}, Potencial: ${potentialNewVal}.` };
+    }
+
+    const currentTurnBefore = this.getCurrentDraftTurn();
+
+    // 1. Inscribir en alineaciones de la Jornada 1
+    this.lineups.push({
+      team: teamName,
+      jornada: JORNADA_DRAFT,
+      playerName: playerDetails.name,
+      realTeam: playerDetails.realTeam,
+      position: playerDetails.position,
+      value: playerDetails.value
+    });
+
+    // 2. Cambiar de Disponible a Fichado
+    this.players.forEach(p => {
+      if ((p.name || '').trim().toLowerCase() === normPlayer) {
+        p.status = 'Fichado';
+      }
+    });
+
+    // 3. Inscribir en Historial_Draft (solo si no existe ya para este jugador)
+    const alreadyInDrafts = this.drafts.some(
+      d => (d.playerName || '').trim().toLowerCase() === normPlayer
+    );
+
+    if (!alreadyInDrafts) {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                      now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+
+      this.drafts.unshift({
+        timestamp: dateStr,
+        team: teamName,
+        playerName: playerDetails.name,
+        realTeam: playerDetails.realTeam,
+        position: playerDetails.position,
+        value: playerDetails.value
+      });
+    }
+
+    this.saveState();
+    this.notify();
+
+    // Calcular el siguiente turno y estado de finalización del Draft
+    const nextTurn = this.getCurrentDraftTurn();
+    const teamsList = this.getTeams();
+    const maxTotalPicks = teamsList.length * 11;
+    const currentPickNumber = this.drafts.length;
+
+    // Disparar aviso a Telegram de la elección realizada y anunciar el siguiente turno
+    this.triggerDraftPickNotification({
+      team: teamName,
+      player: playerName,
+      realTeam: playerDetails.realTeam,
+      position: playerDetails.position,
+      value: playerVal,
+      round: currentTurnBefore.round,
+      pickNumber: currentPickNumber,
+      totalPicks: maxTotalPicks,
+      nextTeam: nextTurn.isComplete ? null : nextTurn.activeTeam,
+      nextRound: nextTurn.isComplete ? null : nextTurn.round,
+      isComplete: nextTurn.isComplete
+    });
+
+    // Si el Draft ha concluido con todas las 11 rondas, disparar aviso especial de finalización
+    if (nextTurn.isComplete) {
+      this.triggerDraftCompletedNotification({
+        totalPicks: currentPickNumber,
+        teamsCount: teamsList.length
+      });
+    }
+
+    // Sincronizar en tiempo real con Google Sheets
+    let gasMessage = '';
+    let isOutdated = false;
+    const targetGasUrl = this.getGasUrl();
+    if (targetGasUrl) {
+      try {
+        const gasRes = await this.executeGasAction({
+          action: 'draft',
+          team: teamName,
+          token: token,
+          player: playerName
+        });
+        if (gasRes.outdatedScript) {
+          isOutdated = false;
+          gasMessage = '';
+        } else if (gasRes.success) {
+          gasMessage = '';
+        } else {
+          gasMessage = '';
+        }
+      } catch (e: any) {
+        gasMessage = '';
+      }
+    }
+
+    return {
+      success: true,
+      outdatedScript: false,
+      message: `¡Selección completada! "${playerName}" se une a "${teamName}". Valor actual del equipo: ${potentialNewVal}. Jugadores: ${playersInTeam.length + 1}/${MAX_DRAFT_PLAYERS_PER_TEAM}.`
+    };
+  }
+
+  public getTransferHistory(): TransferRecord[] {
+    const seen = new Set<string>();
+    const uniqueTransfers: TransferRecord[] = [];
+    for (const t of this.transfers) {
+      const tNorm = String(t.team || '').trim().toLowerCase();
+      if (DEMO_TEAM_NAMES.includes(tNorm)) continue;
+      const jNorm = t.jornada;
+      const outNorm = String(t.playerOut || '').trim().toLowerCase();
+      const inNorm = String(t.playerIn || '').trim().toLowerCase();
+      const timeNorm = String(t.timestamp || '').trim();
+      const key = `${timeNorm}:::${tNorm}:::${jNorm}:::${outNorm}:::${inNorm}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueTransfers.push(t);
+      }
+    }
+    return uniqueTransfers;
+  }
+
+  public getDraftHistory(): DraftRecord[] {
+    const seen = new Set<string>();
+    const uniqueDrafts: DraftRecord[] = [];
+    for (const d of this.drafts) {
+      const pNorm = String(d.playerName || '').trim().toLowerCase();
+      const tNorm = String(d.team || '').trim().toLowerCase();
+      if (DEMO_TEAM_NAMES.includes(tNorm)) continue;
+      const key = `${tNorm}:::${pNorm}`;
+      if (pNorm && !seen.has(key)) {
+        seen.add(key);
+        uniqueDrafts.push(d);
+      }
+    }
+    return uniqueDrafts;
+  }
+
+  public getAccountingData(): AccountingData {
+    // Para el cálculo de Caja, la última jornada de aportes y premios semanales
+    // es la última jornada efectivamente disputada (con puntos en la columna de la hoja Jugadores).
+    const lastPlayedJornada = this.getMaxJornadaFromPlayersSheet();
+    const maxJornada = lastPlayedJornada > 0 ? lastPlayedJornada : 1;
+    const numTeams = this.getNumberOfTeams();
+    const teamNames = this.getTeamNames();
+    const transferHistory = this.getTransferHistory();
+
+    let totalContributions = 0;
+    let totalTransferFees = 0;
+    let totalPrizeMoneyAwarded = 0;
+
+    const teamBalanceMap = new Map<string, { contributions: number; transferFees: number; prizes: number; balance: number }>();
+    teamNames.forEach(name => {
+      teamBalanceMap.set(name, { contributions: 0, transferFees: 0, prizes: 0, balance: 0 });
+    });
+
+    const findTeamKey = (name: string): string | null => {
+      if (!name) return null;
+      if (teamBalanceMap.has(name)) return name;
+      const clean = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      for (const t of teamNames) {
+        const cleanT = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        if (cleanT === clean || cleanT.includes(clean) || clean.includes(cleanT)) {
+          return t;
+        }
+      }
+      return null;
+    };
+
+    // 1. Costes de fichajes por equipo
+    const teamTransfers = new Map<string, TransferRecord[]>();
+    teamNames.forEach(t => teamTransfers.set(t, []));
+
+    transferHistory.forEach(tr => {
+      const matched = findTeamKey(tr.team);
+      if (matched) {
+        teamTransfers.get(matched)?.push(tr);
+      }
+    });
+
+    teamTransfers.forEach((trList, tName) => {
+      const b = teamBalanceMap.get(tName);
+      if (!b) return;
+
+      let teamNormalCount = 0;
+      let teamFees = 0;
+
+      trList.forEach(tr => {
+        const cost = parseCleanNumber(tr.cost);
+        const isAbandon = tr.type === 'Abandono' || (tr as any).motivo === 'Abandono';
+
+        if (cost > 0) {
+          teamFees += cost;
+          if (!isAbandon) teamNormalCount++;
+        } else if (!isAbandon) {
+          // Aplicar regla oficial de la liga: 3 fichajes gratis por equipo, y 2.00€ para posteriores
+          if (teamNormalCount >= FREE_TRANSFERS_PER_TEAM) {
+            teamFees += TRANSFER_COST;
+            tr.cost = TRANSFER_COST;
+          }
+          teamNormalCount++;
+        }
+      });
+
+      b.transferFees = teamFees;
+      totalTransferFees += teamFees;
+    });
+
+    // 2. Aportes y premios semanales
+    // Solo computar aportes y premios para jornadas efectivamente disputadas (con puntos en Jugadores)
+    // a partir de la primera jornada de aportaciones configurada (firstContributionJornada).
+    if (lastPlayedJornada >= this.firstContributionJornada) {
+      for (let j = this.firstContributionJornada; j <= lastPlayedJornada; j++) {
+        totalContributions += numTeams * WEEKLY_CONTRIBUTION;
+        teamNames.forEach(tName => {
+          const b = teamBalanceMap.get(tName);
+          if (b) b.contributions += WEEKLY_CONTRIBUTION;
+        });
+
+        const weeklyRanking = this.calculateWeeklyScores(j);
+        if (weeklyRanking.length > 0 && parseFloat(String(weeklyRanking[0].score)) > 0) {
+          const topScore = weeklyRanking[0].score;
+          const winners = weeklyRanking.filter(team => team.score === topScore);
+          const totalPrize = numTeams * 1;
+          const individualPrize = totalPrize / winners.length;
+          totalPrizeMoneyAwarded += totalPrize;
+
+          winners.forEach(winner => {
+            const matched = findTeamKey(winner.teamName);
+            if (matched) {
+              const b = teamBalanceMap.get(matched);
+              if (b) b.prizes += individualPrize;
+            }
+          });
+        }
+      }
+    }
+
+    teamBalanceMap.forEach(details => {
+      details.balance = details.prizes - details.contributions - details.transferFees;
+    });
+
+    const totalCajaBeforeFinalPrizes = totalContributions + totalTransferFees - totalPrizeMoneyAwarded;
+    const finalJornada = 38;
+    const isFinalJornada = maxJornada >= finalJornada;
+    const potToDistribute = Math.max(0, totalCajaBeforeFinalPrizes);
+
+    // 3. Reparto de Premios Finales
+    const is6Teams = numTeams === 6;
+    const p1Pct = is6Teams ? 0.335 : 0.30;
+    const p2Pct = is6Teams ? 0.255 : 0.23;
+    const p3Pct = is6Teams ? 0.190 : 0.17;
+    const pPenultPct = is6Teams ? 0.0 : 0.10;
+    const pGoalsPct = is6Teams ? 0.110 : 0.10;
+    const pDefPct = is6Teams ? 0.110 : 0.10;
+
+    const generalScores = this.calculateGeneralScores(maxJornada);
+    const mostGoals = this.calculateMostGoalsTeams(maxJornada);
+    const leastConceded = this.calculateLeastConcededTeams(maxJornada);
+
+    const teamFinalPrizesMap = new Map<string, number>();
+    teamNames.forEach(t => teamFinalPrizesMap.set(t, 0));
+
+    const finalPrizes: FinalPrize[] = [];
+    const finalPrizeAmounts: Record<string, string> = {};
+
+    // 1ª Posición General
+    if (generalScores.length > 0) {
+      const t1 = generalScores[0].teamName;
+      const amt1 = potToDistribute * p1Pct;
+      teamFinalPrizesMap.set(t1, (teamFinalPrizesMap.get(t1) || 0) + amt1);
+      finalPrizes.push({
+        type: '1ª Posición General',
+        team: t1,
+        percentage: (p1Pct * 100).toFixed(1) + '%',
+        prize: amt1.toFixed(2),
+        categoryPrize: amt1.toFixed(2)
+      });
+      finalPrizeAmounts['1ª Posición General'] = amt1.toFixed(2);
+    }
+
+    // 2ª Posición General
+    if (generalScores.length > 1) {
+      const t2 = generalScores[1].teamName;
+      const amt2 = potToDistribute * p2Pct;
+      teamFinalPrizesMap.set(t2, (teamFinalPrizesMap.get(t2) || 0) + amt2);
+      finalPrizes.push({
+        type: '2ª Posición General',
+        team: t2,
+        percentage: (p2Pct * 100).toFixed(1) + '%',
+        prize: amt2.toFixed(2),
+        categoryPrize: amt2.toFixed(2)
+      });
+      finalPrizeAmounts['2ª Posición General'] = amt2.toFixed(2);
+    }
+
+    // 3ª Posición General
+    if (generalScores.length > 2) {
+      const t3 = generalScores[2].teamName;
+      const amt3 = potToDistribute * p3Pct;
+      teamFinalPrizesMap.set(t3, (teamFinalPrizesMap.get(t3) || 0) + amt3);
+      finalPrizes.push({
+        type: '3ª Posición General',
+        team: t3,
+        percentage: (p3Pct * 100).toFixed(1) + '%',
+        prize: amt3.toFixed(2),
+        categoryPrize: amt3.toFixed(2)
+      });
+      finalPrizeAmounts['3ª Posición General'] = amt3.toFixed(2);
+    }
+
+    // Penúltima Posición General (si no son 6 equipos)
+    if (!is6Teams && generalScores.length >= 4) {
+      const tPenult = generalScores[generalScores.length - 2].teamName;
+      const amtPenult = potToDistribute * pPenultPct;
+      teamFinalPrizesMap.set(tPenult, (teamFinalPrizesMap.get(tPenult) || 0) + amtPenult);
+      finalPrizes.push({
+        type: 'Penúltima Posición General',
+        team: tPenult,
+        percentage: (pPenultPct * 100).toFixed(1) + '%',
+        prize: amtPenult.toFixed(2),
+        categoryPrize: amtPenult.toFixed(2)
+      });
+      finalPrizeAmounts['Penúltima Posición General'] = amtPenult.toFixed(2);
+    }
+
+    // Equipo Más Goleador
+    if (mostGoals.length > 0) {
+      const topGoals = mostGoals[0].score;
+      const winners = mostGoals.filter(t => t.score === topGoals);
+      const totalGoalsPrize = potToDistribute * pGoalsPct;
+      const indGoalsPrize = totalGoalsPrize / winners.length;
+      winners.forEach(w => {
+        teamFinalPrizesMap.set(w.teamName, (teamFinalPrizesMap.get(w.teamName) || 0) + indGoalsPrize);
+      });
+      finalPrizes.push({
+        type: 'Equipo Más Goleador',
+        team: winners.map(w => w.teamName).join(', '),
+        percentage: (pGoalsPct * 100).toFixed(1) + '%',
+        prize: totalGoalsPrize.toFixed(2),
+        categoryPrize: totalGoalsPrize.toFixed(2)
+      });
+      finalPrizeAmounts['Equipo Más Goleador'] = totalGoalsPrize.toFixed(2);
+    }
+
+    // Equipo Menos Goleado
+    if (leastConceded.length > 0) {
+      const topDef = leastConceded[0].score;
+      const winners = leastConceded.filter(t => t.score === topDef);
+      const totalDefPrize = potToDistribute * pDefPct;
+      const indDefPrize = totalDefPrize / winners.length;
+      winners.forEach(w => {
+        teamFinalPrizesMap.set(w.teamName, (teamFinalPrizesMap.get(w.teamName) || 0) + indDefPrize);
+      });
+      finalPrizes.push({
+        type: 'Equipo Menos Goleado',
+        team: winners.map(w => w.teamName).join(', '),
+        percentage: (pDefPct * 100).toFixed(1) + '%',
+        prize: totalDefPrize.toFixed(2),
+        categoryPrize: totalDefPrize.toFixed(2)
+      });
+      finalPrizeAmounts['Equipo Menos Goleado'] = totalDefPrize.toFixed(2);
+    }
+
+    // 4. Balance Final Definitivo por Equipo (Liquidación)
+    const finalBalanceDetails: FinalBalanceDetail[] = Array.from(teamBalanceMap.entries()).map(([team, details]) => {
+      const balJornadas = details.balance;
+      const pFinal = teamFinalPrizesMap.get(team) || 0;
+      const totalFin = balJornadas + pFinal;
+      return {
+        team,
+        balanceJornadas: balJornadas.toFixed(2),
+        premioFinal: pFinal.toFixed(2),
+        totalFinal: totalFin.toFixed(2)
+      };
+    }).sort((a, b) => parseFloat(b.totalFinal) - parseFloat(a.totalFinal));
+
+    // Tras el reparto final de premios realizado al final de la Jornada 38, la caja acumulada es 0
+    const finalCajaAfterFinalPrizes = "0.00";
+
+    return {
+      maxJornada,
+      firstContributionJornada: this.firstContributionJornada,
+      numTeams,
+      totalContributions: totalContributions.toFixed(2),
+      totalTransferFees: totalTransferFees.toFixed(2),
+      totalPrizeMoneyAwarded: totalPrizeMoneyAwarded.toFixed(2),
+      finalCajaBeforeFinalPrizes: totalCajaBeforeFinalPrizes.toFixed(2),
+      finalCajaAfterFinalPrizes,
+      teamBalanceDetails: Array.from(teamBalanceMap.entries()).map(([team, details]) => ({
+        team,
+        contributions: details.contributions.toFixed(2),
+        transferFees: details.transferFees.toFixed(2),
+        prizes: details.prizes.toFixed(2),
+        balance: details.balance.toFixed(2)
+      })).sort((a, b) => a.team.localeCompare(b.team)),
+      finalPrizes,
+      finalPrizeAmounts,
+      finalBalanceDetails,
+      isFinalJornada
+    };
+  }
+
+  // --- Gráficas Helpers ---
+  public getInitialChartData() {
+    return {
+      teams: this.getTeamNames(),
+      maxJornada: this.getMaxJornada()
+    };
+  }
+
+  public getTeamWeeklyScoresChartData(teamName: string) {
+    const maxJornada = this.getMaxJornada();
+    const labels: string[] = [];
+    const scores: number[] = [];
+
+    for (let j = 1; j <= maxJornada; j++) {
+      labels.push(`J${j}`);
+      const weekly = this.calculateWeeklyScores(j);
+      const teamScore = weekly.find(t => t.teamName === teamName);
+      scores.push(teamScore ? parseFloat(String(teamScore.score)) : 0);
+    }
+    return { labels, scores };
+  }
+
+  public getGroupedWeeklyScores() {
+    const teamNames = this.getTeamNames();
+    const maxJornada = this.getMaxJornada();
+    if (maxJornada === 0) return { labels: [], datasets: [] };
+
+    const labels = Array.from({ length: maxJornada }, (_, i) => `J${i + 1}`);
+    const datasets = teamNames.map(teamName => {
+      const data: number[] = [];
+      for (let j = 1; j <= maxJornada; j++) {
+        const weekly = this.calculateWeeklyScores(j);
+        const score = weekly.find(t => t.teamName === teamName)?.score || 0;
+        data.push(parseFloat(String(score)));
+      }
+      return { label: teamName, data };
+    });
+
+    return { labels, datasets };
+  }
+
+  public getGeneralEvolutionChartData() {
+    const teamNames = this.getTeamNames();
+    const maxJornada = this.getMaxJornada();
+    const labels = Array.from({ length: maxJornada }, (_, i) => `J${i + 1}`);
+
+    const teamTotals = new Map<string, number>(teamNames.map(t => [t, 0]));
+    const datasets = teamNames.map(teamName => {
+      const data: number[] = [];
+      let total = 0;
+      for (let j = 1; j <= maxJornada; j++) {
+        const weekly = this.calculateWeeklyScores(j);
+        const score = parseFloat(String(weekly.find(t => t.teamName === teamName)?.score || 0));
+        total += score;
+        data.push(parseFloat(total.toFixed(2)));
+      }
+      return { label: teamName, data };
+    });
+
+    return { labels, datasets };
+  }
+
+  // --- Admin API Functions ---
+
+  public verifyAdminPassword(password: string): boolean {
+    const clean = String(password || '').trim();
+    if (!clean) return false;
+    const current = (this.adminPassword || ADMIN_PASSWORD).trim();
+    return clean === current || clean === ADMIN_PASSWORD;
+  }
+
+  public getAdminPassword(): string {
+    return this.adminPassword || ADMIN_PASSWORD;
+  }
+
+  public async setAdminPassword(currentPass: string, newPass: string): Promise<{ success: boolean; message: string }> {
+    if (!this.verifyAdminPassword(currentPass)) {
+      return { success: false, message: 'La contraseña actual no es correcta.' };
+    }
+    const cleanNew = String(newPass || '').trim();
+    if (!cleanNew || cleanNew.length < 3) {
+      return { success: false, message: 'La nueva contraseña debe tener al menos 3 caracteres.' };
+    }
+
+    this.adminPassword = cleanNew;
+    localStorage.setItem('lfa_admin_password', cleanNew);
+
+    try {
+      const resp = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: currentPass, newPassword: cleanNew })
+      });
+      if (resp.ok) {
+        this.notify();
+        return { success: true, message: '¡Contraseña de Administrador cambiada y guardada con éxito en la App y servidor!' };
+      }
+    } catch {}
+
+    this.pushLeagueConfigToServer({ adminPassword: cleanNew }, currentPass).catch(() => {});
+    this.notify();
+    return { success: true, message: '¡Contraseña de Administrador actualizada correctamente!' };
+  }
+
+  public getLeagueTexts(): LeagueTexts {
+    return { ...this.leagueTexts };
+  }
+
+  public async saveLeagueTexts(texts: Partial<LeagueTexts>, adminPass: string): Promise<{ success: boolean; message: string }> {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña de administrador incorrecta.' };
+    }
+    this.leagueTexts = {
+      ...this.leagueTexts,
+      ...texts
+    };
+    localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
+    await this.pushLeagueConfigToServer({ leagueTexts: this.leagueTexts }, adminPass);
+    this.notify();
+    return { success: true, message: 'Textos y valores de la liga actualizados con éxito.' };
+  }
+
+  public getCustomCodeGs(): string {
+    if (this.customCodeGs && this.customCodeGs.trim().length > 100) {
+      if (this.customCodeGs.includes('onOpen') && this.customCodeGs.includes('copyLineupsInSheets')) {
+        return this.customCodeGs;
+      }
+    }
+    return generateCustomGasCode({
+      adminPassword: this.adminPassword,
+      firstContributionJornada: this.firstContributionJornada,
+      telegramBotToken: this.notificationConfig.telegramBotToken,
+      telegramChatId: this.notificationConfig.telegramChatId,
+      githubRepo: this.notificationConfig.githubRepo,
+      githubToken: this.notificationConfig.githubToken,
+      maxTeamValue: this.leagueTexts.maxTeamValue,
+      weeklyContribution: this.leagueTexts.weeklyContribution,
+      transferCost: this.leagueTexts.transferCost,
+      freeTransfers: this.leagueTexts.freeTransfers
+    });
+  }
+
+  public async saveCustomCodeGs(code: string, adminPass: string): Promise<{ success: boolean; message: string }> {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña de administrador incorrecta.' };
+    }
+    this.customCodeGs = code;
+    localStorage.setItem('lfa_custom_code_gs', code);
+    await this.pushLeagueConfigToServer({ customCodeGs: code }, adminPass);
+    this.notify();
+    return { success: true, message: '¡Archivo Código.gs guardado y sincronizado con éxito en la App!' };
+  }
+
+  public async resetCustomCodeGs(adminPass: string): Promise<{ success: boolean; message: string }> {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña de administrador incorrecta.' };
+    }
+    this.customCodeGs = '';
+    localStorage.removeItem('lfa_custom_code_gs');
+    await this.pushLeagueConfigToServer({ customCodeGs: '' }, adminPass);
+    this.notify();
+    return { success: true, message: 'Código.gs restablecido a la plantilla dinámica con tus parámetros actuales.' };
+  }
+
+  public isPlayerMode(): boolean {
+    if (typeof window === 'undefined') return true;
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    const admin = params.get('admin');
+    const rol = params.get('rol');
+
+    // Modo Administrador se activa ÚNICAMENTE si la URL incluye explícitamente ?mode=admin, ?admin=1, ?admin=true o ?rol=admin
+    if (mode === 'admin' || admin === '1' || admin === 'true' || rol === 'admin') {
+      return false;
+    }
+
+    // El enlace general (ej: https://ligafantasticaaic.github.io/LFA-AI-Studio/) y cualquier acceso sin parámetro
+    // es por defecto MODO JUGADOR (la pestaña de Admin permanece 100% oculta e inaccesible)
+    return true;
+  }
+
+  public setPlayerMode(active: boolean): void {
+    this.playerModeActive = active;
+    try {
+      const url = new URL(window.location.href);
+      if (active) {
+        // Enlace general sin parámetros = modo jugador
+        url.searchParams.delete('mode');
+        url.searchParams.delete('admin');
+        url.searchParams.delete('rol');
+      } else {
+        // Para modo administrador se añade ?mode=admin a la URL
+        url.searchParams.set('mode', 'admin');
+      }
+      window.history.replaceState({}, document.title, url.toString());
+    } catch {}
+    this.notify();
+  }
+
+  public getPlayerShareUrl(): string {
+    if (typeof window === 'undefined') return '';
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    // Enlace general sin parámetros: abre por defecto en modo jugador
+    return `${origin}${pathname}`;
+  }
+
+  public getAdminShareUrl(): string {
+    if (typeof window === 'undefined') return '';
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    // Enlace con ?mode=admin para acceder como administrador
+    return `${origin}${pathname}?mode=admin`;
+  }
+
+  public async diagnoseTelegram(token: string): Promise<{
+    ok: boolean;
+    error?: string;
+    bot?: { id: number; username: string; first_name: string; can_join_groups?: boolean };
+    detectedChats?: Array<{ id: string; title: string; type: string; isGroup: boolean; isChannel: boolean; username: string }>;
+  }> {
+    const cleanToken = String(token || '').trim();
+    if (!cleanToken) {
+      return { ok: false, error: 'Introduce el Bot Token de Telegram para diagnosticar.' };
+    }
+    if (cleanToken.startsWith('@')) {
+      return { ok: false, error: 'Has introducido un nombre de usuario (@...) en vez del token. El Bot Token tiene formato números:letras (ej: 123456789:ABCdef...).' };
+    }
+    if (!cleanToken.includes(':')) {
+      return { ok: false, error: 'El formato del Bot Token debe incluir dos puntos ":" (ej: 748392019:AAHkjl8...).' };
+    }
+
+    // 1. Intento vía backend server
+    try {
+      const resp = await fetch('/api/telegram-diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramBotToken: cleanToken })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        return data;
+      }
+      const errData = await resp.json().catch(() => null);
+      if (errData?.error && resp.status !== 405 && resp.status !== 404) {
+        return { ok: false, error: errData.error };
+      }
+    } catch {}
+
+    // 2. Intento directo del navegador (CORS soportado por Telegram Bot API)
+    try {
+      const meResp = await fetch(`https://api.telegram.org/bot${cleanToken}/getMe`);
+      const meData = await meResp.json().catch(() => null);
+      if (!meResp.ok || !meData?.ok) {
+        const desc = meData?.description || `HTTP ${meResp.status}`;
+        return {
+          ok: false,
+          error: `Telegram rechazó el Bot Token: "${desc}". Verifica haberlo copiado completo de @BotFather.`
+        };
+      }
+
+      const bot = {
+        id: meData.result.id,
+        username: meData.result.username,
+        first_name: meData.result.first_name,
+        can_join_groups: meData.result.can_join_groups ?? true
+      };
+
+      const updatesResp = await fetch(`https://api.telegram.org/bot${cleanToken}/getUpdates`);
+      const updatesData = await updatesResp.json().catch(() => null);
+
+      const foundChatsMap = new Map<string, any>();
+      if (updatesResp.ok && updatesData?.ok && Array.isArray(updatesData.result)) {
+        for (const u of updatesData.result) {
+          const item = u.message || u.channel_post || u.my_chat_member || u.chat_member;
+          const chat = item?.chat;
+          if (chat && chat.id) {
+            const chatIdStr = String(chat.id);
+            const isGroup = chat.type === 'group' || chat.type === 'supergroup';
+            const isChannel = chat.type === 'channel';
+            const label = chat.title || chat.username || `${chat.first_name || ''} ${chat.last_name || ''}`.trim() || 'Chat';
+            foundChatsMap.set(chatIdStr, {
+              id: chatIdStr,
+              title: label,
+              type: chat.type,
+              isGroup,
+              isChannel,
+              username: chat.username || ''
+            });
+          }
+        }
+      }
+
+      return {
+        ok: true,
+        bot,
+        detectedChats: Array.from(foundChatsMap.values())
+      };
+    } catch (directErr: any) {
+      return { ok: false, error: `Error conectando con la API de Telegram: ${directErr?.message || 'Error de red'}` };
+    }
+  }
+
+  public ensureTokensMatchTeams(): boolean {
+    if (!Array.isArray(this.teams) || this.teams.length === 0) {
+      this.teams = [...INITIAL_TEAMS];
+    }
+
+    const currentTeamsMap = new Map<string, string>(); // lowerCase -> originalCase
+    this.teams.forEach(t => {
+      const trimmed = String(t || '').trim();
+      if (trimmed) currentTeamsMap.set(trimmed.toLowerCase(), trimmed);
+    });
+
+    const demoTeamNames = new Set([
+      'galácticos fc',
+      'tiki-taka united',
+      'la saeta rubia',
+      'furia rojiblanca',
+      'boquerones cf',
+      'dream team 92'
+    ]);
+
+    const hasRealTeams = Array.from(currentTeamsMap.keys()).some(k => !demoTeamNames.has(k));
+
+    // Filter tokens to keep only those belonging to currently active teams in this.teams
+    const cleanTokens: TeamToken[] = [];
+    const seenTokenTeams = new Set<string>();
+
+    for (const tk of (this.tokens || [])) {
+      const tkName = String(tk.team || '').trim();
+      const tkLower = tkName.toLowerCase();
+      if (!tkLower) continue;
+
+      // If we have real teams, discard any demo tokens that aren't in this.teams
+      if (hasRealTeams && demoTeamNames.has(tkLower) && !currentTeamsMap.has(tkLower)) {
+        continue;
+      }
+
+      if (currentTeamsMap.has(tkLower) && !seenTokenTeams.has(tkLower)) {
+        cleanTokens.push({
+          team: currentTeamsMap.get(tkLower)!,
+          token: String(tk.token || '').trim() || crypto.randomUUID()
+        });
+        seenTokenTeams.add(tkLower);
+      }
+    }
+
+    // Ensure every team in this.teams has a valid token
+    for (const [lowerName, originalName] of currentTeamsMap.entries()) {
+      if (!seenTokenTeams.has(lowerName)) {
+        const defaultMatch = INITIAL_TOKENS.find(it => it.team.toLowerCase() === lowerName);
+        cleanTokens.push({
+          team: originalName,
+          token: defaultMatch ? defaultMatch.token : crypto.randomUUID()
+        });
+        seenTokenTeams.add(lowerName);
+      }
+    }
+
+    let modified = false;
+    const uniqueTeams = Array.from(currentTeamsMap.values());
+    if (uniqueTeams.length !== this.teams.length) {
+      this.teams = uniqueTeams;
+      modified = true;
+    }
+
+    if (JSON.stringify(this.tokens) !== JSON.stringify(cleanTokens)) {
+      this.tokens = cleanTokens;
+      modified = true;
+    }
+    if (modified) {
+      this.saveState();
+    }
+    return modified;
+  }
+
+  public getTeamTokensAdmin(adminPass: string): { success: boolean; message?: string; tokens: TeamToken[] } {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Acceso no autorizado.', tokens: [] };
+    }
+    this.ensureTokensMatchTeams();
+    return { success: true, tokens: [...this.tokens] };
+  }
+
+  public addTeamTokenWeb(adminPass: string, teamName: string, tokenValue?: string): { success: boolean; message: string } {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña incorrecta.' };
+    }
+    const team = (teamName || '').trim();
+    if (!team) return { success: false, message: 'El nombre del equipo no puede estar vacío.' };
+
+    const token = (tokenValue || '').trim() || crypto.randomUUID();
+
+    if (!this.teams.includes(team)) {
+      this.teams.push(team);
+    }
+
+    const existingIdx = this.tokens.findIndex(t => t.team.toLowerCase() === team.toLowerCase());
+    if (existingIdx !== -1) {
+      this.tokens[existingIdx].token = token;
+      this.tokens[existingIdx].team = team;
+    } else {
+      this.tokens.push({ team, token });
+    }
+
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ teams: this.teams, tokens: this.tokens }, adminPass).catch(() => {});
+    return { success: true, message: `Equipo '${team}' añadido correctamente con token.` };
+  }
+
+  public editTeamTokenWeb(adminPass: string, oldTeamName: string, newTeamName: string, newTokenValue: string): { success: boolean; message: string } {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña incorrecta.' };
+    }
+    const oldTarget = (oldTeamName || '').trim().toLowerCase();
+    const newTeam = (newTeamName || '').trim();
+    const newToken = (newTokenValue || '').trim();
+
+    if (!newTeam || !newToken) {
+      return { success: false, message: 'El nombre y el token no pueden estar vacíos.' };
+    }
+
+    const tokenEntry = this.tokens.find(t => t.team.toLowerCase() === oldTarget);
+    if (!tokenEntry) return { success: false, message: 'No se encontró el equipo para editar.' };
+
+    tokenEntry.team = newTeam;
+    tokenEntry.token = newToken;
+
+    const teamIdx = this.teams.findIndex(t => t.toLowerCase() === oldTarget);
+    if (teamIdx !== -1) {
+      this.teams[teamIdx] = newTeam;
+    } else {
+      this.teams.push(newTeam);
+    }
+
+    // Update lineups & histories
+    this.lineups.forEach(l => {
+      if (l.team.toLowerCase() === oldTarget) l.team = newTeam;
+    });
+    this.transfers.forEach(tr => {
+      if (tr.team.toLowerCase() === oldTarget) tr.team = newTeam;
+    });
+    this.drafts.forEach(d => {
+      if (d.team.toLowerCase() === oldTarget) d.team = newTeam;
+    });
+
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ teams: this.teams, tokens: this.tokens }, adminPass).catch(() => {});
+    return { success: true, message: 'Equipo y token actualizados correctamente.' };
+  }
+
+  public deleteTeamTokenWeb(adminPass: string, teamName: string): { success: boolean; message: string } {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña incorrecta.' };
+    }
+    const target = (teamName || '').trim().toLowerCase();
+    this.tokens = this.tokens.filter(t => t.team.toLowerCase() !== target);
+    this.teams = this.teams.filter(t => t.toLowerCase() !== target);
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ teams: this.teams, tokens: this.tokens }, adminPass).catch(() => {});
+    return { success: true, message: `Equipo '${teamName}' eliminado.` };
+  }
+
+  public generateTeamTokensWeb(adminPass: string): { success: boolean; message: string } {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña incorrecta.' };
+    }
+    this.tokens = this.teams.map(team => ({
+      team,
+      token: crypto.randomUUID()
+    }));
+    this.saveState();
+    this.notify();
+    this.pushLeagueConfigToServer({ teams: this.teams, tokens: this.tokens }, adminPass).catch(() => {});
+    return { success: true, message: `Se generaron ${this.tokens.length} tokens correctamente.` };
+  }
+
+  /**
+   * Copia las alineaciones de la última jornada (o una jornada específica) a la siguiente en Google Sheets y en la app.
+   */
+  public async copyLastJornadaAlineaciones(
+    adminPass: string,
+    customSourceJ?: number,
+    customTargetJ?: number
+  ): Promise<{ success: boolean; message: string; sourceJornada?: number; targetJornada?: number; count?: number; syncedRemote?: boolean }> {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña de administrador incorrecta.' };
+    }
+
+    const maxLineupsJ = this.getMaxJornadaFromAlineacionesSheet();
+    let sourceJ = (typeof customSourceJ === 'number' && customSourceJ > 0) ? customSourceJ : maxLineupsJ;
+    let targetJ = (typeof customTargetJ === 'number' && customTargetJ > 0) ? customTargetJ : (sourceJ > 0 ? sourceJ + 1 : 0);
+
+    const gasUrl = this.getGasUrl();
+    let gasMessage = '';
+    let remoteSuccess = false;
+
+    // 1. Si Google Apps Script está conectado, invocar la acción remota en Google Sheets
+    if (gasUrl) {
+      try {
+        const gasRes = await this.executeGasAction({
+          action: 'copyLineups',
+          sourceJornada: sourceJ > 0 ? sourceJ : undefined,
+          targetJornada: targetJ > 0 ? targetJ : undefined
+        });
+
+        if (gasRes && gasRes.success) {
+          remoteSuccess = true;
+          const finalSrc = gasRes.sourceJornada || sourceJ;
+          const finalTgt = gasRes.targetJornada || targetJ;
+          gasMessage = ' ' + (gasRes.message || `Sincronizado en tiempo real en la pestaña "Alineaciones" de Google Sheets.`);
+          // Sincronizar remotamente de inmediato para traer la información actualizada
+          await this.syncFromRemote(undefined, true).catch(() => {});
+          return {
+            success: true,
+            message: gasRes.message || `Se copiaron las alineaciones de la J${finalSrc} a la J${finalTgt} en Google Sheets.`,
+            sourceJornada: finalSrc,
+            targetJornada: finalTgt,
+            count: gasRes.count || gasRes.data?.count,
+            syncedRemote: true
+          };
+        } else if (gasRes?.outdatedScript) {
+          gasMessage = ' ⚠️ Nota: Para copiar directamente en Google Sheets, actualiza Código.gs desde el Panel Admin y despliega una "Nueva versión".';
+        } else if (gasRes && gasRes.message) {
+          gasMessage = ' (Aviso Google Sheets: ' + gasRes.message + ')';
+        }
+      } catch (errGas) {
+        console.warn('[gasEngine] Error llamando a copyLineups en GAS:', errGas);
+      }
+    }
+
+    // 2. Si no hay GAS o por respaldo local en el navegador:
+    if (sourceJ <= 0) {
+      return { success: false, message: 'No se encontraron alineaciones registradas en ninguna jornada para copiar.' };
+    }
+
+    if (targetJ <= 0) {
+      targetJ = sourceJ + 1;
+    }
+
+    if (sourceJ === targetJ) {
+      return { success: false, message: `La jornada origen y destino no pueden ser iguales (J${sourceJ}).` };
+    }
+
+    const lastLineup = this.lineups.filter(l => l.jornada === sourceJ && l.playerName && l.playerName.trim());
+    if (lastLineup.length === 0) {
+      return { success: false, message: `No se encontraron alineaciones en la Jornada ${sourceJ}.` };
+    }
+
+    // Preparar las nuevas alineaciones para la jornada destino
+    const playerMap = new Map(this.players.map(p => [p.name.trim().toLowerCase(), p]));
+    const newJornadaData: LineupEntry[] = lastLineup.map(l => {
+      const pD = playerMap.get(l.playerName.trim().toLowerCase());
+      return {
+        team: l.team,
+        jornada: targetJ,
+        playerName: l.playerName,
+        realTeam: pD?.realTeam || l.realTeam || 'N/A',
+        position: pD?.position || l.position || 'N/A',
+        value: pD?.value ?? l.value ?? ''
+      };
+    });
+
+    // Guardar las alineaciones de la nueva jornada localmente (evitando duplicaciones)
+    this.lineups = this.lineups.filter(l => l.jornada !== targetJ);
+    this.lineups.push(...newJornadaData);
+    this.saveState();
+    this.notify();
+
+    return {
+      success: true,
+      message: `Se copiaron ${newJornadaData.length} futbolistas de la J${sourceJ} a la J${targetJ}.${gasMessage}`,
+      sourceJornada: sourceJ,
+      targetJornada: targetJ,
+      count: newJornadaData.length,
+      syncedRemote: remoteSuccess
+    };
+  }
+
+  public copyLastJornadaAlineacionesWeb(adminPass: string, sourceJ?: number, targetJ?: number) {
+    return this.copyLastJornadaAlineaciones(adminPass, sourceJ, targetJ);
+  }
+
+  public saveScheduleDeadline(adminPass: string, jornada: number, realTeam: string, deadlineIsoString: string): { success: boolean; message: string } {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña incorrecta.' };
+    }
+    jornada = parseInt(String(jornada), 10);
+    realTeam = realTeam.trim();
+
+    const existingIdx = this.schedules.findIndex(s => s.jornada === jornada && s.realTeam.toLowerCase() === realTeam.toLowerCase());
+    if (existingIdx !== -1) {
+      this.schedules[existingIdx].deadlineIsoString = deadlineIsoString;
+    } else {
+      this.schedules.push({ jornada, realTeam, deadlineIsoString });
+    }
+
+    this.saveState();
+
+    // Sincronizar schedules con el servidor central para que todos los dispositivos (móvil y PC) los compartan
+    fetch('/api/gas-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        schedules: this.schedules,
+        adminPassword: adminPass
+      })
+    }).catch(e => console.warn('[gasEngine] No se pudo guardar schedules en servidor:', e));
+
+    return { success: true, message: `Límite registrado para ${realTeam} (J${jornada}): ${deadlineIsoString}` };
+  }
+
+  public deleteScheduleDeadline(adminPass: string, jornada: number, realTeam: string): { success: boolean; message: string } {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña incorrecta.' };
+    }
+    jornada = parseInt(String(jornada), 10);
+    realTeam = realTeam.trim().toLowerCase();
+
+    this.schedules = this.schedules.filter(s => !(s.jornada === jornada && s.realTeam.trim().toLowerCase() === realTeam));
+    this.saveState();
+
+    fetch('/api/gas-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        schedules: this.schedules,
+        adminPassword: adminPass
+      })
+    }).catch(e => console.warn('[gasEngine] No se pudo actualizar schedules en servidor:', e));
+
+    return { success: true, message: 'Límite horario eliminado correctamente.' };
+  }
+
+  public getSchedulesList(): ScheduleRecord[] {
+    return [...this.schedules];
+  }
+
+  public getRealTeamsList(): string[] {
+    return [...INITIAL_REAL_TEAMS].sort();
+  }
+
+  public getAdminTeamNamesList(adminPass: string): string[] {
+    if (!this.verifyAdminPassword(adminPass)) return [];
+    return this.getTeamNames();
+  }
+
+  public getTeamJornadasReport(adminPass: string, teamName: string, startJ: number, endJ: number): TeamJornadasReportResponse {
+    if (!this.verifyAdminPassword(adminPass)) {
+      return { success: false, message: 'Contraseña incorrecta.' };
+    }
+    startJ = parseInt(String(startJ), 10);
+    endJ = parseInt(String(endJ), 10);
+
+    const jornadasList: number[] = [];
+    for (let j = startJ; j <= endJ; j++) jornadasList.push(j);
+
+    const playerMap = new Map(this.players.map(p => [p.name, p]));
+    const teamPlayersSet = new Set<string>();
+
+    this.lineups.forEach(l => {
+      if (l.team.trim() === teamName.trim() && l.jornada >= startJ && l.jornada <= endJ && l.playerName) {
+        teamPlayersSet.add(l.playerName.trim());
+      }
+    });
+
+    const rows = Array.from(teamPlayersSet).map(pName => {
+      const pData = playerMap.get(pName);
+      const jDetails = jornadasList.map(j => {
+        const isInLineup = this.lineups.some(l => l.team.trim() === teamName.trim() && l.jornada === j && l.playerName.trim() === pName);
+        if (!isInLineup) {
+          return { pts: '-', goles: '-', defPts: '-' };
+        }
+        return {
+          pts: pData?.jornadasPoints?.[j] ?? 0,
+          goles: pData?.jornadasGoals?.[j] ?? 0,
+          defPts: pData?.jornadasDef?.[j] ?? 0
+        };
+      });
+
+      return {
+        name: pName,
+        realTeam: pData?.realTeam || 'N/A',
+        position: pData?.position || 'N/A',
+        jornadasDetails: jDetails
+      };
+    });
+
+    return {
+      success: true,
+      teamName,
+      jornadas: jornadasList,
+      rows
+    };
+  }
+
+  // --- Funciones del Orden de Elección del Draft (11 Rondas) ---
+
+  /**
+   * Obtiene el orden de elección de las 11 rondas del Draft
+   */
+  public getDraftOrder(): DraftRoundOrder[] {
+    if (this.draftOrder && this.draftOrder.length > 0) {
+      return this.draftOrder.map(ro => {
+        const seenInRound = new Set<string>();
+        const uniqueTeams: string[] = [];
+        for (const t of (ro.teams || [])) {
+          const trimmed = String(t || '').trim();
+          const lower = trimmed.toLowerCase();
+          if (trimmed && !seenInRound.has(lower)) {
+            seenInRound.add(lower);
+            uniqueTeams.push(trimmed);
+          }
+        }
+        return {
+          ...ro,
+          teams: uniqueTeams
+        };
+      });
+    }
+    return this.generateDefaultDraftOrder();
+  }
+
+  /**
+   * Genera el orden de 11 rondas por defecto a partir de los equipos participantes
+   */
+  public generateDefaultDraftOrder(): DraftRoundOrder[] {
+    const currentTeams = this.getTeams();
+    const order: DraftRoundOrder[] = [];
+    for (let r = 1; r <= 11; r++) {
+      order.push({
+        round: r,
+        roundName: `Ronda ${r}`,
+        teams: [...currentTeams]
+      });
+    }
+    return order;
+  }
+
+  /**
+   * Sortea un orden de elección aleatorio para las 11 rondas
+   * En cada ronda, cada equipo participante elige 1 jugador en orden aleatorio
+   * cumpliendo turnos por orden estricto (un equipo no vuelve a elegir hasta que todos los demás han elegido en ese turno).
+   */
+  public generateRandomDraftOrder(pushToServer: boolean = true): DraftRoundOrder[] {
+    const currentTeams = this.getTeamNames();
+
+    if (this.teams.length !== currentTeams.length) {
+      this.teams = [...currentTeams];
+      this.saveState();
+    }
+
+    const order: DraftRoundOrder[] = [];
+    for (let r = 1; r <= 11; r++) {
+      const shuffled = [...currentTeams];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      order.push({
+        round: r,
+        roundName: `Ronda ${r}`,
+        teams: shuffled
+      });
+    }
+    this.setDraftOrder(order, pushToServer);
+    return this.draftOrder;
+  }
+
+  /**
+   * Guarda el orden de elección del Draft en memoria, localStorage y servidor central
+   * Garantiza que cada ronda tenga a cada equipo exactamente una sola vez
+   */
+  public setDraftOrder(order: DraftRoundOrder[], pushToServer: boolean = true): void {
+    const validTeams = this.getTeamNames();
+    const validSet = new Set(validTeams.map(t => t.toLowerCase().trim()));
+
+    const cleanOrder: DraftRoundOrder[] = [];
+    for (let r = 1; r <= 11; r++) {
+      const ro = (order && order[r - 1]) ? order[r - 1] : { round: r, roundName: `Ronda ${r}`, teams: [] };
+      const seenInRound = new Set<string>();
+      const uniqueTeams: string[] = [];
+
+      for (const t of (ro.teams || [])) {
+        const trimmed = String(t || '').trim();
+        const lower = trimmed.toLowerCase();
+        if (trimmed && validSet.has(lower) && !seenInRound.has(lower)) {
+          seenInRound.add(lower);
+          const canonical = validTeams.find(vt => vt.toLowerCase().trim() === lower) || trimmed;
+          uniqueTeams.push(canonical);
+        }
+      }
+
+      // Si algún equipo de la liga no estaba en la ronda, añadirlo
+      for (const vt of validTeams) {
+        const lower = vt.toLowerCase().trim();
+        if (!seenInRound.has(lower)) {
+          seenInRound.add(lower);
+          uniqueTeams.push(vt);
+        }
+      }
+
+      // Limitar la longitud exactamente al número de equipos de la liga
+      const finalTeams = uniqueTeams.slice(0, validTeams.length);
+
+      cleanOrder.push({
+        round: r,
+        roundName: ro.roundName || `Ronda ${r}`,
+        teams: finalTeams
+      });
+    }
+
+    this.draftOrder = cleanOrder;
+    localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
+    if (pushToServer) {
+      this.pushLeagueConfigToServer({ draftOrder: this.draftOrder });
+    }
+    this.notify();
+  }
+
+  /**
+   * Indica si la pestaña de Draft debe ocultarse (al completar las 11 rondas)
+   */
+  public isDraftHidden(): boolean {
+    return this.isDraftHiddenState;
+  }
+
+  /**
+   * Establece si la pestaña de Draft está oculta
+   */
+  public setDraftHidden(hidden: boolean, pushToServer: boolean = true): void {
+    this.isDraftHiddenState = hidden;
+    localStorage.setItem('lfa_is_draft_hidden', String(hidden));
+    if (pushToServer) {
+      this.pushLeagueConfigToServer({ isDraftHidden: hidden });
+    }
+    this.notify();
+  }
+
+  /**
+   * Conteo de elecciones de Draft completadas por cada equipo
+   */
+  public getDraftPicksCountByTeam(): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const t of this.getTeams()) {
+      counts[t] = 0;
+    }
+    for (const d of this.drafts) {
+      const tName = d.team?.trim();
+      if (tName) {
+        // Encontrar coincidencia case-insensitive
+        const matchedTeam = Object.keys(counts).find(k => k.toLowerCase() === tName.toLowerCase());
+        if (matchedTeam) {
+          counts[matchedTeam] = (counts[matchedTeam] || 0) + 1;
+        } else {
+          counts[tName] = (counts[tName] || 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }
+
+  /**
+   * Determina el turno actual del Draft basándose en el orden estipulado y las elecciones realizadas
+   */
+  public getCurrentDraftTurn(): {
+    round: number;
+    activeTeam: string;
+    roundIndex: number;
+    teamIndex: number;
+    isComplete: boolean;
+    totalPicks: number;
+    maxTotalPicks: number;
+  } {
+    const order = this.getDraftOrder();
+    const currentTeams = this.getTeams();
+    const totalTeams = currentTeams.length;
+    const maxTotalPicks = totalTeams * 11;
+    const totalPicks = this.drafts.length;
+
+    if (totalTeams === 0 || totalPicks >= maxTotalPicks) {
+      return {
+        round: 11,
+        activeTeam: '',
+        roundIndex: 10,
+        teamIndex: Math.max(0, totalTeams - 1),
+        isComplete: true,
+        totalPicks,
+        maxTotalPicks
+      };
+    }
+
+    const roundIndex = Math.min(10, Math.floor(totalPicks / totalTeams));
+    const teamIndex = totalPicks % totalTeams;
+    const currentRoundOrder = order[roundIndex];
+    const activeTeam = currentRoundOrder?.teams?.[teamIndex] || currentTeams[teamIndex] || '';
+
+    return {
+      round: roundIndex + 1,
+      activeTeam,
+      roundIndex,
+      teamIndex,
+      isComplete: false,
+      totalPicks,
+      maxTotalPicks
+    };
+  }
+
+  /**
+   * Valida si un equipo tiene permiso para elegir en el Draft en este instante
+   */
+  public canTeamPickInDraft(teamName: string): {
+    allowed: boolean;
+    reason?: string;
+    activeTeam?: string;
+    currentRound?: number;
+  } {
+    const turn = this.getCurrentDraftTurn();
+    if (turn.isComplete) {
+      return {
+        allowed: false,
+        reason: 'El Draft ya ha completado todas sus 11 rondas de elección.'
+      };
+    }
+
+    const counts = this.getDraftPicksCountByTeam();
+    const teamKey = Object.keys(counts).find(k => k.toLowerCase() === teamName.toLowerCase()) || teamName;
+    const teamPicks = counts[teamKey] || 0;
+    if (teamPicks >= 11) {
+      return {
+        allowed: false,
+        reason: `El equipo "${teamName}" ya ha completado sus 11 elecciones permitidas.`
+      };
+    }
+
+    if (turn.activeTeam && turn.activeTeam.toLowerCase() !== teamName.toLowerCase()) {
+      return {
+        allowed: false,
+        reason: `No es el turno de "${teamName}". Turno actual: "${turn.activeTeam}" (Ronda ${turn.round}).`,
+        activeTeam: turn.activeTeam,
+        currentRound: turn.round
+      };
+    }
+
+    return {
+      allowed: true,
+      activeTeam: turn.activeTeam,
+      currentRound: turn.round
+    };
+  }
+
+  /**
+   * Ejecuta una acción de escritura en Google Sheets en tiempo real (Draft, Fichajes, Orden Draft).
+   * Prioriza el backend /api/gas-action (inmune a CORS y redirecciones) y recurre a fetchGasData como respaldo.
+   */
+  public async executeGasAction(payload: {
+    action: 'draft' | 'transfer' | 'saveDraftOrder' | 'ping' | 'resetSeason' | 'copyLineups' | 'copiarAlineaciones';
+    team?: string;
+    token?: string;
+    player?: string;
+    jornada?: number;
+    sourceJornada?: number;
+    targetJornada?: number;
+    transfers?: any[];
+    draftOrder?: any;
+    requestId?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    outdatedScript?: boolean;
+    pendingSheetsSync?: boolean;
+    persistedServer?: boolean;
+    data?: any;
+    sourceJornada?: number;
+    targetJornada?: number;
+    count?: number;
+  }> {
+    const targetUrl = this.getGasUrl();
+    if (!targetUrl) {
+      return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
+    }
+
+    const requestId = payload.requestId || ('req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9));
+
+    // 1. Enviar a través del servidor backend /api/gas-action con timeout de 65s
+    let backendContacted = false;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 65000);
+
+      const resp = await fetch('/api/gas-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          requestId,
+          customGasUrl: targetUrl
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      backendContacted = true;
+
+      if (resp.ok) {
+        const resJson = await resp.json();
+        return resJson;
+      }
+    } catch (e: any) {
+      console.warn('[gasEngine] Falló llamada a backend /api/gas-action:', e?.message || e);
+    }
+
+    // 2. Si el backend fue contactado pero la respuesta no fue 200, evitar duplicar llamadas si ya está en vuelo
+    // Respaldo directo en el cliente (JSONP o fetch) con timeout ampliado a 55 segundos
+    try {
+      const params: Record<string, string> = { action: payload.action, requestId };
+      if (payload.team) params.team = payload.team;
+      if (payload.token) params.token = payload.token;
+      if (payload.player) params.player = payload.player;
+      if (payload.jornada !== undefined) params.jornada = String(payload.jornada);
+      if (payload.sourceJornada !== undefined) params.sourceJornada = String(payload.sourceJornada);
+      if (payload.targetJornada !== undefined) params.targetJornada = String(payload.targetJornada);
+      if (payload.transfers !== undefined) {
+        params.transfers = typeof payload.transfers === 'string' ? payload.transfers : JSON.stringify(payload.transfers);
+      }
+      if (payload.draftOrder !== undefined) {
+        params.draftOrder = typeof payload.draftOrder === 'string' ? payload.draftOrder : JSON.stringify(payload.draftOrder);
+      }
+
+      const res = await this.fetchGasData(targetUrl, params, 55000);
+      if (res && res.error) {
+        const isOutdated = String(res.error).includes('Acción API no reconocida');
+        return {
+          success: false,
+          outdatedScript: isOutdated,
+          message: isOutdated
+            ? `⚠️ Google Sheets no se actualizó en tiempo real: La Web App de Apps Script necesita desplegar una "Nueva versión" para la acción "${payload.action}".`
+            : res.error
+        };
+      }
+      return {
+        success: res?.success !== false,
+        message: res?.message || 'Actualizado en tiempo real en Google Sheets'
+      };
+    } catch (err: any) {
+      const errMsg = String(err?.message || err || '');
+      const isTimeout = errMsg.includes('TIMEOUT_GAS');
+      return {
+        success: false,
+        message: isTimeout
+          ? 'Google Sheets tardó más de lo habitual en responder. Si el fichaje ya aparece en tu hoja, se completó correctamente.'
+          : ('No se pudo contactar con Google Sheets: ' + errMsg)
+      };
+    }
+  }
+
+  /**
+   * Comprueba si la Web App de Apps Script desplegada soporta tiempo real para Draft y Fichajes
+   */
+  public async checkRealtimeStatus(targetUrl?: string): Promise<{
+    configured: boolean;
+    connected: boolean;
+    realtimeReady: boolean;
+    outdatedScript?: boolean;
+    message: string;
+    instruction?: string;
+  }> {
+    const effectiveUrl = (targetUrl || this.getGasUrl()).trim();
+    if (!effectiveUrl) {
+      return {
+        configured: false,
+        connected: false,
+        realtimeReady: false,
+        message: 'No hay URL de Google Apps Script configurada.'
+      };
+    }
+
+    // 1. Diagnóstico directo en el cliente con fetchGasData (inmune a proxies, caídas de servidor o bloqueos de red)
+    try {
+      const pingData = await this.fetchGasData(effectiveUrl, { action: 'ping' }, 12000);
+      if (pingData && (pingData.success || pingData.realtimeReady !== undefined)) {
+        // Conexión básica con Google Sheets confirmada
+        if (pingData.realtimeReady) {
+          return {
+            configured: true,
+            connected: true,
+            realtimeReady: true,
+            outdatedScript: false,
+            message: '✅ Conexión verificada: Tu Web App de Google Apps Script soporta sincronización en tiempo real para Draft y Fichajes.'
+          };
+        }
+
+        // Probar si reconoce las acciones 'transfer' y 'draft'
+        try {
+          const transferTest = await this.fetchGasData(effectiveUrl, {
+            action: 'transfer',
+            team: 'TEST_DIAGNOSTIC',
+            token: 'invalid_token_diag',
+            jornada: '1',
+            transfers: '[]'
+          }, 12000);
+
+          if (transferTest?.error && String(transferTest.error).includes('Acción API no reconocida')) {
+            return {
+              configured: true,
+              connected: true,
+              realtimeReady: false,
+              outdatedScript: true,
+              message: '⚠️ Google Sheets está conectado, pero la Web App necesita publicar una "Nueva versión" en Apps Script para escribir los fichajes directamente en las hojas.',
+              instruction: 'En Google Apps Script: 1. Pega el Código.gs. 2. Ve a Implementar > Administrar implementaciones > Editar (lápiz) > Versión: "Nueva versión" > Implementar.'
+            };
+          }
+
+          const draftTest = await this.fetchGasData(effectiveUrl, {
+            action: 'draft',
+            team: 'TEST_DIAGNOSTIC',
+            token: 'invalid_token_diag',
+            player: 'TestPlayer'
+          }, 12000);
+
+          if (draftTest?.error && String(draftTest.error).includes('Acción API no reconocida')) {
+            return {
+              configured: true,
+              connected: true,
+              realtimeReady: false,
+              outdatedScript: true,
+              message: '⚠️ Google Sheets está conectado, pero la Web App de Apps Script necesita desplegar una "Nueva versión" para activar el tiempo real de Draft y Fichajes.',
+              instruction: 'En Google Apps Script: 1. Pega el Código.gs actualizado. 2. Haz clic en Implementar > Administrar implementaciones > Editar (lápiz) > Versión: "Nueva versión" > Implementar.'
+            };
+          }
+
+          // Si respondió sin "Acción API no reconocida", soporta tiempo real
+          return {
+            configured: true,
+            connected: true,
+            realtimeReady: true,
+            outdatedScript: false,
+            message: '✅ Conexión verificada: Tu Web App de Google Apps Script soporta sincronización en tiempo real para Draft y Fichajes.'
+          };
+        } catch {
+          return {
+            configured: true,
+            connected: true,
+            realtimeReady: false,
+            outdatedScript: true,
+            message: '⚠️ Google Sheets está conectado, pero la Web App requiere actualizarse a una "Nueva versión" para habilitar el tiempo real.',
+            instruction: 'En Google Apps Script: 1. Pega el Código.gs actualizado. 2. Haz clic en Implementar > Administrar implementaciones > Editar (lápiz) > Nueva versión > Implementar.'
+          };
+        }
+      }
+    } catch (directErr) {
+      console.warn('[gasEngine] Diagnóstico directo con fetchGasData falló, probando ruta /api/gas-diagnostics...', directErr);
+    }
+
+    // 2. Respaldo a través de la ruta del servidor
+    try {
+      const resp = await fetch(`/api/gas-diagnostics?gasUrl=${encodeURIComponent(effectiveUrl)}`, { cache: 'no-store' });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json && (json.connected !== undefined || json.realtimeReady !== undefined)) {
+          return json;
+        }
+      }
+    } catch (e) {
+      console.warn('[gasEngine] Falló /api/gas-diagnostics:', e);
+    }
+
+    return {
+      configured: true,
+      connected: false,
+      realtimeReady: false,
+      message: 'No se pudo conectar con la Web App. Comprueba que la URL termine en "/exec" y tenga permisos para "Cualquiera" (Anyone).'
+    };
+  }
+
+  /**
+   * Sincroniza todas las elecciones de Draft registradas en el historial local con Google Sheets.
+   */
+  public async syncAllPendingDraftsToGoogleSheets(): Promise<{ success: boolean; message: string; syncedCount: number }> {
+    const drafts = this.getDraftHistory();
+    if (!drafts.length) {
+      return { success: true, message: 'No hay elecciones de draft registradas en el historial local.', syncedCount: 0 };
+    }
+
+    const targetUrl = this.getGasUrl();
+    if (!targetUrl) {
+      return { success: false, message: 'No hay URL de Google Apps Script configurada.', syncedCount: 0 };
+    }
+
+    const tokenMap = new Map<string, string>();
+    this.getTokens().forEach(t => tokenMap.set(t.team.toLowerCase().trim(), t.token));
+
+    let successCount = 0;
+    let lastError = '';
+
+    // Enviar en orden cronológico (las más antiguas primero)
+    const chronologicalDrafts = [...drafts].reverse();
+
+    // Probar primero el primer elemento para verificar si Apps Script reconoce la acción 'draft'
+    const firstDraft = chronologicalDrafts[0];
+    const firstToken = tokenMap.get(firstDraft.team.toLowerCase().trim()) || '';
+    const testRes = await this.executeGasAction({
+      action: 'draft',
+      team: firstDraft.team,
+      token: firstToken,
+      player: firstDraft.playerName
+    });
+
+    if (testRes.outdatedScript) {
+      return {
+        success: false,
+        message: '⚠️ Tu Web App de Google Apps Script necesita desplegar una "Nueva versión" para habilitar el volcado de elecciones. Sigue las instrucciones de la pestaña Conectar.',
+        syncedCount: 0
+      };
+    }
+
+    if (testRes.success || (testRes.message && testRes.message.includes('ya fue seleccionado'))) {
+      successCount++;
+    } else {
+      lastError = testRes.message;
+    }
+
+    // Procesar el resto
+    for (let i = 1; i < chronologicalDrafts.length; i++) {
+      const d = chronologicalDrafts[i];
+      const token = tokenMap.get(d.team.toLowerCase().trim()) || '';
+      try {
+        const res = await this.executeGasAction({
+          action: 'draft',
+          team: d.team,
+          token: token,
+          player: d.playerName
+        });
+        if (res.success || (res.message && res.message.includes('ya fue seleccionado'))) {
+          successCount++;
+        } else {
+          lastError = res.message;
+        }
+      } catch (err: any) {
+        lastError = err?.message || 'Error de red';
+      }
+    }
+
+    if (successCount === drafts.length) {
+      return {
+        success: true,
+        message: `¡Sincronización completa! Se han registrado las ${successCount} elecciones de Draft en Google Sheets.`,
+        syncedCount: successCount
+      };
+    }
+
+    return {
+      success: successCount > 0,
+      message: `Se verificaron/sincronizaron ${successCount} de ${drafts.length} elecciones. ${lastError ? 'Detalle: ' + lastError : ''}`,
+      syncedCount: successCount
+    };
+  }
+
+  /**
+   * Guarda el orden de elección directamente en la pestaña "Draft" de Google Sheets
+   */
+  public async syncDraftOrderToGoogleSheets(): Promise<{ success: boolean; message: string }> {
+    const targetUrl = this.getGasUrl();
+    if (!targetUrl) {
+      return { success: false, message: 'No hay URL de Google Apps Script configurada.' };
+    }
+    const order = this.getDraftOrder();
+    const res = await this.executeGasAction({
+      action: 'saveDraftOrder',
+      draftOrder: order
+    });
+    return {
+      success: res.success,
+      message: res.message
+    };
+  }
+
+  /**
+   * Restablece los datos de la temporada: vacía alineaciones, historial de fichajes y elecciones de draft,
+   * y devuelve a todos los futbolistas al estado 'Disponible' (salvo los que hayan abandonado la liga).
+   * Si hay conexión con Google Sheets configurada, también vacía y limpia las hojas remotas.
+   */
+  public async resetSeasonData(): Promise<{ success: boolean; message: string; remoteCleared?: boolean }> {
+    this.lineups = [];
+    this.transfers = [];
+    this.drafts = [];
+    this.draftOrder = [];
+    this.players.forEach(p => {
+      if (p.status !== 'Abandona Liga') {
+        p.status = 'Disponible';
+      }
+    });
+    localStorage.setItem('lfa_lineups', '[]');
+    localStorage.setItem('lfa_transfers', '[]');
+    localStorage.setItem('lfa_drafts', '[]');
+    localStorage.setItem('lfa_draft_order', '[]');
+    this.saveState();
+    this.notify();
+
+    let remoteMsg = '';
+    let remoteCleared = false;
+    const gasUrl = this.getGasUrl();
+    if (gasUrl) {
+      try {
+        const gasRes = await this.executeGasAction({ action: 'resetSeason' });
+        if (gasRes.success) {
+          remoteCleared = true;
+          remoteMsg = ' Se ha vaciado también en Google Sheets (Alineaciones, Fichajes, Draft y Jugadores Disponibles).';
+        } else if (gasRes.outdatedScript) {
+          remoteMsg = ' Nota: Para vaciar también tu Google Sheets en remoto, copia el nuevo Código.gs en Apps Script y publica una Nueva Versión.';
+        } else {
+          remoteMsg = ` (Aviso Google Sheets: ${gasRes.message || 'no se pudo contactar'}).`;
+        }
+      } catch (e: any) {
+        remoteMsg = ' (No se pudo conectar con Google Sheets para limpiar en remoto).';
+      }
+    }
+
+    return {
+      success: true,
+      remoteCleared,
+      message: `¡Temporada reiniciada con éxito! Se han vaciado las alineaciones, el historial de fichajes y el draft. Todos los futbolistas vuelven a estar Disponibles.${remoteMsg}`
+    };
+  }
+
+  /**
+   * Restablece los datos de la temporada anterior y sincroniza de forma explícita
+   */
+  public async resetSeasonDataAndSync(): Promise<{ success: boolean; message: string }> {
+    const resetRes = await this.resetSeasonData();
+    const syncRes = await this.syncFromRemote();
+    return {
+      success: syncRes.success,
+      message: syncRes.success
+        ? `${resetRes.message} Datos sincronizados desde Google Sheets.`
+        : resetRes.message
+    };
+  }
+
+  /**
+   * Reintenta el volcado de fichajes pendientes de sincronización con Google Sheets
+   */
+  public async syncPendingTransfersToSheets(): Promise<{ success: boolean; message: string; synced?: number; remaining?: number }> {
+    try {
+      const resp = await fetch('/api/sync-pending-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const text = await resp.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // Si el backend devolvió HTML (ej. página de error o proxy), recurrir a sincronización cliente directa
+        return await this.syncPendingTransfersDirectToGas();
+      }
+      return data;
+    } catch {
+      // Si falla la conexión con el servidor, reintentar directo desde el navegador hacia Google Apps Script
+      return await this.syncPendingTransfersDirectToGas();
+    }
+  }
+
+  /**
+   * Respaldo directo en el navegador para sincronizar transferencias pendientes con Google Apps Script
+   */
+  public async syncPendingTransfersDirectToGas(): Promise<{ success: boolean; message: string; synced?: number; remaining?: number }> {
+    const status = await this.getPendingSheetsStatus();
+    const pendingList = status.pending || [];
+    if (pendingList.length === 0) {
+      return { success: true, count: 0, synced: 0, remaining: 0, message: 'No hay fichajes pendientes de sincronizar con Google Sheets.' };
+    }
+
+    let synced = 0;
+    const remaining: any[] = [];
+    for (const item of pendingList) {
+      try {
+        const res = await this.executeGasAction({
+          action: 'transfer',
+          team: item.team,
+          token: item.token,
+          jornada: item.jornada,
+          transfers: item.transfers,
+          requestId: item.requestId
+        });
+        if (res.success) {
+          synced++;
+        } else {
+          remaining.push(item);
+        }
+      } catch {
+        remaining.push(item);
+      }
+    }
+
+    return {
+      success: synced > 0,
+      synced,
+      remaining: remaining.length,
+      message: synced > 0
+        ? `Se han sincronizado ${synced} fichaje(s) con Google Sheets exitosamente.`
+        : 'Google Sheets aún no reconoce la acción transfer o hubo un error de validación. Copia el Código.gs en Apps Script y despliega Nueva Versión.'
+    };
+  }
+
+  /**
+   * Consulta el número de fichajes pendientes de sincronización en Google Sheets
+   */
+  public async getPendingSheetsStatus(): Promise<{ success: boolean; count: number; pending: any[] }> {
+    try {
+      const resp = await fetch('/api/pending-sheets-status');
+      const text = await resp.text();
+      const data = JSON.parse(text);
+      return data;
+    } catch {
+      return { success: false, count: 0, pending: [] };
+    }
+  }
 }
 
 export const gasEngine = new GasEngineService();
