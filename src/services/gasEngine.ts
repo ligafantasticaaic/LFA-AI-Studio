@@ -114,6 +114,11 @@ const INITIAL_TOKENS: TeamToken[] = [
   { team: 'PLAYA DE CUEVA', token: 'suplente' },
 ];
 
+const INITIAL_REAL_TEAMS: string[] = [
+  'ALV', 'ATH', 'ATM', 'BAR', 'BET', 'CEL', 'ESP', 'GET', 'GIR', 
+  'MLL', 'OSA', 'RAY', 'RMA', 'RSO', 'SEV', 'VAL', 'VIL', 'LEG', 'LPA', 'VLD'
+];
+
 const INITIAL_PLAYERS: Player[] = [
   // Porteros
   { name: 'Thibaut Courtois', realTeam: 'RMA', position: 'Portero', value: 18, status: 'Disponible', jornadasPoints: { 1: 8, 2: 7, 3: 9, 4: 6, 5: 8 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 1, 3: 0, 4: 2, 5: 0 } },
@@ -121,24 +126,84 @@ const INITIAL_PLAYERS: Player[] = [
   { name: 'Jan Oblak', realTeam: 'ATM', position: 'Portero', value: 16, status: 'Disponible', jornadasPoints: { 1: 7, 2: 6, 3: 8, 4: 7, 5: 9 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 2, 3: 0, 4: 1, 5: 0 } },
   { name: 'Unai Simón', realTeam: 'ATH', position: 'Portero', value: 14, status: 'Disponible', jornadasPoints: { 1: 8, 2: 6, 3: 7, 4: 6, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 1, 3: 1, 4: 2, 5: 1 } },
   { name: 'Álex Remiro', realTeam: 'RSO', position: 'Portero', value: 13, status: 'Disponible', jornadasPoints: { 1: 6, 2: 7, 3: 6, 4: 8, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 1 } },
+  { name: 'David Soria', realTeam: 'GET', position: 'Portero', value: 11, status: 'Disponible', jornadasPoints: { 1: 7, 2: 5, 3: 6, 4: 7, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 2, 3: 1, 4: 1, 5: 2 } },
+  { name: 'Paulo Gazzaniga', realTeam: 'GIR', position: 'Portero', value: 10, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 5, 4: 7, 5: 5 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 1, 3: 2, 4: 1, 5: 2 } },
+  { name: 'Rui Silva', realTeam: 'BET', position: 'Portero', value: 9, status: 'Disponible', jornadasPoints: { 1: 5, 2: 6, 3: 7, 4: 5, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 2, 2: 1, 3: 0, 4: 2, 5: 1 } },
+  { name: 'Stole Dimitrievski', realTeam: 'VAL', position: 'Portero', value: 8, status: 'Disponible', jornadasPoints: { 1: 6, 2: 5, 3: 6, 4: 6, 5: 5 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 2, 3: 1, 4: 2, 5: 2 } },
 
   // Defensas
   { name: 'Antonio Rüdiger', realTeam: 'RMA', position: 'Defensa', value: 16, status: 'Disponible', jornadasPoints: { 1: 8, 2: 9, 3: 7, 4: 8, 5: 10 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 1, 3: 0, 4: 2, 5: 0 } },
   { name: 'Dani Carvajal', realTeam: 'RMA', position: 'Defensa', value: 15, status: 'Disponible', jornadasPoints: { 1: 7, 2: 8, 3: 9, 4: 6, 5: 8 }, jornadasGoals: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 1, 3: 0, 4: 2, 5: 0 } },
   { name: 'Jules Koundé', realTeam: 'BAR', position: 'Defensa', value: 15, status: 'Disponible', jornadasPoints: { 1: 8, 2: 7, 3: 9, 4: 8, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 0, 3: 2, 4: 0, 5: 1 } },
   { name: 'Pau Cubarsí', realTeam: 'BAR', position: 'Defensa', value: 14, status: 'Disponible', jornadasPoints: { 1: 7, 2: 8, 3: 7, 4: 9, 5: 8 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 0, 3: 2, 4: 0, 5: 1 } },
+  { name: 'Alejandro Balde', realTeam: 'BAR', position: 'Defensa', value: 13, status: 'Disponible', jornadasPoints: { 1: 7, 2: 7, 3: 8, 4: 7, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 0, 3: 2, 4: 0, 5: 1 } },
+  { name: 'Robin Le Normand', realTeam: 'ATM', position: 'Defensa', value: 14, status: 'Disponible', jornadasPoints: { 1: 7, 2: 6, 3: 8, 4: 8, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 2, 3: 0, 4: 1, 5: 0 } },
+  { name: 'José María Giménez', realTeam: 'ATM', position: 'Defensa', value: 13, status: 'Disponible', jornadasPoints: { 1: 6, 2: 7, 3: 7, 4: 8, 5: 8 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 2, 3: 0, 4: 1, 5: 0 } },
+  { name: 'Daniel Vivian', realTeam: 'ATH', position: 'Defensa', value: 13, status: 'Disponible', jornadasPoints: { 1: 8, 2: 7, 3: 6, 4: 7, 5: 8 }, jornadasGoals: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 1, 3: 1, 4: 2, 5: 1 } },
+  { name: 'Aitor Paredes', realTeam: 'ATH', position: 'Defensa', value: 11, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 7, 4: 6, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 1, 3: 1, 4: 2, 5: 1 } },
+  { name: 'Jon Pacheco', realTeam: 'RSO', position: 'Defensa', value: 10, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 6, 4: 7, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 1 } },
+  { name: 'Cristhian Mosquera', realTeam: 'VAL', position: 'Defensa', value: 11, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 5, 4: 7, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 2, 3: 1, 4: 2, 5: 2 } },
+  { name: 'Diego Rico', realTeam: 'GET', position: 'Defensa', value: 10, status: 'Disponible', jornadasPoints: { 1: 7, 2: 6, 3: 6, 4: 6, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 2, 3: 1, 4: 1, 5: 2 } },
+  { name: 'Daley Blind', realTeam: 'GIR', position: 'Defensa', value: 12, status: 'Disponible', jornadasPoints: { 1: 7, 2: 6, 3: 7, 4: 8, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 1, 3: 2, 4: 1, 5: 2 } },
+  { name: 'Marc Bartra', realTeam: 'BET', position: 'Defensa', value: 10, status: 'Disponible', jornadasPoints: { 1: 8, 2: 6, 3: 6, 4: 6, 5: 7 }, jornadasGoals: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 2, 2: 1, 3: 0, 4: 2, 5: 1 } },
+  { name: 'Nemanja Gudelj', realTeam: 'SEV', position: 'Defensa', value: 9, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 5, 4: 6, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 2, 2: 1, 3: 2, 4: 1, 5: 2 } },
+  { name: 'Mika Màrmol', realTeam: 'LPA', position: 'Defensa', value: 9, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 6, 4: 5, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 2, 2: 2, 3: 1, 4: 2, 5: 1 } },
+  { name: 'Óscar Mingueza', realTeam: 'CEL', position: 'Defensa', value: 13, status: 'Disponible', jornadasPoints: { 1: 9, 2: 10, 3: 6, 4: 8, 5: 7 }, jornadasGoals: { 1: 1, 2: 1, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 1, 2: 1, 3: 2, 4: 1, 5: 2 } },
+  { name: 'Raúl Albiol', realTeam: 'VIL', position: 'Defensa', value: 9, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 6, 4: 7, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 2, 2: 1, 3: 2, 4: 1, 5: 1 } },
+  { name: 'Abdel Abqar', realTeam: 'ALV', position: 'Defensa', value: 8, status: 'Disponible', jornadasPoints: { 1: 6, 2: 5, 3: 6, 4: 6, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 2, 2: 1, 3: 1, 4: 2, 5: 2 } },
+  { name: 'Flavien Boyomo', realTeam: 'OSA', position: 'Defensa', value: 10, status: 'Disponible', jornadasPoints: { 1: 8, 2: 7, 3: 6, 4: 8, 5: 6 }, jornadasGoals: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 0 }, jornadasDef: { 1: 1, 2: 1, 3: 2, 4: 1, 5: 2 } },
+  { name: 'Florian Lejeune', realTeam: 'RAY', position: 'Defensa', value: 9, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 5, 4: 6, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 2, 2: 1, 3: 2, 4: 2, 5: 1 } },
+  { name: 'Leandro Cabrera', realTeam: 'ESP', position: 'Defensa', value: 8, status: 'Disponible', jornadasPoints: { 1: 5, 2: 6, 3: 6, 4: 5, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 2, 2: 2, 3: 2, 4: 1, 5: 2 } },
 
   // Centrocampistas
   { name: 'Jude Bellingham', realTeam: 'RMA', position: 'Medio', value: 24, status: 'Disponible', jornadasPoints: { 1: 9, 2: 8, 3: 11, 4: 10, 5: 9 }, jornadasGoals: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Federico Valverde', realTeam: 'RMA', position: 'Medio', value: 20, status: 'Disponible', jornadasPoints: { 1: 10, 2: 8, 3: 9, 4: 8, 5: 11 }, jornadasGoals: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
   { name: 'Pedri González', realTeam: 'BAR', position: 'Medio', value: 21, status: 'Disponible', jornadasPoints: { 1: 8, 2: 10, 3: 9, 4: 11, 5: 9 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
   { name: 'Dani Olmo', realTeam: 'BAR', position: 'Medio', value: 19, status: 'Disponible', jornadasPoints: { 1: 11, 2: 11, 3: 10, 4: 9, 5: 12 }, jornadasGoals: { 1: 1, 2: 1, 3: 1, 4: 0, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Rodrigo De Paul', realTeam: 'ATM', position: 'Medio', value: 16, status: 'Disponible', jornadasPoints: { 1: 7, 2: 8, 3: 8, 4: 7, 5: 8 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Conor Gallagher', realTeam: 'ATM', position: 'Medio', value: 15, status: 'Disponible', jornadasPoints: { 1: 8, 2: 9, 3: 7, 4: 9, 5: 8 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Oihan Sancet', realTeam: 'ATH', position: 'Medio', value: 16, status: 'Disponible', jornadasPoints: { 1: 10, 2: 7, 3: 9, 4: 8, 5: 10 }, jornadasGoals: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Mikel Merino', realTeam: 'RSO', position: 'Medio', value: 15, status: 'Abandona Liga', jornadasPoints: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Martín Zubimendi', realTeam: 'RSO', position: 'Medio', value: 16, status: 'Disponible', jornadasPoints: { 1: 8, 2: 7, 3: 8, 4: 8, 5: 7 }, jornadasGoals: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Brais Méndez', realTeam: 'RSO', position: 'Medio', value: 15, status: 'Disponible', jornadasPoints: { 1: 7, 2: 8, 3: 6, 4: 8, 5: 8 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Álex Baena', realTeam: 'VIL', position: 'Medio', value: 18, status: 'Disponible', jornadasPoints: { 1: 9, 2: 9, 3: 8, 4: 10, 5: 11 }, jornadasGoals: { 1: 0, 2: 0, 3: 1, 4: 1, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Giovani Lo Celso', realTeam: 'BET', position: 'Medio', value: 17, status: 'Disponible', jornadasPoints: { 1: 11, 2: 12, 3: 9, 4: 10, 5: 11 }, jornadasGoals: { 1: 1, 2: 2, 3: 1, 4: 0, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Isco Alarcón', realTeam: 'BET', position: 'Medio', value: 16, status: 'Disponible', jornadasPoints: { 1: 8, 2: 7, 3: 9, 4: 8, 5: 8 }, jornadasGoals: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Yangel Herrera', realTeam: 'GIR', position: 'Medio', value: 13, status: 'Disponible', jornadasPoints: { 1: 7, 2: 8, 3: 6, 4: 8, 5: 7 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Pepelu', realTeam: 'VAL', position: 'Medio', value: 12, status: 'Disponible', jornadasPoints: { 1: 7, 2: 6, 3: 7, 4: 7, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Mauro Arambarri', realTeam: 'GET', position: 'Medio', value: 11, status: 'Disponible', jornadasPoints: { 1: 8, 2: 6, 3: 8, 4: 7, 5: 8 }, jornadasGoals: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Aimar Oroz', realTeam: 'OSA', position: 'Medio', value: 12, status: 'Disponible', jornadasPoints: { 1: 7, 2: 8, 3: 7, 4: 8, 5: 7 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Lucas Torró', realTeam: 'OSA', position: 'Medio', value: 10, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 7, 4: 6, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Kirian Rodríguez', realTeam: 'LPA', position: 'Medio', value: 11, status: 'Disponible', jornadasPoints: { 1: 6, 2: 7, 3: 6, 4: 6, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Sergi Darder', realTeam: 'MLL', position: 'Medio', value: 11, status: 'Disponible', jornadasPoints: { 1: 6, 2: 6, 3: 7, 4: 6, 5: 6 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Kike Pérez', realTeam: 'VLD', position: 'Medio', value: 8, status: 'Disponible', jornadasPoints: { 1: 5, 2: 6, 3: 5, 4: 6, 5: 5 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
 
   // Delanteros
   { name: 'Kylian Mbappé', realTeam: 'RMA', position: 'Delantero', value: 28, status: 'Disponible', jornadasPoints: { 1: 9, 2: 12, 3: 13, 4: 10, 5: 14 }, jornadasGoals: { 1: 1, 2: 2, 3: 2, 4: 1, 5: 2 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
   { name: 'Vinícius Júnior', realTeam: 'RMA', position: 'Delantero', value: 27, status: 'Disponible', jornadasPoints: { 1: 10, 2: 11, 3: 12, 4: 11, 5: 13 }, jornadasGoals: { 1: 1, 2: 1, 3: 2, 4: 1, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
   { name: 'Robert Lewandowski', realTeam: 'BAR', position: 'Delantero', value: 26, status: 'Disponible', jornadasPoints: { 1: 13, 2: 12, 3: 11, 4: 14, 5: 12 }, jornadasGoals: { 1: 2, 2: 2, 3: 1, 4: 3, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
-  { name: 'Lamine Yamal', realTeam: 'BAR', position: 'Delantero', value: 25, status: 'Disponible', jornadasPoints: { 1: 11, 2: 12, 3: 13, 4: 12, 5: 14 }, jornadasGoals: { 1: 1, 2: 1, 3: 1, 4: 2, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }
+  { name: 'Lamine Yamal', realTeam: 'BAR', position: 'Delantero', value: 25, status: 'Disponible', jornadasPoints: { 1: 11, 2: 12, 3: 13, 4: 12, 5: 14 }, jornadasGoals: { 1: 1, 2: 1, 3: 1, 4: 2, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Raphinha', realTeam: 'BAR', position: 'Delantero', value: 23, status: 'Disponible', jornadasPoints: { 1: 10, 2: 14, 3: 11, 4: 13, 5: 12 }, jornadasGoals: { 1: 1, 2: 3, 3: 1, 4: 2, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Antoine Griezmann', realTeam: 'ATM', position: 'Delantero', value: 23, status: 'Disponible', jornadasPoints: { 1: 10, 2: 9, 3: 11, 4: 10, 5: 12 }, jornadasGoals: { 1: 1, 2: 1, 3: 1, 4: 1, 5: 2 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Julián Álvarez', realTeam: 'ATM', position: 'Delantero', value: 22, status: 'Disponible', jornadasPoints: { 1: 8, 2: 10, 3: 9, 4: 11, 5: 10 }, jornadasGoals: { 1: 0, 2: 1, 3: 1, 4: 1, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Alexander Sørloth', realTeam: 'ATM', position: 'Delantero', value: 18, status: 'Disponible', jornadasPoints: { 1: 9, 2: 7, 3: 8, 4: 9, 5: 8 }, jornadasGoals: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Nico Williams', realTeam: 'ATH', position: 'Delantero', value: 22, status: 'Disponible', jornadasPoints: { 1: 9, 2: 10, 3: 8, 4: 11, 5: 10 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Iñaki Williams', realTeam: 'ATH', position: 'Delantero', value: 18, status: 'Disponible', jornadasPoints: { 1: 8, 2: 9, 3: 10, 4: 8, 5: 9 }, jornadasGoals: { 1: 1, 2: 1, 3: 1, 4: 0, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Takefusa Kubo', realTeam: 'RSO', position: 'Delantero', value: 19, status: 'Disponible', jornadasPoints: { 1: 9, 2: 8, 3: 10, 4: 8, 5: 9 }, jornadasGoals: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Mikel Oyarzabal', realTeam: 'RSO', position: 'Delantero', value: 18, status: 'Disponible', jornadasPoints: { 1: 8, 2: 8, 3: 7, 4: 9, 5: 8 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Ayoze Pérez', realTeam: 'VIL', position: 'Delantero', value: 18, status: 'Disponible', jornadasPoints: { 1: 10, 2: 11, 3: 10, 4: 12, 5: 11 }, jornadasGoals: { 1: 1, 2: 1, 3: 2, 4: 2, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Iago Aspas', realTeam: 'CEL', position: 'Delantero', value: 17, status: 'Disponible', jornadasPoints: { 1: 9, 2: 10, 3: 8, 4: 9, 5: 9 }, jornadasGoals: { 1: 1, 2: 1, 3: 0, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Borja Iglesias', realTeam: 'CEL', position: 'Delantero', value: 14, status: 'Disponible', jornadasPoints: { 1: 8, 2: 9, 3: 7, 4: 8, 5: 8 }, jornadasGoals: { 1: 1, 2: 1, 3: 0, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Ante Budimir', realTeam: 'OSA', position: 'Delantero', value: 15, status: 'Disponible', jornadasPoints: { 1: 8, 2: 8, 3: 9, 4: 8, 5: 9 }, jornadasGoals: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Hugo Duro', realTeam: 'VAL', position: 'Delantero', value: 13, status: 'Disponible', jornadasPoints: { 1: 7, 2: 8, 3: 7, 4: 8, 5: 7 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Vedat Muriqi', realTeam: 'MLL', position: 'Delantero', value: 14, status: 'Disponible', jornadasPoints: { 1: 8, 2: 7, 3: 8, 4: 8, 5: 8 }, jornadasGoals: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Abel Ruiz', realTeam: 'GIR', position: 'Delantero', value: 12, status: 'Disponible', jornadasPoints: { 1: 7, 2: 8, 3: 6, 4: 7, 5: 7 }, jornadasGoals: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Sergio Camello', realTeam: 'RAY', position: 'Delantero', value: 11, status: 'Disponible', jornadasPoints: { 1: 7, 2: 6, 3: 7, 4: 6, 5: 7 }, jornadasGoals: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Javi Puado', realTeam: 'ESP', position: 'Delantero', value: 12, status: 'Disponible', jornadasPoints: { 1: 7, 2: 7, 3: 9, 4: 6, 5: 8 }, jornadasGoals: { 1: 0, 2: 0, 3: 2, 4: 0, 5: 1 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+  { name: 'Juanmi Latasa', realTeam: 'VLD', position: 'Delantero', value: 9, status: 'Disponible', jornadasPoints: { 1: 5, 2: 6, 3: 5, 4: 6, 5: 5 }, jornadasGoals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, jornadasDef: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
 ];
+
+const INITIAL_LINEUPS: LineupEntry[] = [];
 
 export const DEMO_TEAM_NAMES = [
   'galácticos fc',
@@ -150,9 +215,13 @@ export const DEMO_TEAM_NAMES = [
   'dream team 92'
 ];
 
+const INITIAL_TRANSFERS: TransferRecord[] = [];
+const INITIAL_DRAFTS: DraftRecord[] = [];
+const INITIAL_SCHEDULES: ScheduleRecord[] = [];
+
 export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec';
 
-class GasEngineService {
+export class GasEngineService {
   private teams: string[] = [];
   private tokens: TeamToken[] = [];
   private players: Player[] = [];
@@ -173,7 +242,6 @@ class GasEngineService {
     freeTransfers: 3
   };
   private customCodeGs: string = '';
-  private playerModeActive: boolean = false;
   private customClubStyles: ClubStyle[] = [...DEFAULT_CLUB_STYLES];
   private notificationConfig: NotificationConfig = {
     githubRepo: '',
@@ -188,7 +256,6 @@ class GasEngineService {
   private isDraftHiddenState: boolean = false;
   private remoteMaxJornada: number = 0;
   private isSyncingRemote: boolean = false;
-  private lastRemoteDataSig: string = '';
   private listeners: Array<() => void> = [];
 
   constructor() {
@@ -196,12 +263,17 @@ class GasEngineService {
     this.initCentralizedSync();
   }
 
-  private loadState() {
+  private loadState(): void {
     if (typeof window === 'undefined') return;
-
     try {
-      const savedGas = localStorage.getItem('lfa_gas_url');
-      if (savedGas && savedGas.trim()) this.gasUrl = savedGas.trim();
+      const savedGasUrl = localStorage.getItem('lfa_gas_url');
+      if (savedGasUrl) this.gasUrl = savedGasUrl;
+
+      const savedContrib = localStorage.getItem('lfa_first_contribution_jornada');
+      if (savedContrib) this.firstContributionJornada = Number(savedContrib) || 5;
+
+      const savedAdmin = localStorage.getItem('lfa_admin_password');
+      if (savedAdmin) this.adminPassword = savedAdmin;
 
       const savedTeams = localStorage.getItem('lfa_teams');
       this.teams = savedTeams ? JSON.parse(savedTeams) : [...INITIAL_TEAMS];
@@ -213,28 +285,25 @@ class GasEngineService {
       this.players = savedPlayers ? JSON.parse(savedPlayers) : [...INITIAL_PLAYERS];
 
       const savedLineups = localStorage.getItem('lfa_lineups');
-      this.lineups = savedLineups ? JSON.parse(savedLineups) : [];
+      this.lineups = savedLineups ? JSON.parse(savedLineups) : [...INITIAL_LINEUPS];
 
       const savedTransfers = localStorage.getItem('lfa_transfers');
-      this.transfers = savedTransfers ? JSON.parse(savedTransfers) : [];
+      this.transfers = savedTransfers ? JSON.parse(savedTransfers) : [...INITIAL_TRANSFERS];
 
       const savedDrafts = localStorage.getItem('lfa_drafts');
-      this.drafts = savedDrafts ? JSON.parse(savedDrafts) : [];
+      this.drafts = savedDrafts ? JSON.parse(savedDrafts) : [...INITIAL_DRAFTS];
 
       const savedSchedules = localStorage.getItem('lfa_schedules');
-      this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [];
+      this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
 
       const savedStyles = localStorage.getItem('lfa_club_styles');
-      if (savedStyles) this.customClubStyles = JSON.parse(savedStyles);
+      this.customClubStyles = savedStyles ? JSON.parse(savedStyles) : [...DEFAULT_CLUB_STYLES];
 
       const savedNotif = localStorage.getItem('lfa_notification_config');
       if (savedNotif) this.notificationConfig = JSON.parse(savedNotif);
 
       const savedTexts = localStorage.getItem('lfa_league_texts');
       if (savedTexts) this.leagueTexts = JSON.parse(savedTexts);
-
-      const savedFCJ = localStorage.getItem('lfa_first_contribution_jornada');
-      if (savedFCJ) this.firstContributionJornada = Number(savedFCJ) || 5;
 
       const savedDraftOrder = localStorage.getItem('lfa_draft_order');
       if (savedDraftOrder) this.draftOrder = JSON.parse(savedDraftOrder);
@@ -244,11 +313,11 @@ class GasEngineService {
 
       this.ensureTokensMatchTeams();
     } catch (e) {
-      console.warn('[gasEngine] Error cargando estado de localStorage:', e);
+      console.error('Error cargando estado desde localStorage:', e);
     }
   }
 
-  private saveState() {
+  private saveState(): void {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem('lfa_teams', JSON.stringify(this.teams));
@@ -258,30 +327,25 @@ class GasEngineService {
       localStorage.setItem('lfa_transfers', JSON.stringify(this.transfers));
       localStorage.setItem('lfa_drafts', JSON.stringify(this.drafts));
       localStorage.setItem('lfa_schedules', JSON.stringify(this.schedules));
-      localStorage.setItem('lfa_gas_url', this.gasUrl);
+      localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
+      localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
+      localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
+      localStorage.setItem('lfa_draft_order', JSON.stringify(this.draftOrder));
+      localStorage.setItem('lfa_is_draft_hidden', String(this.isDraftHiddenState));
     } catch (e) {
-      console.warn('[gasEngine] Error guardando en localStorage:', e);
+      console.error('Error guardando estado en localStorage:', e);
     }
   }
 
   private ensureTokensMatchTeams(): boolean {
     let changed = false;
-    const knownTeams = new Set(this.teams.map(t => t.toLowerCase().trim()));
-    this.tokens = this.tokens.filter(t => knownTeams.has(t.team.toLowerCase().trim()));
-
-    const assignedTokens = new Set(this.tokens.map(t => t.team.toLowerCase().trim()));
-    const tokenPool: Array<TeamToken['token']> = ['arbitro', 'porteria', 'titular', 'fichaje', 'empate', 'suplente'];
-
-    this.teams.forEach((teamName) => {
-      if (!assignedTokens.has(teamName.toLowerCase().trim())) {
-        const usedTokenTypes = new Set(this.tokens.map(t => t.token));
-        const freeType = tokenPool.find(tk => !usedTokenTypes.has(tk)) || 'titular';
-        this.tokens.push({ team: teamName, token: freeType });
+    const existingTeamNames = new Set(this.tokens.map(t => t.team.toLowerCase().trim()));
+    for (const team of this.teams) {
+      if (!existingTeamNames.has(team.toLowerCase().trim())) {
+        this.tokens.push({ team, token: 'titular' });
         changed = true;
       }
-    });
-
-    if (changed) this.saveState();
+    }
     return changed;
   }
 
@@ -380,6 +444,7 @@ class GasEngineService {
           if (serverUrl) {
             const currentLocal = this.getGasUrl();
             if (serverUrl !== currentLocal) {
+              console.log('[gasEngine] 🔄 URL de Sheets actualizada automáticamente desde el servidor central:', serverUrl);
               this.gasUrl = serverUrl;
               localStorage.setItem('lfa_gas_url', serverUrl);
               changed = true;
@@ -791,7 +856,9 @@ class GasEngineService {
 
         const raw = await resp.text();
         let data: any = null;
-        try { data = JSON.parse(raw); } catch {}
+        try {
+          data = JSON.parse(raw);
+        } catch {}
 
         if (resp.ok && data?.success) {
           return { success: true, message: data.message || '¡Mensaje de aviso enviado con éxito a Telegram!' };
@@ -824,7 +891,19 @@ class GasEngineService {
         if (desc.includes('chat not found')) {
           return {
             success: false,
-            error: `Chat no encontrado (${chatId}). Verifica que has añadido al bot al grupo o canal.`
+            error: `Chat no encontrado (${chatId}). Verifica que has añadido al bot al grupo o canal, o que has iniciado conversación con él.`
+          };
+        }
+        if (desc.includes('bot was blocked') || desc.includes("bot can't initiate conversation")) {
+          return {
+            success: false,
+            error: 'El bot no tiene permiso para escribir: abre Telegram, busca a tu bot y pulsa "Iniciar" (/start).'
+          };
+        }
+        if (desc.includes('Unauthorized') || tgResp.status === 401) {
+          return {
+            success: false,
+            error: 'Token no autorizado por Telegram. Comprueba que copiaste el token completo exactamente de @BotFather.'
           };
         }
 
@@ -1081,7 +1160,9 @@ class GasEngineService {
           delete (window as any)[callbackName];
         }
         if (abortController) {
-          try { abortController.abort(); } catch {}
+          try {
+            abortController.abort();
+          } catch {}
         }
       }
 
@@ -1125,8 +1206,14 @@ class GasEngineService {
             scriptElement = document.createElement('script');
             const jsonpUrl = fullUrl + '&callback=' + callbackName;
 
-            (window as any)[callbackName] = (data: any) => { onSuccess(data); };
-            scriptElement.onerror = () => { onFail(new Error('SCRIPT_LOAD_ERROR'), 'jsonp'); };
+            (window as any)[callbackName] = (data: any) => {
+              onSuccess(data);
+            };
+
+            scriptElement.onerror = () => {
+              onFail(new Error('SCRIPT_LOAD_ERROR'), 'jsonp');
+            };
+
             scriptElement.src = jsonpUrl;
             document.head.appendChild(scriptElement);
           } else {
@@ -1144,7 +1231,10 @@ class GasEngineService {
             signal: abortController.signal
           }).then(async (res) => {
             if (isDone) return;
-            if (!res.ok) { startJsonpFallback(); return; }
+            if (!res.ok) {
+              startJsonpFallback();
+              return;
+            }
             const text = await res.text();
             const trimmed = text.trim();
             if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || text.includes('accounts.google.com')) {
@@ -1157,7 +1247,9 @@ class GasEngineService {
             } catch {
               startJsonpFallback();
             }
-          }).catch(() => { startJsonpFallback(); });
+          }).catch(() => {
+            startJsonpFallback();
+          });
         } catch {
           startJsonpFallback();
         }
@@ -1169,8 +1261,14 @@ class GasEngineService {
         scriptElement = document.createElement('script');
         const jsonpUrl = fullUrl + '&callback=' + callbackName;
 
-        (window as any)[callbackName] = (data: any) => { onSuccess(data); };
-        scriptElement.onerror = () => { onFail(new Error('SCRIPT_LOAD_ERROR'), 'jsonp'); };
+        (window as any)[callbackName] = (data: any) => {
+          onSuccess(data);
+        };
+
+        scriptElement.onerror = () => {
+          onFail(new Error('SCRIPT_LOAD_ERROR'), 'jsonp');
+        };
+
         scriptElement.src = jsonpUrl;
         document.head.appendChild(scriptElement);
       } else {
@@ -1186,7 +1284,10 @@ class GasEngineService {
           signal: abortController.signal
         }).then(async (res) => {
           if (isDone) return;
-          if (!res.ok) { onFail(new Error('HTTP_' + res.status), 'fetch'); return; }
+          if (!res.ok) {
+            onFail(new Error('HTTP_' + res.status), 'fetch');
+            return;
+          }
           const text = await res.text();
           const trimmed = text.trim();
 
@@ -1209,7 +1310,9 @@ class GasEngineService {
           } catch {
             onFail(new Error('INVALID_JSON'), 'fetch');
           }
-        }).catch((fetchErr) => { onFail(fetchErr, 'fetch'); });
+        }).catch((fetchErr) => {
+          onFail(fetchErr, 'fetch');
+        });
       } catch (e) {
         onFail(e, 'fetch');
       }
@@ -1226,7 +1329,7 @@ class GasEngineService {
       return {
         success: false,
         code: 'DEV_URL',
-        message: '⚠️ Has introducido una URL terminada en "/dev". En Apps Script, haz clic en "Implementar > Nueva implementación" y copia la URL terminada en "/exec".'
+        message: '⚠️ Has introducido una URL terminada en "/dev" (modo desarrollador). Esta URL exige inicio de sesión en Google. En Apps Script, haz clic en "Implementar > Nueva implementación > Aplicación web" y copia la URL terminada en "/exec".'
       };
     }
 
@@ -1240,7 +1343,11 @@ class GasEngineService {
       const latencyMs = Date.now() - startTime;
 
       if (data && data.error) {
-        return { success: false, latencyMs, message: 'Google Apps Script respondió: ' + data.error };
+        return {
+          success: false,
+          latencyMs,
+          message: 'Google Apps Script respondió: ' + data.error
+        };
       }
 
       return {
@@ -1251,10 +1358,39 @@ class GasEngineService {
       };
     } catch (err: any) {
       const latencyMs = Date.now() - startTime;
+      if (err.message === 'DEV_URL_ERROR') {
+        return {
+          success: false,
+          code: 'DEV_URL',
+          message: '⚠️ La URL termina en "/dev". Debes usar la URL de implementación que termina en "/exec".'
+        };
+      }
+      if (err.message === 'AUTH_REQUIRED') {
+        return {
+          success: false,
+          code: 'AUTH_REQUIRED',
+          message: '🔒 Google exige autorización de cuenta. En Google Apps Script: "Implementar > Administrar implementaciones > Editar", y en "¿Quién tiene acceso?" elige "Cualquiera" (Anyone).'
+        };
+      }
+      if (err.message === 'OLD_GAS_CODE') {
+        return {
+          success: false,
+          code: 'OLD_CODE',
+          message: '⚠️ Tu Web App devolvió la página HTML antigua. En Google Apps Script debes: 1) Pegar el nuevo "Código.gs", 2) Guardar (Ctrl+S), y 3) Ir a "Implementar > Administrar implementaciones > Editar > Versión: Nueva versión > Implementar".'
+        };
+      }
+      if (err.message === 'RETURNED_HTML') {
+        return {
+          success: false,
+          code: 'HTML_RESPONSE',
+          message: '⚠️ La Web App respondió con HTML en vez de la API JSON. Asegúrate de actualizar el archivo "Código.gs" en tu proyecto de Apps Script y crear una "Nueva versión" en la implementación.'
+        };
+      }
+
       return {
         success: false,
         latencyMs,
-        message: err?.message || 'No se pudo conectar con Google Apps Script.'
+        message: 'No se pudo conectar con la Web App. Comprueba que: 1) La URL termine en "/exec", 2) Hayas pegado el nuevo "Código.gs", y 3) En Apps Script hayas seleccionado "Nueva versión" en Implementar > Administrar implementaciones.'
       };
     }
   }
@@ -1310,8 +1446,6 @@ class GasEngineService {
       }
 
       if (data && data.error) {
-        clearTimeout(safetyTimer);
-        this.isSyncingRemote = false;
         return { success: false, message: 'Error de Google Apps Script: ' + data.error };
       }
 
@@ -1325,361 +1459,84 @@ class GasEngineService {
       let updatedTeamsCount = 0;
       let updatedPlayersCount = 0;
 
-      // 1. Sincronizar Equipos
       if (Array.isArray(data.teams) && data.teams.length > 0) {
         const seenTeams = new Set<string>();
         const remoteTeams: string[] = [];
         data.teams.forEach((t: any) => {
           const trimmed = String(t || '').trim();
           const lower = trimmed.toLowerCase();
-          if (trimmed && !seenTeams.has(lower) && !DEMO_TEAM_NAMES.includes(lower)) {
+          if (trimmed && !seenTeams.has(lower)) {
             seenTeams.add(lower);
             remoteTeams.push(trimmed);
           }
         });
         if (remoteTeams.length > 0) {
           this.teams = remoteTeams;
-          updatedTeamsCount = remoteTeams.length;
+          updatedTeamsCount = this.teams.length;
         }
       }
 
-      // 2. Sincronizar Tokens de Equipos
       if (Array.isArray(data.tokens) && data.tokens.length > 0) {
-        this.tokens = data.tokens.filter((tk: TeamToken) => !DEMO_TEAM_NAMES.includes(tk.team.toLowerCase().trim()));
+        this.tokens = data.tokens;
       }
-      this.ensureTokensMatchTeams();
 
-      // 3. Sincronizar Plantilla de Jugadores
       if (Array.isArray(data.players) && data.players.length > 0) {
-        this.players = data.players.map((p: any) => ({
-          name: String(p.name || '').trim(),
-          realTeam: canonicalizeRealTeam(p.realTeam),
-          position: p.position || 'Medio',
-          value: parseCleanNumber(p.value),
-          status: p.status || 'Disponible',
-          jornadasPoints: p.jornadasPoints || {},
-          jornadasGoals: p.jornadasGoals || {},
-          jornadasDef: p.jornadasDef || {}
-        })).filter((p: Player) => p.name.length > 0);
+        this.players = data.players;
         updatedPlayersCount = this.players.length;
       }
 
-      // 4. Sincronizar Fichajes / Transferencias
-      if (Array.isArray(data.transfers)) {
-        const remoteTransfers: TransferRecord[] = data.transfers
-          .filter((t: any) => t && !DEMO_TEAM_NAMES.includes(String(t.team || '').toLowerCase().trim()))
-          .map((t: any) => ({
-            team: String(t.team || '').trim(),
-            jornada: Number(t.jornada) || 1,
-            playerOut: String(t.playerOut || '').trim(),
-            playerIn: String(t.playerIn || '').trim(),
-            cost: parseCleanNumber(t.cost),
-            type: t.type || 'Standard',
-            timestamp: t.timestamp || new Date().toISOString()
-          }));
-
-        this.transfers = remoteTransfers;
-      }
-
-      // 5. Sincronizar Alineaciones
       if (Array.isArray(data.lineups)) {
-        this.lineups = data.lineups
-          .filter((l: any) => l && !DEMO_TEAM_NAMES.includes(String(l.team || '').toLowerCase().trim()))
-          .map((l: any) => ({
-            team: String(l.team || '').trim(),
-            jornada: Number(l.jornada) || 1,
-            slot: Number(l.slot) || 1,
-            playerName: String(l.playerName || '').trim(),
-            realTeam: canonicalizeRealTeam(l.realTeam),
-            position: l.position || 'Medio',
-            value: parseCleanNumber(l.value)
-          }));
+        this.lineups = data.lineups;
       }
 
-      // 6. Sincronizar Elecciones de Draft
+      if (Array.isArray(data.transfers)) {
+        this.transfers = data.transfers;
+      }
+
       if (Array.isArray(data.drafts)) {
-        this.drafts = data.drafts.map((d: any) => ({
-          team: String(d.team || '').trim(),
-          player: String(d.player || '').trim(),
-          round: Number(d.round) || 1,
-          pickNumber: Number(d.pickNumber) || 1,
-          timestamp: d.timestamp || new Date().toISOString()
-        }));
+        this.drafts = data.drafts;
       }
 
-      // 7. Sincronizar Calendario / Encuentros
       if (Array.isArray(data.schedules)) {
-        this.schedules = data.schedules.map((s: any) => ({
-          jornada: Number(s.jornada) || 1,
-          homeTeam: String(s.homeTeam || '').trim(),
-          awayTeam: String(s.awayTeam || '').trim(),
-          scoreHome: s.scoreHome !== undefined && s.scoreHome !== null ? Number(s.scoreHome) : null,
-          scoreAway: s.scoreAway !== undefined && s.scoreAway !== null ? Number(s.scoreAway) : null
-        }));
+        this.schedules = data.schedules;
       }
 
-      this.lastSyncTime = new Date().toLocaleString('es-ES');
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('lfa_last_sync_time', this.lastSyncTime);
-      }
-
+      this.ensureTokensMatchTeams();
       this.saveState();
+      this.lastSyncTime = new Date().toISOString();
+      localStorage.setItem('lfa_last_sync_time', this.lastSyncTime);
       this.notify();
-
-      clearTimeout(safetyTimer);
-      this.isSyncingRemote = false;
 
       return {
         success: true,
-        message: 'Sincronización completada con éxito con Google Sheets.',
+        message: 'Sincronización remota completada con éxito.',
         stats: {
-          teamsCount: updatedTeamsCount,
-          playersCount: updatedPlayersCount,
-          transfersCount: this.transfers.length
+          teams: updatedTeamsCount,
+          players: updatedPlayersCount
         }
       };
     } catch (err: any) {
-      clearTimeout(safetyTimer);
-      this.isSyncingRemote = false;
       return {
         success: false,
-        message: 'No se pudo sincronizar con Google Sheets: ' + (err?.message || 'Error de red.')
+        message: 'Fallo al sincronizar datos remotos: ' + (err.message || 'Error de red')
       };
+    } finally {
+      clearTimeout(safetyTimer);
+      this.isSyncingRemote = false;
     }
   }
 
-  // --- MÉTODOS DE FICHAJES Y MERCADO DE JUGADORES ---
-
-  public getTransfers(): TransferRecord[] {
-    return [...this.transfers];
-  }
-
-  public getTeamTransfersCount(team: string, jornada?: number): number {
-    const cleanTeam = team.toLowerCase().trim();
-    return this.transfers.filter(t => {
-      const matchTeam = t.team.toLowerCase().trim() === cleanTeam;
-      if (!matchTeam) return false;
-      if (jornada !== undefined) return t.jornada === jornada;
-      return true;
-    }).length;
-  }
-
-  public getFreeTransfersCount(team: string): number {
-    const used = this.getTeamTransfersCount(team);
-    const maxFree = this.leagueTexts.freeTransfers || FREE_TRANSFERS_PER_TEAM;
-    return Math.max(0, maxFree - used);
-  }
-
-  public async registerTransfer(data: {
-    team: string;
-    playerOut: string;
-    playerIn: string;
-    jornada: number;
-    cost?: number;
-    type?: string;
-    adminPassword?: string;
-  }): Promise<{ success: boolean; message: string; transferCost?: number }> {
-    const cleanTeam = data.team.trim();
-    const cleanOut = data.playerOut.trim();
-    const cleanIn = data.playerIn.trim();
-
-    if (!cleanTeam || !cleanOut || !cleanIn) {
-      return { success: false, message: 'Todos los campos del fichaje son obligatorios.' };
-    }
-
-    const calculatedCost = data.cost !== undefined 
-      ? data.cost 
-      : (this.getFreeTransfersCount(cleanTeam) > 0 ? 0 : (this.leagueTexts.transferCost || TRANSFER_COST));
-
-    const transferType = data.type || (calculatedCost === 0 ? 'Gratuito' : 'De Pago');
-
-    const newTransfer: TransferRecord = {
-      team: cleanTeam,
-      jornada: data.jornada,
-      playerOut: cleanOut,
-      playerIn: cleanIn,
-      cost: calculatedCost,
-      type: transferType,
-      timestamp: new Date().toISOString()
-    };
-
-    // 1. Guardar localmente inmediatamente (optimistic update)
-    this.transfers.unshift(newTransfer);
-
-    // Actualizar jugador saliente
-    const pOutObj = this.players.find(p => p.name.toLowerCase().trim() === cleanOut.toLowerCase());
-    if (pOutObj) {
-      pOutObj.status = 'Transferido';
-    }
-
-    // Actualizar jugador entrante
-    const pInObj = this.players.find(p => p.name.toLowerCase().trim() === cleanIn.toLowerCase());
-    if (pInObj) {
-      pInObj.status = 'Fichado';
-    }
-
-    // Actualizar alineaciones locales si el jugador de salida estaba en alineación
-    this.lineups.forEach(l => {
-      if (l.team.toLowerCase().trim() === cleanTeam.toLowerCase() && l.playerName.toLowerCase().trim() === cleanOut.toLowerCase() && l.jornada === data.jornada) {
-        l.playerName = cleanIn;
-        if (pInObj) {
-          l.realTeam = pInObj.realTeam;
-          l.position = pInObj.position;
-          l.value = pInObj.value;
-        }
-      }
-    });
-
-    this.saveState();
-    this.notify();
-
-    // 2. Persistir en el servidor central backend (/api/persisted-league)
-    try {
-      await fetch('/api/persisted-league', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'addTransfer',
-          transfer: newTransfer,
-          lineupOverride: {
-            team: cleanTeam,
-            jornada: data.jornada,
-            playerOut: cleanOut,
-            playerIn: cleanIn,
-            realTeam: pInObj?.realTeam,
-            position: pInObj?.position,
-            value: pInObj?.value
-          }
-        })
-      });
-    } catch (e) {
-      console.warn('[gasEngine] Falló la persistencia en servidor local:', e);
-    }
-
-    // 3. Disparar avisos a Telegram y GitHub Actions
-    this.triggerFichajeNotification({
-      equipo: cleanTeam,
-      jugadorEntra: `${cleanIn} (${pInObj?.realTeam || 'LaLiga'})`,
-      jugadorSale: `${cleanOut} (${pOutObj?.realTeam || 'LaLiga'})`,
-      jornada: data.jornada,
-      coste: calculatedCost.toFixed(2),
-      tipo: transferType
-    }).catch(() => {});
-
-    // 4. Enviar mutación a Google Apps Script si hay conexión disponible
-    if (this.isRemoteConnected()) {
-      try {
-        await this.fetchGasData(this.getGasUrl(), {
-          action: 'transfer',
-          team: cleanTeam,
-          playerOut: cleanOut,
-          playerIn: cleanIn,
-          jornada: String(data.jornada),
-          cost: String(calculatedCost),
-          type: transferType,
-          adminPassword: data.adminPassword || this.adminPassword
-        }, 15000);
-      } catch (gasErr) {
-        console.warn('[gasEngine] Error enviando fichaje a Sheets:', gasErr);
-      }
-    }
-
-    return {
-      success: true,
-      message: `¡Fichaje de ${cleanIn} registrado con éxito para ${cleanTeam}!`,
-      transferCost: calculatedCost
-    };
-  }
-
-  // --- MÉTODOS DE DRAFT, EQUIPOS, JUGADORES Y CONFIGURACIÓN ---
-
-  public getPlayers(): Player[] {
-    return [...this.players];
-  }
-
-  public getTeams(): string[] {
-    return [...this.teams];
-  }
-
-  public getTokens(): TeamToken[] {
-    return [...this.tokens];
-  }
-
-  public getLineups(): LineupEntry[] {
-    return [...this.lineups];
-  }
-
-  public getDrafts(): DraftRecord[] {
-    return [...this.drafts];
-  }
-
-  public getSchedules(): ScheduleRecord[] {
-    return [...this.schedules];
-  }
-
-  public getLeagueTexts(): LeagueTexts {
-    return { ...this.leagueTexts };
-  }
-
-  public saveLeagueTexts(texts: Partial<LeagueTexts>, adminPassword?: string): { success: boolean; message: string } {
-    this.leagueTexts = { ...this.leagueTexts, ...texts };
-    localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
-    this.saveState();
-    this.notify();
-    this.pushLeagueConfigToServer({ leagueTexts: this.leagueTexts }, adminPassword).catch(() => {});
-    return { success: true, message: 'Textos y parámetros de la liga actualizados correctamente.' };
-  }
-
-  public getAdminPassword(): string {
-    return this.adminPassword;
-  }
-
-  public setAdminPassword(pass: string): void {
-    this.adminPassword = pass.trim();
-    localStorage.setItem('lfa_admin_password', this.adminPassword);
-    this.pushLeagueConfigToServer({ adminPassword: this.adminPassword }).catch(() => {});
-    this.notify();
-  }
-
-  public getCustomCodeGs(): string {
-    return this.customCodeGs || generateCustomGasCode(this.leagueTexts);
-  }
-
-  public setCustomCodeGs(code: string, adminPassword?: string): void {
-    this.customCodeGs = code;
-    localStorage.setItem('lfa_custom_code_gs', code);
-    this.pushLeagueConfigToServer({ customCodeGs: code }, adminPassword).catch(() => {});
-    this.notify();
-  }
-
-  public getDraftOrder(): DraftRoundOrder[] {
-    return [...this.draftOrder];
-  }
-
-  public isDraftHidden(): boolean {
-    return this.isDraftHiddenState;
-  }
-
-  public setDraftHidden(hidden: boolean, adminPassword?: string): void {
-    this.isDraftHiddenState = hidden;
-    localStorage.setItem('lfa_is_draft_hidden', String(hidden));
-    this.pushLeagueConfigToServer({ isDraftHidden: hidden }, adminPassword).catch(() => {});
-    this.notify();
-  }
-
-  public resetAllData(): void {
-    this.teams = [...INITIAL_TEAMS];
-    this.tokens = [...INITIAL_TOKENS];
-    this.players = [...INITIAL_PLAYERS];
-    this.lineups = [];
-    this.transfers = [];
-    this.drafts = [];
-    this.schedules = [];
-    this.customClubStyles = [...DEFAULT_CLUB_STYLES];
-    this.saveState();
-    this.notify();
-  }
+  // Getters para exponer datos a la app
+  public getTeams(): string[] { return [...this.teams]; }
+  public getTokens(): TeamToken[] { return [...this.tokens]; }
+  public getPlayers(): Player[] { return [...this.players]; }
+  public getLineups(): LineupEntry[] { return [...this.lineups]; }
+  public getTransfers(): TransferRecord[] { return [...this.transfers]; }
+  public getDrafts(): DraftRecord[] { return [...this.drafts]; }
+  public getSchedules(): ScheduleRecord[] { return [...this.schedules]; }
+  public getLeagueTexts(): LeagueTexts { return { ...this.leagueTexts }; }
+  public getDraftOrder(): DraftRoundOrder[] { return [...this.draftOrder]; }
+  public isDraftHidden(): boolean { return this.isDraftHiddenState; }
 }
 
-// Instancia única (Singleton) exportada
 export const gasEngine = new GasEngineService();
