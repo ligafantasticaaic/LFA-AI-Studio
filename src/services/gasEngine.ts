@@ -907,7 +907,7 @@ export class GasEngineService {
           };
         }
 
-        return { success: false, error: `Telegram error (${tgData?.error_code \vert{}\vert{} tgResp.status}):${desc}` };
+        return { success: false, error: `Telegram error (${tgData?.error_code || tgResp.status}):${desc}` };
       } catch (directErr: any) {
         return {
           success: false,
