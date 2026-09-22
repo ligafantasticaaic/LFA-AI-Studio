@@ -612,6 +612,7 @@ function doGet(e) {
   
   // Si la app React (en GitHub Pages, Cloud Run o local) solicita datos via API JSON
   if (action) {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
     var result = {};
     try {
       if (action === 'ping' || action === 'test') {
@@ -732,7 +733,12 @@ function doPost(e) {
       result = processDraftSelection(postData.team, postData.token, postData.player);
     } else if (action === 'transfer' || action === 'fichaje' || action === 'fichajes' || action === 'transfers') {
       var reqId = postData.requestId || (e && e.parameter && e.parameter.requestId) || '';
-      result = processMultipleTransfers(postData.team, postData.token, postData.jornada, postData.transfers, reqId);
+      var jNum = Number(postData.jornada || (e && e.parameter && e.parameter.jornada) || 1);
+      var trListPost = postData.transfers;
+      if (typeof trListPost === 'string') {
+        try { trListPost = JSON.parse(trListPost); } catch(eTr) { trListPost = []; }
+      }
+      result = processMultipleTransfers(postData.team, postData.token, jNum, trListPost, reqId);
     } else if (action === 'saveDraftOrder') {
       result = saveDraftOrderToSheet(postData.draftOrder);
     } else if (action === 'resetSeason') {
@@ -1387,14 +1393,63 @@ function getHorariosEquipos(ss) {
 }
 
 /**
- * Comprueba si todos los equipos de la liga ya han disputado su partido en la jornada
- * Una jornada está finalizada ÚNICAMENTE cuando todos sus partidos se han jugado.
+ * Comprueba si la jornada ya ha concluido.
+ * REGLA SUPREMA: Manda la hoja Horarios_Equipos.
+ * La jornada está finalizada cuando las fechas y horarios de los partidos ya han pasado,
+ * independientemente de que haya o no puntuaciones en la hoja Jugadores.
  */
 function isJornadaFullyPlayedInSheet(ss, jornada) {
   jornada = Number(jornada);
   if (!jornada || isNaN(jornada)) return false;
   try {
     if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. Autoridad Suprema: Hoja Horarios_Equipos
+    var schedules = getHorariosEquipos(ss);
+    if (schedules && schedules.length > 0) {
+      var jScheds = schedules.filter(function(s) {
+        return Number(s.jornada) === jornada;
+      });
+
+      if (jScheds.length > 0) {
+        var now = new Date();
+        var allPast = true;
+        for (var si = 0; si < jScheds.length; si++) {
+          var sc = jScheds[si];
+          var deadline = sc.deadlineIsoString ? new Date(sc.deadlineIsoString) : null;
+          if (!deadline || isNaN(deadline.getTime())) {
+            if (sc.year && sc.month && sc.day) {
+              deadline = new Date(sc.year, sc.month - 1, sc.day, sc.hours || 23, sc.minutes || 59, 0);
+            }
+          }
+          if (deadline && !isNaN(deadline.getTime())) {
+            if (now < deadline) {
+              allPast = false;
+              break;
+            }
+          }
+        }
+        return allPast;
+      }
+
+      // Si no hay filas específicas para esta jornada en Horarios_Equipos,
+      // pero hay jornadas posteriores cuyos partidos ya han concluido (ej: estamos en J1 y J4 ya pasó):
+      var maxPassedJornada = 0;
+      var nowTime = new Date().getTime();
+      for (var k = 0; k < schedules.length; k++) {
+        var sk = schedules[k];
+        var dl = sk.deadlineIsoString ? new Date(sk.deadlineIsoString).getTime() : 0;
+        if (dl > 0 && nowTime >= dl) {
+          var jNum = Number(sk.jornada);
+          if (jNum > maxPassedJornada) maxPassedJornada = jNum;
+        }
+      }
+      if (maxPassedJornada >= jornada) {
+        return true;
+      }
+    }
+
+    // 2. Respaldo secundario si la hoja Horarios_Equipos está vacía: comprobar puntuaciones en Jugadores
     var sheetJug = ss.getSheetByName('Jugadores');
     if (!sheetJug) return false;
     var lastCol = sheetJug.getLastColumn();
@@ -1431,7 +1486,6 @@ function isJornadaFullyPlayedInSheet(ss, jornada) {
     var leagueList = Object.keys(allLeagueTeams);
     if (leagueList.length === 0) return false;
 
-    // Si hay algún equipo sin puntos registrados en esta jornada, la jornada NO está finalizada (partido suspendido/pendiente)
     for (var i = 0; i < leagueList.length; i++) {
       var eqName = leagueList[i];
       if (!teamsWithPoints[eqName]) {
