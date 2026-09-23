@@ -980,7 +980,7 @@ class GasEngineService {
     jornada: number;
     coste: string;
     tipo: string;
-  }): Promise<void> {
+  }): Promise<{ success: boolean; error?: string }> {
     const notif = this.notificationConfig;
     const now = new Date();
     const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
@@ -999,14 +999,16 @@ class GasEngineService {
       `⏱ _${dateStr}_`
     ].join('\n');
 
+    let tgRes: { success: boolean; error?: string } = { success: true };
     // 1. Envío directo y vía proxy a Telegram
     if (notif.telegramBotToken && notif.telegramChatId) {
-      this.sendTelegramCustomMessage(msg).catch(e => console.warn('[gasEngine] Fallo aviso Telegram:', e));
+      tgRes = await this.sendTelegramCustomMessage(msg).catch(e => ({ success: false, error: e?.message || 'Error de red' }));
     }
     // 2. Notificación a GitHub Actions
     if (notif.githubRepo && notif.githubToken) {
       this.testNotification('github', payload).catch(e => console.warn('[gasEngine] Fallo dispatch GitHub Actions:', e));
     }
+    return tgRes;
   }
 
   public async sendTelegramCustomMessage(text: string): Promise<{ success: boolean; message?: string; error?: string }> {
@@ -1029,9 +1031,12 @@ class GasEngineService {
           text
         })
       });
-      if (resp.ok) {
-        const data = await resp.json().catch(() => null);
-        if (data?.success) return { success: true };
+      const data = await resp.json().catch(() => null);
+      if (resp.ok && data?.success) {
+        return { success: true };
+      }
+      if (data?.error) {
+        return { success: false, error: data.error };
       }
     } catch {}
 
@@ -1059,9 +1064,13 @@ class GasEngineService {
         tgData = await tgResp.json().catch(() => null);
       }
       if (tgData?.ok) return { success: true };
-      return { success: false, error: tgData?.description };
+      const desc = tgData?.description || `Error HTTP ${tgResp.status}`;
+      if (desc.includes('Unauthorized') || tgResp.status === 401) {
+        return { success: false, error: 'Telegram 401 Unauthorized: El bot token no es válido o fue revocado en @BotFather.' };
+      }
+      return { success: false, error: desc };
     } catch (e: any) {
-      return { success: false, error: e?.message };
+      return { success: false, error: e?.message || 'Error de conexión con Telegram' };
     }
   }
 
@@ -1586,7 +1595,7 @@ class GasEngineService {
       if (rawTransfers !== null && Array.isArray(rawTransfers)) {
         const seenTransfers = new Set<string>();
         const parsedTransfers: TransferRecord[] = [];
-        rawTransfers.forEach((t: any) => {
+        rawTransfers.forEach((t: any, idx: number) => {
           const timestamp = String(t.timestamp || t.date || t['Marca temporal'] || t.Fecha || t['Fecha/Hora'] || t.Hora || '').trim();
           const team = String(t.team || t.Equipo || t.Team || t.Club || t['Nombre Equipo'] || '').trim();
           if (DEMO_TEAM_NAMES.includes(team.toLowerCase())) return;
@@ -1597,7 +1606,7 @@ class GasEngineService {
           const cost = parseCleanNumber(t.cost !== undefined ? t.cost : (t.Coste !== undefined ? t.Coste : (t.Precio !== undefined ? t.Precio : 0)));
           const type = ((t.type || t.Tipo || 'Normal') as 'Normal' | 'Abandono');
 
-          const key = `${team.toLowerCase()}:::${jornada}:::${playerOut.toLowerCase()}:::${playerIn.toLowerCase()}`;
+          const key = `${timestamp}:::${team.toLowerCase()}:::${jornada}:::${playerOut.toLowerCase()}:::${playerIn.toLowerCase()}:::${idx}`;
           if ((team || playerOut || playerIn) && !seenTransfers.has(key)) {
             seenTransfers.add(key);
             parsedTransfers.push({ timestamp, team, jornada, playerOut, playerIn, cost, type });
@@ -1607,52 +1616,7 @@ class GasEngineService {
         // Google Sheets es la fuente autoritativa: se reemplaza el registro local con el de Sheets
         this.transfers = parsedTransfers;
         updatedTransfersCount = this.transfers.length;
-
-        // Re-aplicar fichajes sobre las alineaciones en orden cronológico (exclusivamente para la jornada del fichaje)
-        const chronological = [...this.transfers].reverse();
-        chronological.forEach(tr => {
-          const trTeam = tr.team.trim().toLowerCase();
-          const trJor = tr.jornada;
-          const trOut = tr.playerOut.trim().toLowerCase();
-          const trIn = tr.playerIn.trim();
-
-          this.lineups.forEach(l => {
-            if (
-              l.team.trim().toLowerCase() === trTeam &&
-              l.jornada === trJor &&
-              l.playerName.trim().toLowerCase() === trOut
-            ) {
-              const pDetails = this.players.find(p => p.name.trim().toLowerCase() === trIn.toLowerCase());
-              l.playerName = trIn;
-              if (pDetails) {
-                l.realTeam = pDetails.realTeam;
-                l.position = pDetails.position;
-                l.value = pDetails.value;
-              }
-            }
-          });
-        });
       }
-
-      // Sincronizar estado de los jugadores:
-      // Se respeta prioritariamente el estado traído de la hoja Jugadores de Google Sheets.
-      // Además, se garantiza que todo jugador alineado o fichado figure con estado 'Fichado'.
-      const activeLineupPlayers = new Set(
-        this.lineups
-          .filter(l => l.playerName && l.playerName.trim() !== '')
-          .map(l => l.playerName.trim().toLowerCase())
-      );
-      this.transfers.forEach(tr => {
-        if (tr.playerIn) activeLineupPlayers.add(tr.playerIn.trim().toLowerCase());
-      });
-
-      this.players.forEach(p => {
-        const lower = (p.name || '').trim().toLowerCase();
-        if (p.status === 'Abandona Liga') return;
-        if (activeLineupPlayers.has(lower)) {
-          p.status = 'Fichado';
-        }
-      });
 
       // Actualizar historial de draft si viene en la respuesta
       const rawDrafts = Array.isArray(data.drafts) ? data.drafts :
@@ -3117,6 +3081,13 @@ class GasEngineService {
           // Si fue timeout o problema de conectividad temporal
           gasMessage = '';
         }
+
+        if (gasRes.telegram && !gasRes.telegram.success && gasRes.telegram.error) {
+          gasMessage += `\n⚠️ Telegram no enviado: ${gasRes.telegram.error}`;
+        } else if (gasRes.message && gasRes.message.includes('Telegram:')) {
+          const tgPart = gasRes.message.split('Telegram:')[1]?.replace(/[)\]]/g, '').trim();
+          if (tgPart) gasMessage += `\n⚠️ Telegram no enviado: ${tgPart}`;
+        }
       } catch (e: any) {
         gasMessage = '';
       }
@@ -3127,7 +3098,7 @@ class GasEngineService {
     const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
                     now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
 
-    plannedTransfers.forEach(pt => {
+    for (const pt of plannedTransfers) {
       if (pt.pInDetails) {
         const normOut = pt.pOut.toLowerCase().trim();
         const normIn = pt.pIn.toLowerCase().trim();
@@ -3179,18 +3150,20 @@ class GasEngineService {
         }
 
         // Disparar aviso automático (Telegram y GitHub Actions)
-        this.triggerFichajeNotification({
+        const tgRes = await this.triggerFichajeNotification({
           equipo: teamName,
           jugadorEntra: pt.pIn,
           jugadorSale: pt.pOut,
           jornada,
           coste: pt.cost.toFixed(2),
           tipo: pt.type
-        }).catch(err => {
-          console.warn('[gasEngine] Error enviando notificación de fichaje:', err);
-        });
+        }).catch(err => ({ success: false, error: err?.message || 'Error de red' }));
+
+        if (tgRes && !tgRes.success && tgRes.error && !gasMessage.includes('Telegram no enviado')) {
+          gasMessage += `\n⚠️ Telegram no enviado: ${tgRes.error}`;
+        }
       }
-    });
+    }
 
     this.saveState();
     this.notify();
@@ -4640,6 +4613,7 @@ class GasEngineService {
     sourceJornada?: number;
     targetJornada?: number;
     count?: number;
+    telegram?: { success: boolean; error?: string };
   }> {
     const targetUrl = this.getGasUrl();
     if (!targetUrl) {

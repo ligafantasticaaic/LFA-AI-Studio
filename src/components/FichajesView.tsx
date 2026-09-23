@@ -611,13 +611,13 @@ export const FichajesView: React.FC = () => {
             )}
 
             {statusMessage && (
-              <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 w-full sm:w-auto ${
+              <div className={`p-3 rounded-xl text-xs font-bold flex items-start gap-2 w-full sm:w-auto ${
                 statusMessage.isSuccess
                   ? 'bg-emerald-950/70 border border-emerald-500/40 text-emerald-300'
                   : 'bg-rose-950/70 border border-rose-500/40 text-rose-300'
               }`}>
-                {statusMessage.isSuccess ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                <span>{statusMessage.text}</span>
+                {statusMessage.isSuccess ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+                <span className="whitespace-pre-line leading-relaxed">{statusMessage.text}</span>
               </div>
             )}
           </div>

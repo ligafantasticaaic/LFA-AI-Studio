@@ -246,7 +246,20 @@ async function startServer() {
     }
     data.transfers = existingTransfers;
 
-    // 2. Aplicar lineupOverrides a las alineaciones si Google Sheets no las había actualizado aún (exclusivamente en la jornada del fichaje)
+    // Purgar de persisted.lineupOverrides aquellos que ya hayan sido asimilados por Google Sheets
+    if (rawIncoming.length > 0 && persisted.lineupOverrides.length > 0) {
+      const initialCount = persisted.lineupOverrides.length;
+      persisted.lineupOverrides = persisted.lineupOverrides.filter(ov => {
+        const tLower = String(ov.team || '').toLowerCase().trim();
+        const k = `${tLower}:::${ov.jornada}:::${String(ov.playerOut || '').toLowerCase().trim()}:::${String(ov.playerIn || '').toLowerCase().trim()}`;
+        return !seen.has(k);
+      });
+      if (persisted.lineupOverrides.length !== initialCount) {
+        savePersistedLeagueData(persisted);
+      }
+    }
+
+    // 2. Solo aplicar lineupOverrides transitorios pendientes que Google Sheets aún no haya reflejado
     if (persisted.lineupOverrides.length > 0 && Array.isArray(data.lineups)) {
       for (const ov of persisted.lineupOverrides) {
         const targetTeam = String(ov.team).toLowerCase().trim();
@@ -265,28 +278,6 @@ async function startServer() {
           }
         });
       }
-    }
-
-    // 3. Ajustar estados de jugadores en data.players
-    if (persisted.lineupOverrides.length > 0 && Array.isArray(data.players)) {
-      persisted.lineupOverrides.forEach(ov => {
-        const outLower = String(ov.playerOut).toLowerCase().trim();
-        const inLower = String(ov.playerIn).toLowerCase().trim();
-
-        data.players.forEach((p: any) => {
-          const pName = String(p.name || p.Nombre || '').toLowerCase().trim();
-          if (pName === inLower) {
-            p.status = 'Fichado';
-            if (p.Estado) p.Estado = 'Fichado';
-          }
-          if (pName === outLower) {
-            if (p.status !== 'Abandona Liga') {
-              p.status = 'Disponible';
-              if (p.Estado) p.Estado = 'Disponible';
-            }
-          }
-        });
-      });
     }
 
     return data;
@@ -650,16 +641,17 @@ async function startServer() {
   });
 
   // Helper para enviar avisos de fichajes a Telegram directamente desde el servidor backend
-  async function sendTelegramTransferAlert(team: string, jornada: number, transfers: any[]) {
+  async function sendTelegramTransferAlert(team: string, jornada: number, transfers: any[]): Promise<{ success: boolean; error?: string }> {
     try {
       const config = getGasConfig();
       const botToken = String(config.notificationConfig?.telegramBotToken || '').trim();
       const chatId = String(config.notificationConfig?.telegramChatId || '').trim();
       if (!botToken || !chatId) {
         console.log('[telegram-alert] Bot Token o Chat ID no configurados en el servidor.');
-        return;
+        return { success: false, error: 'Bot Token o Chat ID no configurados' };
       }
 
+      let lastError: string | undefined;
       for (const item of transfers) {
         const pOut = String(item.playerOut || '').trim();
         const pIn = String(item.playerIn || '').trim();
@@ -715,11 +707,22 @@ async function startServer() {
         if (tgResp.ok && tgData?.ok) {
           console.log(`[telegram-alert] ✅ Fichaje notificado a Telegram correctamente para ${team}`);
         } else {
-          console.warn(`[telegram-alert] ⚠️ Error avisando a Telegram (${tgResp.status}):`, tgData?.description || rawText);
+          const desc = tgData?.description || rawText;
+          console.warn(`[telegram-alert] ⚠️ Error avisando a Telegram (${tgResp.status}):`, desc);
+          if (desc.includes('Unauthorized') || tgResp.status === 401) {
+            lastError = 'Telegram 401 Unauthorized: El Bot Token ha expirado o fue revocado en @BotFather.';
+          } else {
+            lastError = desc;
+          }
         }
       }
+      if (lastError) {
+        return { success: false, error: lastError };
+      }
+      return { success: true };
     } catch (err: any) {
       console.warn(`[telegram-alert] Error en sendTelegramTransferAlert:`, err?.message || err);
+      return { success: false, error: err?.message || 'Error de conexión con Telegram' };
     }
   }
 
@@ -728,6 +731,7 @@ async function startServer() {
     const { action, team, token, player, jornada, sourceJornada, targetJornada, transfers, draftOrder, customGasUrl, requestId } = req.body || {};
     const config = getGasConfig();
     const targetUrl = (customGasUrl || config.gasUrl || '').trim();
+    let tgAlertResult: { success: boolean; error?: string } | undefined;
 
     // 1. Si la acción es 'transfer', persistir inmediatamente en el servidor central para que cualquier dispositivo la comparta
     if (action === 'transfer') {
@@ -778,7 +782,10 @@ async function startServer() {
         syncCache = null; // invalidar caché para que cualquier cliente vea el cambio inmediatamente
 
         // Disparar aviso automático a Telegram directamente desde el servidor backend
-        sendTelegramTransferAlert(String(team || '').trim(), Number(jornada) || 1, trList).catch(() => {});
+        tgAlertResult = await sendTelegramTransferAlert(String(team || '').trim(), Number(jornada) || 1, trList).catch(err => ({
+          success: false,
+          error: err?.message || 'Error al conectar con Telegram'
+        }));
       }
     }
 
@@ -889,9 +896,15 @@ async function startServer() {
         syncCache = null;
       }
 
+      let responseMsg = data?.message || 'Actualizado en tiempo real en Google Sheets';
+      if (action === 'transfer' && tgAlertResult && !tgAlertResult.success) {
+        responseMsg += ` (⚠️ Telegram: ${tgAlertResult.error})`;
+      }
+
       return res.json({
         success: data?.success !== false,
-        message: data?.message || 'Actualizado en tiempo real en Google Sheets',
+        message: responseMsg,
+        telegram: tgAlertResult,
         data
       });
     } catch (err: any) {
