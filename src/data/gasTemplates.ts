@@ -432,8 +432,8 @@ function menuRecalcularTodo() {
 // Configuración de Notificaciones (Telegram y GitHub Actions)
 var GITHUB_REPO = ""; // Repositorio GitHub (ej: "usuario/liga-fantastica")
 var GITHUB_PAT = ""; // GitHub Personal Access Token con permiso de repo / contents
-var TELEGRAM_BOT_TOKEN = ""; // Token del Bot de Telegram (@BotFather)
-var TELEGRAM_CHAT_ID = ""; // ID del chat o grupo de Telegram (ej: -100xxxxxxxxxx)
+var TELEGRAM_BOT_TOKEN = "8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo"; // Token del Bot de Telegram (@BotFather)
+var TELEGRAM_CHAT_ID = "-1004337595394"; // ID del chat o grupo de Telegram (ej: -100xxxxxxxxxx)
 
 /**
  * Función para enviar avisos de fichajes a Telegram y GitHub Actions
@@ -3081,7 +3081,7 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
         }
       }
       
-      // Actualizar alineación en la hoja Alineaciones
+      // Actualizar alineación en la hoja Alineaciones exclusivamente para la jornada del fichaje
       if (sheetAl) {
         var alData = sheetAl.getDataRange().getValues();
         for (var r = 1; r < alData.length; r++) {

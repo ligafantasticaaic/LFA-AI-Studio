@@ -267,8 +267,8 @@ class GasEngineService {
   private notificationConfig: NotificationConfig = {
     githubRepo: '',
     githubToken: '',
-    telegramBotToken: '',
-    telegramChatId: '',
+    telegramBotToken: '8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo',
+    telegramChatId: '-1004337595394',
     directTelegram: false
   };
   private lastSyncTime: string | null = null;
@@ -548,18 +548,19 @@ class GasEngineService {
                 if (DEMO_TEAM_NAMES.includes(tLower)) continue;
                 const outLower = String(ov.playerOut || '').toLowerCase().trim();
                 const jor = Number(ov.jornada);
-                const lEntry = this.lineups.find(l =>
-                  l.team.toLowerCase().trim() === tLower &&
-                  l.jornada === jor &&
-                  l.playerName.toLowerCase().trim() === outLower
-                );
-                if (lEntry) {
-                  lEntry.playerName = ov.playerIn;
-                  if (ov.realTeam) lEntry.realTeam = ov.realTeam;
-                  if (ov.position) lEntry.position = ov.position;
-                  if (ov.value !== undefined) lEntry.value = ov.value;
-                  appliedOverrides = true;
-                }
+                this.lineups.forEach(l => {
+                  if (
+                    l.team.toLowerCase().trim() === tLower &&
+                    l.jornada === jor &&
+                    l.playerName.toLowerCase().trim() === outLower
+                  ) {
+                    l.playerName = ov.playerIn;
+                    if (ov.realTeam) l.realTeam = ov.realTeam;
+                    if (ov.position) l.position = ov.position;
+                    if (ov.value !== undefined) l.value = ov.value;
+                    appliedOverrides = true;
+                  }
+                });
               }
               if (appliedOverrides) {
                 localStorage.setItem('lfa_lineups', JSON.stringify(this.lineups));
@@ -981,9 +982,28 @@ class GasEngineService {
     tipo: string;
   }): Promise<void> {
     const notif = this.notificationConfig;
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                    now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+
+    const msg = [
+      "🚨 *¡FICHAJE OFICIAL EN LA LIGA FANTÁSTICA!* ⚽",
+      "━━━━━━━━━━━━━━━━━━━━",
+      `🏟 *Equipo:* ${payload.equipo}`,
+      `🟢 *Alta:* ${payload.jugadorEntra}`,
+      `🔴 *Baja:* ${payload.jugadorSale}`,
+      `💰 *Coste:* ${payload.coste} €`,
+      `📅 *Jornada:* J${payload.jornada}`,
+      `📝 *Tipo:* ${payload.tipo || 'Normal'}`,
+      "━━━━━━━━━━━━━━━━━━━━",
+      `⏱ _${dateStr}_`
+    ].join('\n');
+
+    // 1. Envío directo y vía proxy a Telegram
     if (notif.telegramBotToken && notif.telegramChatId) {
-      this.testNotification('telegram', payload).catch(e => console.warn('[gasEngine] Fallo aviso Telegram:', e));
+      this.sendTelegramCustomMessage(msg).catch(e => console.warn('[gasEngine] Fallo aviso Telegram:', e));
     }
+    // 2. Notificación a GitHub Actions
     if (notif.githubRepo && notif.githubToken) {
       this.testNotification('github', payload).catch(e => console.warn('[gasEngine] Fallo dispatch GitHub Actions:', e));
     }
@@ -1429,7 +1449,7 @@ class GasEngineService {
         const tId = setTimeout(() => ctrl.abort(), 26000);
 
         try {
-          const proxyRes = await fetch(proxyUrl, { signal: ctrl.signal });
+          const proxyRes = await fetch(proxyUrl, { signal: ctrl.signal, cache: 'no-store' });
           clearTimeout(tId);
           if (proxyRes.ok) {
             const proxyJson = await proxyRes.json();
@@ -1553,19 +1573,6 @@ class GasEngineService {
         }).filter((l: any) => l.team && l.playerName);
       }
 
-      // Sincronizar estado de los jugadores: si están en las alineaciones activas pasan a 'Fichado', si no a 'Disponible'
-      const assignedPlayerNames = new Set(
-        this.lineups
-          .filter(l => l.playerName && l.playerName.trim() !== '')
-          .map(l => l.playerName.trim().toLowerCase())
-      );
-      this.players.forEach(p => {
-        const lower = (p.name || '').trim().toLowerCase();
-        if (p.status !== 'Abandona Liga') {
-          p.status = assignedPlayerNames.has(lower) ? 'Fichado' : 'Disponible';
-        }
-      });
-
       let updatedTransfersCount = 0;
       let updatedDraftsCount = 0;
 
@@ -1597,44 +1604,55 @@ class GasEngineService {
           }
         });
 
-        // Unificar también con las transferencias locales existentes que pudieran no estar aún en Sheets (excluyendo datos demo)
-        this.transfers.forEach(existing => {
-          const tLower = existing.team.toLowerCase().trim();
-          if (DEMO_TEAM_NAMES.includes(tLower)) return;
-
-          const key = `${tLower}:::${existing.jornada}:::${existing.playerOut.toLowerCase()}:::${existing.playerIn.toLowerCase()}`;
-          if (!seenTransfers.has(key)) {
-            seenTransfers.add(key);
-            parsedTransfers.unshift(existing);
-          }
-        });
-
+        // Google Sheets es la fuente autoritativa: se reemplaza el registro local con el de Sheets
         this.transfers = parsedTransfers;
         updatedTransfersCount = this.transfers.length;
 
-        // Re-aplicar cualquier fichaje sobre las alineaciones si Sheets todavía mostraba al jugador saliente
-        this.transfers.forEach(tr => {
+        // Re-aplicar fichajes sobre las alineaciones en orden cronológico (exclusivamente para la jornada del fichaje)
+        const chronological = [...this.transfers].reverse();
+        chronological.forEach(tr => {
           const trTeam = tr.team.trim().toLowerCase();
           const trJor = tr.jornada;
           const trOut = tr.playerOut.trim().toLowerCase();
           const trIn = tr.playerIn.trim();
 
-          const lEntry = this.lineups.find(l =>
-            l.team.trim().toLowerCase() === trTeam &&
-            l.jornada === trJor &&
-            l.playerName.trim().toLowerCase() === trOut
-          );
-          if (lEntry) {
-            const pDetails = this.players.find(p => p.name.trim().toLowerCase() === trIn.toLowerCase());
-            lEntry.playerName = trIn;
-            if (pDetails) {
-              lEntry.realTeam = pDetails.realTeam;
-              lEntry.position = pDetails.position;
-              lEntry.value = pDetails.value;
+          this.lineups.forEach(l => {
+            if (
+              l.team.trim().toLowerCase() === trTeam &&
+              l.jornada === trJor &&
+              l.playerName.trim().toLowerCase() === trOut
+            ) {
+              const pDetails = this.players.find(p => p.name.trim().toLowerCase() === trIn.toLowerCase());
+              l.playerName = trIn;
+              if (pDetails) {
+                l.realTeam = pDetails.realTeam;
+                l.position = pDetails.position;
+                l.value = pDetails.value;
+              }
             }
-          }
+          });
         });
       }
+
+      // Sincronizar estado de los jugadores:
+      // Se respeta prioritariamente el estado traído de la hoja Jugadores de Google Sheets.
+      // Además, se garantiza que todo jugador alineado o fichado figure con estado 'Fichado'.
+      const activeLineupPlayers = new Set(
+        this.lineups
+          .filter(l => l.playerName && l.playerName.trim() !== '')
+          .map(l => l.playerName.trim().toLowerCase())
+      );
+      this.transfers.forEach(tr => {
+        if (tr.playerIn) activeLineupPlayers.add(tr.playerIn.trim().toLowerCase());
+      });
+
+      this.players.forEach(p => {
+        const lower = (p.name || '').trim().toLowerCase();
+        if (p.status === 'Abandona Liga') return;
+        if (activeLineupPlayers.has(lower)) {
+          p.status = 'Fichado';
+        }
+      });
 
       // Actualizar historial de draft si viene en la respuesta
       const rawDrafts = Array.isArray(data.drafts) ? data.drafts :
@@ -2798,9 +2816,12 @@ class GasEngineService {
 
   public getTeamPlayersForJornada(teamName: string, jornada: number): string[] {
     if (!teamName || isNaN(jornada) || jornada <= 0) return [];
+    const normT = teamName.trim().toLowerCase();
+    const entries = this.lineups.filter(
+      l => l.team.trim().toLowerCase() === normT && l.jornada === jornada && l.playerName.trim() !== ''
+    );
     const seen = new Set<string>();
-    return this.lineups
-      .filter(l => l.team.trim() === teamName.trim() && l.jornada === jornada && l.playerName.trim() !== '')
+    return entries
       .map(l => l.playerName.trim())
       .filter(name => {
         const key = name.toLowerCase();
@@ -3107,18 +3128,24 @@ class GasEngineService {
                     now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
 
     plannedTransfers.forEach(pt => {
-      const lineupEntry = this.lineups.find(
-        l => l.team.trim() === teamName && l.jornada === jornada && l.playerName.trim() === pt.pOut
-      );
+      if (pt.pInDetails) {
+        const normOut = pt.pOut.toLowerCase().trim();
+        const normIn = pt.pIn.toLowerCase().trim();
+        const normTeam = teamName.toLowerCase().trim();
 
-      if (lineupEntry && pt.pInDetails) {
-        lineupEntry.playerName = pt.pIn;
-        lineupEntry.realTeam = pt.pInDetails.realTeam;
-        lineupEntry.position = pt.pInDetails.position;
-        lineupEntry.value = pt.pInDetails.value;
-
-        const normOut = pt.pOut.toLowerCase();
-        const normIn = pt.pIn.toLowerCase();
+        // 1. Actualizar la alineación exclusivamente en la jornada del fichaje (sin propagar automáticamente)
+        this.lineups.forEach(l => {
+          if (
+            l.team.trim().toLowerCase() === normTeam &&
+            l.jornada === jornada &&
+            l.playerName.trim().toLowerCase() === normOut
+          ) {
+            l.playerName = pt.pIn;
+            l.realTeam = pt.pInDetails!.realTeam;
+            l.position = pt.pInDetails!.position;
+            l.value = pt.pInDetails!.value;
+          }
+        });
 
         this.players.forEach(p => {
           const pNameLower = (p.name || '').trim().toLowerCase();
@@ -3167,6 +3194,9 @@ class GasEngineService {
 
     this.saveState();
     this.notify();
+
+    // Sincronización inmediata forzada para confirmar con Google Sheets y el servidor central
+    this.syncFromRemote(undefined, true).catch(() => {});
 
     return {
       success: true,

@@ -246,26 +246,24 @@ async function startServer() {
     }
     data.transfers = existingTransfers;
 
-    // 2. Aplicar lineupOverrides a las alineaciones si Google Sheets no las había actualizado aún
+    // 2. Aplicar lineupOverrides a las alineaciones si Google Sheets no las había actualizado aún (exclusivamente en la jornada del fichaje)
     if (persisted.lineupOverrides.length > 0 && Array.isArray(data.lineups)) {
       for (const ov of persisted.lineupOverrides) {
         const targetTeam = String(ov.team).toLowerCase().trim();
         const targetOut = String(ov.playerOut).toLowerCase().trim();
         const jor = Number(ov.jornada);
 
-        const idx = data.lineups.findIndex((l: any) => {
+        data.lineups.forEach((l: any) => {
           const lTeam = String(l.team || l.teamName || l.Equipo || '').toLowerCase().trim();
           const lJ = Number(l.jornada || l.Jornada || 1);
           const lPlayer = String(l.playerName || l.player || l.Jugador || '').toLowerCase().trim();
-          return lTeam === targetTeam && lJ === jor && lPlayer === targetOut;
+          if (lTeam === targetTeam && lJ === jor && lPlayer === targetOut) {
+            l.playerName = ov.playerIn;
+            if (ov.realTeam) l.realTeam = ov.realTeam;
+            if (ov.position) l.position = ov.position;
+            if (ov.value !== undefined) l.value = ov.value;
+          }
         });
-
-        if (idx !== -1) {
-          data.lineups[idx].playerName = ov.playerIn;
-          if (ov.realTeam) data.lineups[idx].realTeam = ov.realTeam;
-          if (ov.position) data.lineups[idx].position = ov.position;
-          if (ov.value !== undefined) data.lineups[idx].value = ov.value;
-        }
       }
     }
 
@@ -301,6 +299,9 @@ async function startServer() {
 
   // GET current centralized Google Apps Script Web App URL and league config
   app.get('/api/gas-config', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const config = getGasConfig();
     const persisted = getPersistedLeagueData();
     res.json({
@@ -312,6 +313,9 @@ async function startServer() {
 
   // GET centralized persisted transfers and lineups (instant across all browsers)
   app.get('/api/persisted-league', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const data = getPersistedLeagueData();
     res.json(data);
   });
@@ -467,9 +471,12 @@ async function startServer() {
       });
     }
 
-    // Servir desde caché fresca si no se solicita forzar refresco (< 20 segundos)
+    // Servir desde caché fresca si no se solicita forzar refresco (< 4 segundos para evitar sobrecarga en GAS)
     const now = Date.now();
-    if (!forceRefresh && syncCache && syncCache.url === targetUrl && (now - syncCache.timestamp < 20000)) {
+    if (!forceRefresh && syncCache && syncCache.url === targetUrl && (now - syncCache.timestamp < 4000)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       return res.json(syncCache.data);
     }
 
@@ -514,6 +521,9 @@ async function startServer() {
       }
 
       const result = await inFlightSync;
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       return res.json(result);
     } catch (err: any) {
       console.error('[gas-sync] Error al obtener datos de Google Apps Script:', err);
@@ -639,6 +649,80 @@ async function startServer() {
     }
   });
 
+  // Helper para enviar avisos de fichajes a Telegram directamente desde el servidor backend
+  async function sendTelegramTransferAlert(team: string, jornada: number, transfers: any[]) {
+    try {
+      const config = getGasConfig();
+      const botToken = String(config.notificationConfig?.telegramBotToken || '').trim();
+      const chatId = String(config.notificationConfig?.telegramChatId || '').trim();
+      if (!botToken || !chatId) {
+        console.log('[telegram-alert] Bot Token o Chat ID no configurados en el servidor.');
+        return;
+      }
+
+      for (const item of transfers) {
+        const pOut = String(item.playerOut || '').trim();
+        const pIn = String(item.playerIn || '').trim();
+        if (!pOut || !pIn) continue;
+
+        const cost = item.cost !== undefined ? Number(item.cost).toFixed(2) : '0.00';
+        const tipo = item.type || (item.isAbandonment ? 'Baja / Abandona Liga' : 'Fichaje');
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                        now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+
+        const lines = [
+          "🚨 *¡FICHAJE OFICIAL EN LA LIGA FANTÁSTICA!* ⚽",
+          "━━━━━━━━━━━━━━━━━━━━",
+          `🏟 *Equipo:* ${team}`,
+          `🟢 *Alta:* ${pIn}${item.realTeamIn ? ' (' + item.realTeamIn + ')' : ''}`,
+          `🔴 *Baja:* ${pOut}${item.realTeamOut ? ' (' + item.realTeamOut + ')' : ''}`,
+          `💰 *Coste:* ${cost} €`,
+          `📅 *Jornada:* J${jornada}`,
+          `📝 *Tipo:* ${tipo}`,
+          "━━━━━━━━━━━━━━━━━━━━",
+          `⏱ _${dateStr}_`
+        ];
+        const text = lines.join('\n');
+
+        let tgResp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: text,
+            parse_mode: 'Markdown'
+          })
+        });
+
+        let rawText = await tgResp.text();
+        let tgData: any = null;
+        try { tgData = JSON.parse(rawText); } catch {}
+
+        if (!tgResp.ok && tgData?.description?.includes("can't parse entities")) {
+          tgResp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: text.replace(/[*_`]/g, '')
+            })
+          });
+          rawText = await tgResp.text();
+          try { tgData = JSON.parse(rawText); } catch {}
+        }
+
+        if (tgResp.ok && tgData?.ok) {
+          console.log(`[telegram-alert] ✅ Fichaje notificado a Telegram correctamente para ${team}`);
+        } else {
+          console.warn(`[telegram-alert] ⚠️ Error avisando a Telegram (${tgResp.status}):`, tgData?.description || rawText);
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[telegram-alert] Error en sendTelegramTransferAlert:`, err?.message || err);
+    }
+  }
+
   // POST /api/gas-action - Ejecuta mutaciones en tiempo real en Google Sheets (Draft, Fichajes, Orden Draft)
   app.post('/api/gas-action', async (req, res) => {
     const { action, team, token, player, jornada, sourceJornada, targetJornada, transfers, draftOrder, customGasUrl, requestId } = req.body || {};
@@ -664,7 +748,7 @@ async function startServer() {
           const pOut = String(item.playerOut || '').trim();
           const pIn = String(item.playerIn || '').trim();
           const cost = Number(item.cost || 0);
-          const type = item.type || 'Normal';
+          const type = item.type || (item.isAbandonment ? 'Baja / Abandona Liga' : 'Normal');
 
           if (pOut && pIn) {
             persisted.transfers.unshift({
@@ -692,6 +776,9 @@ async function startServer() {
 
         savePersistedLeagueData(persisted);
         syncCache = null; // invalidar caché para que cualquier cliente vea el cambio inmediatamente
+
+        // Disparar aviso automático a Telegram directamente desde el servidor backend
+        sendTelegramTransferAlert(String(team || '').trim(), Number(jornada) || 1, trList).catch(() => {});
       }
     }
 
@@ -1046,6 +1133,11 @@ async function startServer() {
       }
 
       const desc = tgData?.description || 'Error desconocido de Telegram';
+      if (desc.includes('Unauthorized') || tgResp.status === 401) {
+        return res.status(400).json({
+          error: `Telegram indica: "Unauthorized" (Error 401).\n\nEl Bot Token proporcionado ("${cleanBotToken.substring(0, 10)}...") no es reconocido por Telegram o fue revocado en @BotFather.\n\n¿Cómo solucionarlo?\n1. Abre la app de Telegram y entra al chat con @BotFather.\n2. Envía el comando /mybots, selecciona tu bot y pulsa "API Token" (o crea uno nuevo con /newbot).\n3. Copia el token completo y pégalo en la configuración de la app.`
+        });
+      }
       if (desc.includes('chat not found')) {
         return res.status(400).json({
           error: `Telegram indica: "Chat no encontrado" (${cleanChatId}).\n\n¿Por qué ocurre esto?\n1. Si es un GRUPO: Debes añadir a tu bot como miembro del grupo en Telegram. Telegram no permite enviar mensajes a grupos donde el bot no está dentro.\n2. Si es un GRUPO o SUPERGRUPO: los IDs siempre empiezan por "-100" (ejemplo: "-100${cleanChatId.replace(/^-100/, '').replace(/^-/, '')}").\n3. Si es un CANAL: el bot debe ser Administrador con permisos de publicación.\n4. Si es un chat PRIVADO contigo: debes buscar a tu bot en Telegram y pulsar el botón "Iniciar" (/start).`
@@ -1112,7 +1204,14 @@ async function startServer() {
         return res.json({ success: true, message: 'Mensaje enviado a Telegram correctamente' });
       }
 
-      return res.status(400).json({ error: tgData?.description || 'Error al enviar mensaje a Telegram' });
+      const desc = tgData?.description || 'Error al enviar mensaje a Telegram';
+      if (desc.includes('Unauthorized') || tgResp.status === 401) {
+        return res.status(400).json({
+          error: `Telegram indica: "Unauthorized" (Error 401). El Bot Token no es válido o fue revocado en @BotFather. Verifica tu token en @BotFather (/mybots > API Token).`
+        });
+      }
+
+      return res.status(400).json({ error: desc });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || 'Error en el servidor al contactar con Telegram' });
     }
