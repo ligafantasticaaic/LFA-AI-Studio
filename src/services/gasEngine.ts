@@ -19,6 +19,20 @@ import {
   DraftRoundOrder
 } from '../types/league';
 import { generateCustomGasCode } from '../data/gasTemplates';
+import { INITIAL_SCHEDULES_DATA } from '../data/initialSchedules';
+
+function safeParseJson<T = any>(str: string | null | undefined, fallback: T): T {
+  if (!str) return fallback;
+  const trimmed = str.trim();
+  if (trimmed.startsWith('<') || trimmed.includes('<!DOCTYPE') || trimmed.includes('<html')) {
+    return fallback;
+  }
+  try {
+    return JSON.parse(str) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 // Constants matching Código.gs exactly
 export const MAX_TEAM_VALUE = 200;
@@ -222,9 +236,9 @@ const INITIAL_TRANSFERS: TransferRecord[] = [];
 
 const INITIAL_DRAFTS: DraftRecord[] = [];
 
-const INITIAL_SCHEDULES: ScheduleRecord[] = [];
+const INITIAL_SCHEDULES: ScheduleRecord[] = INITIAL_SCHEDULES_DATA;
 
-export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec';
+export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwDMoqKJXsdNu6c3aaNROXx_2-VxbwCACoTZQsZzzdP-4LXluaDACtQLaOmvdbs3cvsBQ/exec';
 
 // Engine Class with LocalStorage persistence to ensure live mutations work 100%
 class GasEngineService {
@@ -436,6 +450,12 @@ class GasEngineService {
         }
 
         if (this.ensureTokensMatchTeams()) {
+          changed = true;
+        }
+
+        if (Array.isArray(data.schedules) && data.schedules.length > 0) {
+          this.schedules = data.schedules;
+          localStorage.setItem('lfa_schedules', JSON.stringify(this.schedules));
           changed = true;
         }
 
@@ -1766,7 +1786,12 @@ class GasEngineService {
   private loadState() {
     try {
       const savedGasUrl = localStorage.getItem('lfa_gas_url');
-      this.gasUrl = (savedGasUrl && savedGasUrl.trim()) ? savedGasUrl.trim() : DEFAULT_GAS_URL;
+      if (savedGasUrl && savedGasUrl.trim() && !savedGasUrl.includes('AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw')) {
+        this.gasUrl = savedGasUrl.trim();
+      } else {
+        this.gasUrl = DEFAULT_GAS_URL;
+        localStorage.setItem('lfa_gas_url', DEFAULT_GAS_URL);
+      }
 
       const savedTeams = localStorage.getItem('lfa_teams');
       const savedTokens = localStorage.getItem('lfa_tokens');
@@ -1869,7 +1894,16 @@ class GasEngineService {
       if (savedLineups && JSON.parse(savedLineups).length !== this.lineups.length) {
         localStorage.setItem('lfa_lineups', JSON.stringify(this.lineups));
       }
-      this.schedules = savedSchedules ? JSON.parse(savedSchedules) : [...INITIAL_SCHEDULES];
+      if (savedSchedules) {
+        try {
+          const parsedSched = JSON.parse(savedSchedules);
+          this.schedules = (Array.isArray(parsedSched) && parsedSched.length > 0) ? parsedSched : [...INITIAL_SCHEDULES];
+        } catch {
+          this.schedules = [...INITIAL_SCHEDULES];
+        }
+      } else {
+        this.schedules = [...INITIAL_SCHEDULES];
+      }
 
       // Reconciliar automáticamente las elecciones del draft con las alineaciones de Jornada 1
       if (Array.isArray(this.drafts) && this.drafts.length > 0) {
@@ -2213,14 +2247,86 @@ class GasEngineService {
       };
     }
 
+    const now = new Date();
+    const jScheds = this.schedules.filter(s => s.jornada === jornada);
+
+    // 1. REGLA SUPREMA: Manda la hoja Horarios_Equipos.
+    // La jornada está finalizada cuando las fechas y horarios de los partidos ya han pasado,
+    // independientemente de que haya o no puntuaciones en la hoja Jugadores.
+    if (jScheds.length > 0) {
+      const playedTeams: string[] = [];
+      const pendingTeams: string[] = [];
+
+      jScheds.forEach(s => {
+        const teamName = s.realTeam;
+        let isPast = false;
+        if (s.deadlineIsoString) {
+          const dl = new Date(s.deadlineIsoString);
+          if (!isNaN(dl.getTime()) && now >= dl) {
+            isPast = true;
+          }
+        }
+        if (isPast) {
+          if (!playedTeams.includes(teamName)) playedTeams.push(teamName);
+        } else {
+          if (!pendingTeams.includes(teamName)) pendingTeams.push(teamName);
+        }
+      });
+
+      const isFullyPlayed = pendingTeams.length === 0 && playedTeams.length > 0;
+      const isPartiallyPlayed = playedTeams.length > 0 && pendingTeams.length > 0;
+      const isOpen = !isFullyPlayed;
+
+      let reason: string | undefined;
+      if (isFullyPlayed) {
+        reason = `La Jornada ${jornada} ya está finalizada (todos los partidos de Horario_Equipos se han disputado).`;
+      } else if (isPartiallyPlayed) {
+        reason = `La Jornada ${jornada} tiene partido(s) aplazados o pendientes de jugar (${pendingTeams.join(', ')}). Los fichajes con estos equipos están permitidos.`;
+      }
+
+      return {
+        jornada,
+        isFullyPlayed,
+        isPartiallyPlayed,
+        isOpen,
+        pendingTeams,
+        playedTeams,
+        hasSuspendedMatches: isPartiallyPlayed,
+        reason
+      };
+    }
+
+    // Si no hay filas de horarios para esta jornada específica en this.schedules:
+    // Comprobar si jornadas cronológicamente posteriores ya han concluido según Horarios_Equipos
+    let maxPassedJornada = 0;
+    for (const sk of this.schedules) {
+      if (sk.deadlineIsoString) {
+        const dl = new Date(sk.deadlineIsoString);
+        if (!isNaN(dl.getTime()) && now >= dl) {
+          if (sk.jornada > maxPassedJornada) maxPassedJornada = sk.jornada;
+        }
+      }
+    }
+    if (maxPassedJornada >= jornada) {
+      return {
+        jornada,
+        isFullyPlayed: true,
+        isPartiallyPlayed: false,
+        isOpen: false,
+        pendingTeams: [],
+        playedTeams: [],
+        hasSuspendedMatches: false,
+        reason: `La Jornada ${jornada} ya está finalizada (anterior a la jornada ${maxPassedJornada} ya disputada).`
+      };
+    }
+
+    // 2. Respaldo secundario si la hoja Horarios_Equipos no contiene información: comprobar Jugadores
     const allRealTeams = this.getLeagueRealTeams();
     const playedTeams: string[] = [];
     const pendingTeams: string[] = [];
 
     allRealTeams.forEach(rt => {
       const canonRt = canonicalizeRealTeam(rt);
-
-      // 1. Comprobar si los jugadores de este equipo real tienen puntuaciones registradas en esta jornada
       const hasPoints = this.players.some(p =>
         canonicalizeRealTeam(p.realTeam) === canonRt &&
         p.jornadasPoints &&
@@ -2232,43 +2338,20 @@ class GasEngineService {
 
       if (hasPoints) {
         playedTeams.push(rt);
-        return;
+      } else {
+        pendingTeams.push(rt);
       }
-
-      // 2. Comprobar en Horarios_Equipos si ya ha pasado el horario límite
-      let matchSched = this.schedules.find(
-        s => s.jornada === jornada && canonicalizeRealTeam(s.realTeam) === canonRt
-      );
-      if (!matchSched) {
-        matchSched = this.schedules.find(
-          s => s.jornada === jornada && (s.realTeam.toUpperCase() === 'TODOS' || s.realTeam.toUpperCase() === 'GENERAL')
-        );
-      }
-
-      if (matchSched && matchSched.deadlineIsoString) {
-        const deadline = new Date(matchSched.deadlineIsoString);
-        if (!isNaN(deadline.getTime())) {
-          if (new Date() >= deadline) {
-            playedTeams.push(rt);
-            return;
-          }
-        }
-      }
-
-      // No tiene puntos registrados y su horario no ha vencido -> partido pendiente o aplazado
-      pendingTeams.push(rt);
     });
 
-    // REGLA FUNDAMENTAL: Una jornada está finalizada ÚNICAMENTE cuando TODOS los partidos se han jugado
     const isFullyPlayed = pendingTeams.length === 0 && playedTeams.length > 0;
     const isPartiallyPlayed = playedTeams.length > 0 && pendingTeams.length > 0;
     const isOpen = !isFullyPlayed;
 
     let reason: string | undefined;
     if (isFullyPlayed) {
-      reason = `La Jornada ${jornada} ya está completamente finalizada (todos los partidos se han disputado).`;
+      reason = `La Jornada ${jornada} ya está completamente finalizada (puntuaciones registradas).`;
     } else if (isPartiallyPlayed) {
-      reason = `La Jornada ${jornada} tiene partido(s) aplazados o pendientes de jugar (${pendingTeams.join(', ')}). Los fichajes entre jugadores de estos equipos están permitidos.`;
+      reason = `La Jornada ${jornada} tiene partido(s) aplazados o pendientes de jugar (${pendingTeams.join(', ')}).`;
     }
 
     return {
@@ -2345,24 +2428,7 @@ class GasEngineService {
 
     const canonTarget = canonicalizeRealTeam(realTeam);
 
-    // 0.1 Comprobar si los jugadores de este equipo real ya tienen puntuaciones oficiales registradas en esta jornada
-    const teamHasPointsInJornada = this.players.some(p => 
-      canonicalizeRealTeam(p.realTeam) === canonTarget &&
-      p.jornadasPoints &&
-      p.jornadasPoints[jornada] !== undefined &&
-      p.jornadasPoints[jornada] !== null &&
-      typeof p.jornadasPoints[jornada] === 'number' &&
-      !isNaN(p.jornadasPoints[jornada] as number)
-    );
-    if (teamHasPointsInJornada) {
-      return {
-        hasSchedule: true,
-        isOpen: false,
-        reason: `El partido de ${realTeam} en la Jornada ${jornada} ya ha sido disputado (cuenta con puntuaciones oficiales registradas).`
-      };
-    }
-
-    // Buscar en this.schedules para esta jornada y equipo real específico
+    // 1. REGLA SUPREMA: Buscar en this.schedules para esta jornada y equipo real específico
     let matchSched = this.schedules.find(
       s => s.jornada === jornada && canonicalizeRealTeam(s.realTeam) === canonTarget
     );
@@ -2374,7 +2440,23 @@ class GasEngineService {
       );
     }
 
+    // 2. Respaldo secundario: si no existe horario programado, comprobar si ya tiene puntuaciones registradas
     if (!matchSched) {
+      const teamHasPointsInJornada = this.players.some(p => 
+        canonicalizeRealTeam(p.realTeam) === canonTarget &&
+        p.jornadasPoints &&
+        p.jornadasPoints[jornada] !== undefined &&
+        p.jornadasPoints[jornada] !== null &&
+        typeof p.jornadasPoints[jornada] === 'number' &&
+        !isNaN(p.jornadasPoints[jornada] as number)
+      );
+      if (teamHasPointsInJornada) {
+        return {
+          hasSchedule: true,
+          isOpen: false,
+          reason: `El partido de ${realTeam} en la Jornada ${jornada} ya ha sido disputado (cuenta con puntuaciones oficiales registradas).`
+        };
+      }
       return { hasSchedule: false, isOpen: true };
     }
 
@@ -4556,8 +4638,9 @@ class GasEngineService {
       backendContacted = true;
 
       if (resp.ok) {
-        const resJson = await resp.json();
-        return resJson;
+        const text = await resp.text();
+        const resJson = safeParseJson(text, null);
+        if (resJson) return resJson;
       }
     } catch (e: any) {
       console.warn('[gasEngine] Falló llamada a backend /api/gas-action:', e?.message || e);
@@ -4900,14 +4983,12 @@ class GasEngineService {
         headers: { 'Content-Type': 'application/json' }
       });
       const text = await resp.text();
-      let data: any = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // Si el backend devolvió HTML (ej. página de error o proxy), recurrir a sincronización cliente directa
-        return await this.syncPendingTransfersDirectToGas();
+      const data = safeParseJson(text, null);
+      if (data && typeof data === 'object') {
+        return data;
       }
-      return data;
+      // Si el backend devolvió HTML (ej. página de error o proxy), recurrir a sincronización cliente directa
+      return await this.syncPendingTransfersDirectToGas();
     } catch {
       // Si falla la conexión con el servidor, reintentar directo desde el navegador hacia Google Apps Script
       return await this.syncPendingTransfersDirectToGas();
@@ -4921,7 +5002,7 @@ class GasEngineService {
     const status = await this.getPendingSheetsStatus();
     const pendingList = status.pending || [];
     if (pendingList.length === 0) {
-      return { success: true, count: 0, synced: 0, remaining: 0, message: 'No hay fichajes pendientes de sincronizar con Google Sheets.' };
+      return { success: true, synced: 0, remaining: 0, message: 'No hay fichajes pendientes de sincronizar con Google Sheets.' };
     }
 
     let synced = 0;
@@ -4963,8 +5044,8 @@ class GasEngineService {
     try {
       const resp = await fetch('/api/pending-sheets-status');
       const text = await resp.text();
-      const data = JSON.parse(text);
-      return data;
+      const data = safeParseJson(text, null);
+      return data || { success: false, count: 0, pending: [] };
     } catch {
       return { success: false, count: 0, pending: [] };
     }

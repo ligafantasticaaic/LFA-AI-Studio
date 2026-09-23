@@ -109,7 +109,7 @@ async function startServer() {
       customCodeGs: newValues.customCodeGs !== undefined ? newValues.customCodeGs : (current.customCodeGs || ''),
       gasUrl: (newValues.gasUrl !== undefined && String(newValues.gasUrl).trim())
         ? String(newValues.gasUrl).trim()
-        : (current.gasUrl || 'https://script.google.com/macros/s/AKfycby0F4hqPcPISguJZGvDAarVkYksTs_ygTIVSl88861d3nxLGW5oKasl9FFuhUPmqEYwlw/exec'),
+        : (current.gasUrl || 'https://script.google.com/macros/s/AKfycbwDMoqKJXsdNu6c3aaNROXx_2-VxbwCACoTZQsZzzdP-4LXluaDACtQLaOmvdbs3cvsBQ/exec'),
       firstContributionJornada: typeof newValues.firstContributionJornada === 'number'
         ? Math.max(1, Math.min(38, newValues.firstContributionJornada))
         : current.firstContributionJornada || 5,
@@ -482,7 +482,7 @@ async function startServer() {
           url.searchParams.set('_t', String(Date.now()));
 
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 28000);
+          const timeout = setTimeout(() => controller.abort(), 65000);
 
           try {
             const response = await fetch(url.toString(), {
@@ -497,7 +497,7 @@ async function startServer() {
             try {
               data = JSON.parse(text);
             } catch {
-              throw new Error('Google Apps Script no devolvió un JSON válido.');
+              throw new Error('Google Apps Script devolvió una respuesta no válida (HTML o error interno).');
             }
 
             if (data && data.success !== false) {
@@ -524,10 +524,10 @@ async function startServer() {
         return res.json({ ...staleMerged, fromStaleCache: true });
       }
 
-      return res.status(500).json({
+      return res.status(200).json({
         success: false,
         error: err?.message || 'NETWORK_ERROR',
-        message: 'Error al conectar con Google Sheets: ' + (err?.message || 'Error de red')
+        message: 'No se pudo conectar con Google Sheets: ' + (err?.message || 'Tiempo de espera agotado')
       });
     }
   });
@@ -569,6 +569,7 @@ async function startServer() {
 
       let syncedCount = 0;
       const remaining: any[] = [];
+      let lastErrorMessage = '';
 
       for (const item of persisted.pendingTransfers) {
         try {
@@ -584,7 +585,7 @@ async function startServer() {
           url.searchParams.set('_t', String(Date.now()));
 
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 20000);
+          const timeout = setTimeout(() => controller.abort(), 25000);
           const resp = await fetch(url.toString(), {
             method: 'GET',
             redirect: 'follow',
@@ -603,9 +604,13 @@ async function startServer() {
           if (json && json.success) {
             syncedCount++;
           } else {
+            if (json && (json.message || json.error)) {
+              lastErrorMessage = json.message || json.error;
+            }
             remaining.push(item);
           }
-        } catch (err) {
+        } catch (err: any) {
+          lastErrorMessage = err?.message || 'Error de conexión';
           remaining.push(item);
         }
       }
@@ -615,18 +620,21 @@ async function startServer() {
       syncCache = null;
 
       res.json({
-        success: true,
+        success: syncedCount > 0 || remaining.length === 0,
         synced: syncedCount,
         remaining: remaining.length,
         message: syncedCount > 0
           ? `Se han sincronizado ${syncedCount} fichaje(s) con Google Sheets exitosamente.`
-          : 'Google Sheets aún no reconoce la acción transfer o hubo un error de validación. Copia el Código.gs en Apps Script y despliega Nueva Versión.'
+          : (lastErrorMessage
+              ? `Aviso de Google Sheets: ${lastErrorMessage}`
+              : 'No se pudieron sincronizar los fichajes pendientes. Comprueba la conexión con Google Sheets.')
       });
     } catch (globalErr: any) {
-      res.status(500).json({
+      res.json({
         success: false,
         synced: 0,
-        message: 'Error al sincronizar con Google Sheets: ' + (globalErr?.message || 'Error del servidor')
+        remaining: 0,
+        message: 'Error al contactar con Google Sheets: ' + (globalErr?.message || 'Error del servidor')
       });
     }
   });

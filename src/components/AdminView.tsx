@@ -639,17 +639,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const handleSyncPendingTransfers = async () => {
     setIsSyncingPendingTransfers(true);
-    const safetyTimer = setTimeout(() => setIsSyncingPendingTransfers(false), 25000);
+    const safetyTimer = setTimeout(() => setIsSyncingPendingTransfers(false), 35000);
     try {
       const res = await gasEngine.syncPendingTransfersToSheets();
-      showAlert(res.message, res.success);
+      showAlert(res?.message || 'Sincronización finalizada.', !!res?.success);
       const st = await gasEngine.getPendingSheetsStatus();
       setPendingTransfersCount(st?.count || 0);
-      if (res.success) {
+      if (res?.success) {
         loadAdminData();
       }
     } catch (e: any) {
-      showAlert('Error al sincronizar fichajes: ' + (e?.message || 'Error de red'), false);
+      const msg = e?.message || '';
+      if (msg.includes('Unexpected token') || msg.includes('JSON') || msg.includes('<html')) {
+        showAlert('Google Apps Script tardó en responder. Comprueba que el script esté actualizado en Implementar > Nueva versión.', false);
+      } else {
+        showAlert('Error al sincronizar fichajes: ' + (msg || 'Error de conexión'), false);
+      }
     } finally {
       clearTimeout(safetyTimer);
       setIsSyncingPendingTransfers(false);

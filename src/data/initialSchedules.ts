@@ -1,0 +1,5322 @@
+export const INITIAL_SCHEDULES_DATA = [
+  {
+    "jornada": 1,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 1,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-08-13T21:00",
+    "fecha": "13/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 2,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-08-21T21:00",
+    "fecha": "21/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 3,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-08-28T21:00",
+    "fecha": "28/08/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 4,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-09-04T21:00",
+    "fecha": "04/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 5,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-09-11T21:00",
+    "fecha": "11/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-10-21T20:00",
+    "fecha": "21/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-09-03T21:00",
+    "fecha": "03/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-10-21T20:00",
+    "fecha": "21/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-09-03T21:00",
+    "fecha": "03/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 6,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-09-15T19:00",
+    "fecha": "15/09/2026",
+    "hora": "19:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 7,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-09-18T21:00",
+    "fecha": "18/09/2026",
+    "hora": "21:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 8,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-10-11T20:00",
+    "fecha": "11/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 9,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-10-18T20:00",
+    "fecha": "18/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 10,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-10-25T20:00",
+    "fecha": "25/10/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 11,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-11-01T20:00",
+    "fecha": "01/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 12,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-11-08T20:00",
+    "fecha": "08/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 13,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-11-22T20:00",
+    "fecha": "22/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 14,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-11-29T20:00",
+    "fecha": "29/11/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 15,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-12-06T20:00",
+    "fecha": "06/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 16,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-12-13T20:00",
+    "fecha": "13/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "BET",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "GET",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 17,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2026-12-20T20:00",
+    "fecha": "20/12/2026",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 18,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-01-03T20:00",
+    "fecha": "03/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 19,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-01-10T20:00",
+    "fecha": "10/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 20,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-01-17T20:00",
+    "fecha": "17/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 21,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-01-24T20:00",
+    "fecha": "24/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 22,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-01-31T20:00",
+    "fecha": "31/01/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 23,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-02-07T20:00",
+    "fecha": "07/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 24,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-02-14T20:00",
+    "fecha": "14/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 25,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-02-21T20:00",
+    "fecha": "21/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 26,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-02-28T20:00",
+    "fecha": "28/02/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 27,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-03-07T20:00",
+    "fecha": "07/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 28,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-03-14T20:00",
+    "fecha": "14/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 29,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-03-21T20:00",
+    "fecha": "21/03/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 30,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-04-04T20:00",
+    "fecha": "04/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 31,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-04-11T20:00",
+    "fecha": "11/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 32,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-04-18T20:00",
+    "fecha": "18/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 33,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-04-21T20:00",
+    "fecha": "21/04/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 34,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-05-02T20:00",
+    "fecha": "02/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 35,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-05-09T20:00",
+    "fecha": "09/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 36,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-05-16T20:00",
+    "fecha": "16/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 37,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-05-23T20:00",
+    "fecha": "23/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "ALV",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "ATH",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "ATM",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "BAR",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "BET",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "CEL",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "DEP",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "ELC",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "ESP",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "GET",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "LEV",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "MAL",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "RMA",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "OSA",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "RAY",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "RSO",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "RAC",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "SEV",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "VAL",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  },
+  {
+    "jornada": 38,
+    "realTeam": "VIL",
+    "deadlineIsoString": "2027-05-30T20:00",
+    "fecha": "30/05/2027",
+    "hora": "20:00"
+  }
+];
