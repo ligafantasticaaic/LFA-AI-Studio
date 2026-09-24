@@ -8,7 +8,8 @@
     "maxTeamValue": 200,
     "weeklyContribution": 1.5,
     "transferCost": 2,
-    "freeTransfers": 3
+    "freeTransfers": 3,
+    "customLogo": ""
   },
   "customCodeGs": "",
   "firstContributionJornada": 5,
@@ -210,8 +211,7 @@
     "directTelegram": false,
     "enabled": true
   },
-  "updatedAt": "2026-09-05T10:46:11.357Z",
-  "updatedBy": "admin",
+  "draftOrder": [],
   "schedules": [
     {
       "jornada": 1,
@@ -5533,5 +5533,8 @@
       "fecha": "30/05/2027",
       "hora": "20:00"
     }
-  ]
+  ],
+  "isDraftHidden": false,
+  "updatedAt": "2026-09-24T08:31:07.594Z",
+  "updatedBy": "admin"
 }

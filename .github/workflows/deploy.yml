@@ -24,18 +24,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+          npm ci || npm install --legacy-peer-deps
 
       - name: Build project
-        run: npm run build
+        run: |
+          npm run build
+          # Asegurar compatibilidad total con GitHub Pages (sin Jekyll y con 404 SPA fallback)
+          touch dist/.nojekyll
+          if [ -f dist/index.html ] && [ ! -f dist/404.html ]; then
+            cp dist/index.html dist/404.html
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -25,7 +25,8 @@ async function startServer() {
         maxTeamValue: 200,
         weeklyContribution: 1.5,
         transferCost: 2,
-        freeTransfers: 3
+        freeTransfers: 3,
+        customLogo: ''
       },
       customCodeGs: '',
       firstContributionJornada: 5,
@@ -382,10 +383,62 @@ async function startServer() {
         fs.writeFileSync(path.join(distDir, 'test_trans.png'), logo1024);
       }
 
-      return res.json({ success: true, message: '¡Logo e icono actualizados con éxito en toda la aplicación!' });
+      // Guardar customLogo en gas-config.json para propagación inmediata a todos los clientes
+      const currentConfig = getGasConfig();
+      const updatedTexts = {
+        ...(currentConfig.leagueTexts || {}),
+        customLogo: `/logo.png?v=${Date.now()}`
+      };
+      saveGasConfig({ leagueTexts: updatedTexts }, 'admin');
+
+      return res.json({ success: true, message: '¡Logo e icono actualizados con éxito en toda la aplicación!', customLogo: updatedTexts.customLogo });
     } catch (err: any) {
       console.error('Error en /api/upload-logo:', err);
       return res.status(500).json({ success: false, error: err?.message || 'Error al procesar y guardar la imagen.' });
+    }
+  });
+
+  // POST /api/reset-logo - Restablece el logo al original
+  app.post('/api/reset-logo', async (req, res) => {
+    try {
+      const root = process.cwd();
+      const sharpModule = await import('sharp');
+      const sharp = sharpModule.default;
+
+      const svgPath = path.join(root, 'public/logo.svg');
+      if (fs.existsSync(svgPath)) {
+        const svgBuffer = fs.readFileSync(svgPath);
+        const pwa192 = await sharp(svgBuffer).resize(192, 192).png().toBuffer();
+        const pwa512 = await sharp(svgBuffer).resize(512, 512).png().toBuffer();
+        const logo1024 = await sharp(svgBuffer).resize(1024, 1024).png().toBuffer();
+
+        fs.writeFileSync(path.join(root, 'public/logo.png'), pwa512);
+        fs.writeFileSync(path.join(root, 'public/icon.png'), pwa512);
+        fs.writeFileSync(path.join(root, 'public/pwa-192.png'), pwa192);
+        fs.writeFileSync(path.join(root, 'public/pwa-512.png'), pwa512);
+        fs.writeFileSync(path.join(root, 'public/test_trans.png'), logo1024);
+        fs.writeFileSync(path.join(root, 'src/assets/images/LOGO_Nuevo_LFA.png'), pwa512);
+
+        const distDir = path.join(root, 'dist');
+        if (fs.existsSync(distDir)) {
+          fs.writeFileSync(path.join(distDir, 'logo.png'), pwa512);
+          fs.writeFileSync(path.join(distDir, 'icon.png'), pwa512);
+          fs.writeFileSync(path.join(distDir, 'pwa-192.png'), pwa192);
+          fs.writeFileSync(path.join(distDir, 'pwa-512.png'), pwa512);
+          fs.writeFileSync(path.join(distDir, 'test_trans.png'), logo1024);
+        }
+      }
+
+      const currentConfig = getGasConfig();
+      const updatedTexts = {
+        ...(currentConfig.leagueTexts || {}),
+        customLogo: ''
+      };
+      saveGasConfig({ leagueTexts: updatedTexts }, 'admin');
+
+      return res.json({ success: true, message: 'Logo restablecido al diseño oficial con éxito.' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || 'Error al restablecer logo.' });
     }
   });
 

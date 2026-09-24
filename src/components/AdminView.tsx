@@ -148,38 +148,86 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setLogoUploadMsg(null);
 
     const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64 = reader.result as string;
-        const res = await fetch('/api/upload-logo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64 })
-        });
-        const data = await res.json();
-        if (data.success) {
+    reader.onload = () => {
+      const rawDataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          // Procesamiento en Canvas: proporción 1:1, centrado sobre fondo transparente
+          const canvas = document.createElement('canvas');
+          const size = 512;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, size, size);
+            const scale = Math.min(size / img.width, size / img.height);
+            const w = img.width * scale;
+            const h = img.height * scale;
+            const x = (size - w) / 2;
+            const y = (size - h) / 2;
+            ctx.drawImage(img, x, y, w, h);
+          }
+          const compressedDataUrl = canvas.toDataURL('image/png');
+
+          // 1. Guardar en gasEngine y sincronizar con localStorage y servidor
+          const updatedTexts = { ...leagueTextsInput, customLogo: compressedDataUrl };
+          setLeagueTextsInput(updatedTexts);
+          await gasEngine.saveLeagueTexts({ customLogo: compressedDataUrl }, adminPass);
+
+          // 2. Intentar guardar en backend /api/upload-logo si el servidor Node está presente
+          try {
+            await fetch('/api/upload-logo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imageBase64: compressedDataUrl })
+            });
+          } catch {}
+
           const newTs = Date.now();
           setLogoTimestamp(newTs);
           setLogoUploadMsg({ text: '¡Logo e icono oficial actualizados con éxito en toda la aplicación!' });
-          // Forzar refresco inmediato de imágenes de logo en toda la app
-          document.querySelectorAll('img[src*="logo.png"]').forEach((img: any) => {
-            img.src = `/logo.png?v=${newTs}`;
-          });
-          setTimeout(() => setLogoUploadMsg(null), 4000);
-        } else {
-          setLogoUploadMsg({ text: data.error || 'Error al subir el logo.', error: true });
+          setTimeout(() => setLogoUploadMsg(null), 5000);
+        } catch (err: any) {
+          setLogoUploadMsg({ text: err?.message || 'Error al procesar el logo.', error: true });
+        } finally {
+          setIsUploadingLogo(false);
         }
-      } catch (err: any) {
-        setLogoUploadMsg({ text: err?.message || 'Error de conexión al subir el logo.', error: true });
-      } finally {
+      };
+      img.onerror = () => {
         setIsUploadingLogo(false);
-      }
+        setLogoUploadMsg({ text: 'El archivo seleccionado no es una imagen válida.', error: true });
+      };
+      img.src = rawDataUrl;
     };
     reader.onerror = () => {
       setIsUploadingLogo(false);
-      setLogoUploadMsg({ text: 'Error al leer el archivo seleccionado.', error: true });
+      setLogoUploadMsg({ text: 'Error al leer el archivo en el dispositivo.', error: true });
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleResetLogo = async () => {
+    setIsUploadingLogo(true);
+    setLogoUploadMsg(null);
+    try {
+      const updatedTexts = { ...leagueTextsInput, customLogo: '' };
+      setLeagueTextsInput(updatedTexts);
+      await gasEngine.saveLeagueTexts({ customLogo: '' }, adminPass);
+
+      try {
+        await fetch('/api/reset-logo', { method: 'POST' });
+      } catch {}
+
+      const newTs = Date.now();
+      setLogoTimestamp(newTs);
+      setLogoUploadMsg({ text: 'Logo oficial restablecido al diseño predeterminado.' });
+      setTimeout(() => setLogoUploadMsg(null), 5000);
+    } catch (err: any) {
+      setLogoUploadMsg({ text: err?.message || 'Error al restablecer logo.', error: true });
+    } finally {
+      setIsUploadingLogo(false);
+    }
   };
 
   useEffect(() => {
@@ -876,8 +924,45 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
           )}
 
+          {/* Quick Access Anchors */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-1">Accesos rápidos:</span>
+            <button
+              type="button"
+              onClick={() => document.getElementById('seccion-logo')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold px-3 py-1.5 rounded-xl shrink-0 flex items-center gap-1.5 cursor-pointer transition shadow-sm"
+            >
+              <Upload className="w-3.5 h-3.5 text-amber-400" />
+              <span>🎨 Logo e Icono</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => document.getElementById('seccion-sheets')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold px-3 py-1.5 rounded-xl shrink-0 flex items-center gap-1.5 cursor-pointer transition"
+            >
+              <Database className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Google Sheets</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => document.getElementById('seccion-telegram')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold px-3 py-1.5 rounded-xl shrink-0 flex items-center gap-1.5 cursor-pointer transition"
+            >
+              <Send className="w-3.5 h-3.5 text-sky-400" />
+              <span>Telegram</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => document.getElementById('seccion-reglas')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold px-3 py-1.5 rounded-xl shrink-0 flex items-center gap-1.5 cursor-pointer transition"
+            >
+              <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Reglas y Textos</span>
+            </button>
+          </div>
+
           {/* Section 0: Enlace & Sincronización con Google Sheets (Apps Script) */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+          <div id="seccion-sheets" className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -1472,7 +1557,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
           {/* ======================================================== */}
           {/* NUEVA SECCIÓN: Personalización de Textos y Reglas Liga   */}
           {/* ======================================================== */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+          <div id="seccion-reglas" className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
@@ -1490,45 +1575,74 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
 
             {/* Logo Oficial e Icono */}
-            <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div id="seccion-logo" className="bg-slate-950/80 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-700/80 p-1 flex items-center justify-center shrink-0 shadow-lg">
+                <div className="w-20 h-20 rounded-2xl bg-slate-900 border border-slate-700/80 p-2 flex items-center justify-center shrink-0 shadow-xl relative">
                   <img
-                    src={`/logo.png?v=${logoTimestamp}`}
+                    src={leagueTextsInput.customLogo || `/logo.png?v=${logoTimestamp}`}
                     alt="Logo Oficial LFA"
-                    className="w-14 h-14 object-contain"
+                    className="w-16 h-16 object-contain drop-shadow-md"
                   />
+                  {leagueTextsInput.customLogo && (
+                    <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-slate-900" title="Logo personalizado activo" />
+                  )}
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <span>Logo e Icono Oficial de la Liga</span>
-                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                      Activo
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-black text-white">Logo e Icono Oficial de la Liga</h3>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                      leagueTextsInput.customLogo 
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' 
+                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    }`}>
+                      {leagueTextsInput.customLogo ? 'Personalizado' : 'Oficial LFA'}
                     </span>
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5 max-w-lg">
-                    Logo circular oficial de la LFA ('L F A', 'DESDE 2010' y futbolista en silueta con fondo transparente). Se utiliza como icono de la app, cabecera y PWA.
+                  </div>
+                  <p className="text-xs text-slate-400 max-w-lg leading-relaxed">
+                    Logo circular oficial de la LFA ('L F A', 'DESDE 2010' y futbolista en silueta con fondo transparente). Se utiliza en la cabecera, pestaña del navegador y acceso directo PWA.
                   </p>
                   {logoUploadMsg && (
-                    <div className={`mt-2 text-xs font-semibold flex items-center gap-1.5 ${logoUploadMsg.error ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {logoUploadMsg.error ? <AlertTriangle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    <div className={`pt-1 text-xs font-semibold flex items-center gap-1.5 ${logoUploadMsg.error ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {logoUploadMsg.error ? <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> : <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
                       <span>{logoUploadMsg.text}</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div>
-                <label className={`cursor-pointer inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs py-2.5 px-3.5 rounded-xl transition shadow-md ${isUploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <Upload className="w-4 h-4" />
-                  <span>{isUploadingLogo ? 'Actualizando...' : 'Cambiar / Subir Logo'}</span>
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                {/* Botón nativo infalible para móviles, iframes y PC */}
+                <div className="relative inline-flex items-center">
+                  <button
+                    type="button"
+                    className="pointer-events-none inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs py-2.5 px-4 rounded-xl shadow-lg transition"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>{isUploadingLogo ? 'Procesando...' : 'Cambiar / Subir Logo'}</span>
+                  </button>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
                     onChange={handleUploadLogoFile}
-                    className="hidden"
+                    onClick={(e) => { (e.target as HTMLInputElement).value = ''; }}
+                    disabled={isUploadingLogo}
+                    title="Seleccionar archivo de imagen para el logo"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                   />
-                </label>
+                </div>
+
+                {leagueTextsInput.customLogo && (
+                  <button
+                    type="button"
+                    onClick={handleResetLogo}
+                    disabled={isUploadingLogo}
+                    className="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 font-bold text-xs py-2.5 px-3.5 rounded-xl transition shadow cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Restablecer Oficial</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2121,7 +2235,7 @@ for (let j = ${firstJornadaInput}; j <= maxJornadaPlayers; j++) {
           {/* ======================================================== */}
           {/* NUEVA SECCIÓN: 3. Sistema de Avisos de Fichajes          */}
           {/* ======================================================== */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+          <div id="seccion-telegram" className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">

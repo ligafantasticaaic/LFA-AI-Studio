@@ -166,6 +166,7 @@ export interface LeagueTexts {
   weeklyContribution?: number;
   transferCost?: number;
   freeTransfers?: number;
+  customLogo?: string;
 }
 
 export interface LeagueConfig {

@@ -87,6 +87,8 @@ export const Header: React.FC<HeaderProps> = ({
     return true;
   });
 
+  const logoSrc = leagueTexts.customLogo || `/logo.png?v=${encodeURIComponent(leagueTexts.season || 'lfa')}`;
+
   return (
     <header className="mb-6 space-y-4">
       {/* Top Banner */}
@@ -95,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Logo Oficial LFA circular respetado al 100% sobre fondo transparente sin recortes */}
           <div className="h-14 sm:h-16 w-14 sm:w-16 flex items-center justify-center shrink-0">
             <img 
-              src="/logo.png" 
+              src={logoSrc} 
               alt="Logo Liga Fantástica" 
               className="h-14 sm:h-16 w-14 sm:w-16 object-contain drop-shadow-md hover:scale-105 transition-transform"
               referrerPolicy="no-referrer"
