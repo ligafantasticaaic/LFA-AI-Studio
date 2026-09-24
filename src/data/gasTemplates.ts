@@ -3827,9 +3827,22 @@ export function generateCustomGasCode(options?: {
   freeTransfers?: number;
   customCodeGs?: string;
 }): string {
-  // Si el usuario guardó un Código.gs editado manualmente y no está vacío, respetarlo
+  // Si el usuario guardó un Código.gs editado manualmente y no está vacío, respetarlo pero asegurando tokens actuales
   if (options?.customCodeGs && options.customCodeGs.trim().length > 100) {
-    return options.customCodeGs;
+    let custom = options.customCodeGs;
+    if (options?.telegramBotToken) {
+      custom = custom.replace(
+        /var TELEGRAM_BOT_TOKEN = ".*?";/,
+        `var TELEGRAM_BOT_TOKEN = "${options.telegramBotToken.replace(/"/g, '')}";`
+      );
+    }
+    if (options?.telegramChatId) {
+      custom = custom.replace(
+        /var TELEGRAM_CHAT_ID = ".*?";/,
+        `var TELEGRAM_CHAT_ID = "${options.telegramChatId.replace(/"/g, '')}";`
+      );
+    }
+    return custom;
   }
 
   let code = REDESIGNED_CODE_GS;

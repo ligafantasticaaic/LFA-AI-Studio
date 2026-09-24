@@ -461,9 +461,13 @@ class GasEngineService {
 
         // Configuración de notificaciones
         if (data.notificationConfig && typeof data.notificationConfig === 'object') {
+          const sTgToken = String(data.notificationConfig.telegramBotToken || '').trim();
+          const sTgChat = String(data.notificationConfig.telegramChatId || '').trim();
           this.notificationConfig = {
             ...this.notificationConfig,
-            ...data.notificationConfig
+            ...data.notificationConfig,
+            telegramBotToken: sTgToken || this.notificationConfig.telegramBotToken,
+            telegramChatId: sTgChat || this.notificationConfig.telegramChatId
           };
           localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
           changed = true;
@@ -3081,13 +3085,6 @@ class GasEngineService {
           // Si fue timeout o problema de conectividad temporal
           gasMessage = '';
         }
-
-        if (gasRes.telegram && !gasRes.telegram.success && gasRes.telegram.error) {
-          gasMessage += `\n⚠️ Telegram no enviado: ${gasRes.telegram.error}`;
-        } else if (gasRes.message && gasRes.message.includes('Telegram:')) {
-          const tgPart = gasRes.message.split('Telegram:')[1]?.replace(/[)\]]/g, '').trim();
-          if (tgPart) gasMessage += `\n⚠️ Telegram no enviado: ${tgPart}`;
-        }
       } catch (e: any) {
         gasMessage = '';
       }
@@ -3149,19 +3146,15 @@ class GasEngineService {
           });
         }
 
-        // Disparar aviso automático (Telegram y GitHub Actions)
-        const tgRes = await this.triggerFichajeNotification({
+        // Disparar aviso automático (Telegram y GitHub Actions) en segundo plano sin alterar el mensaje de confirmación
+        this.triggerFichajeNotification({
           equipo: teamName,
           jugadorEntra: pt.pIn,
           jugadorSale: pt.pOut,
           jornada,
           coste: pt.cost.toFixed(2),
           tipo: pt.type
-        }).catch(err => ({ success: false, error: err?.message || 'Error de red' }));
-
-        if (tgRes && !tgRes.success && tgRes.error && !gasMessage.includes('Telegram no enviado')) {
-          gasMessage += `\n⚠️ Telegram no enviado: ${tgRes.error}`;
-        }
+        }).catch(() => {});
       }
     }
 
@@ -3174,7 +3167,7 @@ class GasEngineService {
     return {
       success: true,
       outdatedScript: isOutdated,
-      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.${gasMessage}`
+      message: `Fichaje(s) completado(s): ${processedSummary.join(', ')}. Nuevo valor del equipo: ${potentialNewVal}M.`
     };
   }
 
@@ -3756,16 +3749,32 @@ class GasEngineService {
   }
 
   public getCustomCodeGs(): string {
+    const activeToken = (this.notificationConfig.telegramBotToken || '8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo').trim();
+    const activeChatId = (this.notificationConfig.telegramChatId || '-1004337595394').trim();
+
     if (this.customCodeGs && this.customCodeGs.trim().length > 100) {
       if (this.customCodeGs.includes('onOpen') && this.customCodeGs.includes('copyLineupsInSheets')) {
-        return this.customCodeGs;
+        let code = this.customCodeGs;
+        if (activeToken) {
+          code = code.replace(
+            /var TELEGRAM_BOT_TOKEN = ".*?";/,
+            `var TELEGRAM_BOT_TOKEN = "${activeToken.replace(/"/g, '')}";`
+          );
+        }
+        if (activeChatId) {
+          code = code.replace(
+            /var TELEGRAM_CHAT_ID = ".*?";/,
+            `var TELEGRAM_CHAT_ID = "${activeChatId.replace(/"/g, '')}";`
+          );
+        }
+        return code;
       }
     }
     return generateCustomGasCode({
       adminPassword: this.adminPassword,
       firstContributionJornada: this.firstContributionJornada,
-      telegramBotToken: this.notificationConfig.telegramBotToken,
-      telegramChatId: this.notificationConfig.telegramChatId,
+      telegramBotToken: activeToken,
+      telegramChatId: activeChatId,
       githubRepo: this.notificationConfig.githubRepo,
       githubToken: this.notificationConfig.githubToken,
       maxTeamValue: this.leagueTexts.maxTeamValue,

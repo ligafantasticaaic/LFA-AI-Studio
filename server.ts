@@ -897,9 +897,6 @@ async function startServer() {
       }
 
       let responseMsg = data?.message || 'Actualizado en tiempo real en Google Sheets';
-      if (action === 'transfer' && tgAlertResult && !tgAlertResult.success) {
-        responseMsg += ` (⚠️ Telegram: ${tgAlertResult.error})`;
-      }
 
       return res.json({
         success: data?.success !== false,

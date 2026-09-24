@@ -134,10 +134,25 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [customCopyTargetJ, setCustomCopyTargetJ] = useState<string>('');
 
   useEffect(() => {
+    // Sincronizar inmediatamente al montar la vista de Admin en cualquier dispositivo
+    gasEngine.fetchServerGasConfig(false).then(() => {
+      setNotificationConfig(gasEngine.getNotificationConfig());
+      setCustomCodeGsInput(gasEngine.getCustomCodeGs());
+      setFirstJornadaInput(gasEngine.getFirstContributionJornada());
+      setLeagueTextsInput(gasEngine.getLeagueTexts());
+      setClubStylesList(gasEngine.getClubStyles());
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const unsub = gasEngine.subscribe(() => {
       setSyncVersion(v => v + 1);
       setIsDraftHiddenAdmin(gasEngine.isDraftHidden());
       setGasUrlInput(gasEngine.getGasUrl());
+      setNotificationConfig(gasEngine.getNotificationConfig());
+      setCustomCodeGsInput(gasEngine.getCustomCodeGs());
+      setFirstJornadaInput(gasEngine.getFirstContributionJornada());
+      setLeagueTextsInput(gasEngine.getLeagueTexts());
       if (isUnlocked) {
         loadAdminData();
       }
@@ -717,7 +732,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleCopyGasCode = () => {
-    const code = GAS_TEMPLATES['Código.gs'] || '';
+    const code = gasEngine.getCustomCodeGs();
     navigator.clipboard.writeText(code);
     setCopiedGasCode(true);
     setTimeout(() => setCopiedGasCode(false), 2000);
@@ -1574,7 +1589,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => setShowCodeGsEditor(!showCodeGsEditor)}
+                onClick={() => {
+                  if (!showCodeGsEditor) {
+                    setCustomCodeGsInput(gasEngine.getCustomCodeGs());
+                  }
+                  setShowCodeGsEditor(!showCodeGsEditor);
+                }}
                 className="bg-slate-950 hover:bg-slate-800 text-amber-400 border border-amber-500/30 text-xs font-bold py-2 px-3 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
               >
                 {showCodeGsEditor ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
