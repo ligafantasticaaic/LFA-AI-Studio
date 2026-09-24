@@ -92,12 +92,12 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Top Banner */}
       <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          {/* Logo Oficial respetado al 100% sobre fondo transparente sin recortes */}
-          <div className="h-12 sm:h-14 w-auto flex items-center justify-center shrink-0">
+          {/* Logo Oficial LFA circular respetado al 100% sobre fondo transparente sin recortes */}
+          <div className="h-14 sm:h-16 w-14 sm:w-16 flex items-center justify-center shrink-0">
             <img 
               src="/logo.png" 
               alt="Logo Liga Fantástica" 
-              className="h-12 sm:h-14 w-auto object-contain drop-shadow-md"
+              className="h-14 sm:h-16 w-14 sm:w-16 object-contain drop-shadow-md hover:scale-105 transition-transform"
               referrerPolicy="no-referrer"
             />
           </div>

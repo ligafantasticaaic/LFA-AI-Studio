@@ -7,7 +7,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '25mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
   // Path to persistent configuration file
   const CONFIG_PATH = path.join(process.cwd(), 'gas-config.json');
@@ -341,6 +342,51 @@ async function startServer() {
     }
     const saved = saveGasConfig({ adminPassword: cleanNew }, 'admin');
     res.json({ success: true, message: '¡Contraseña de administrador actualizada correctamente!', config: saved });
+  });
+
+  // POST /api/upload-logo - Permite subir o actualizar el logo e icono oficial de la app
+  app.post('/api/upload-logo', async (req, res) => {
+    try {
+      const { imageBase64 } = req.body || {};
+      if (!imageBase64 || typeof imageBase64 !== 'string') {
+        return res.status(400).json({ success: false, error: 'No se envió ninguna imagen válida en Base64.' });
+      }
+
+      const cleanBase64 = imageBase64.replace(/^data:image\/[a-z+]+;base64,/, '');
+      const buffer = Buffer.from(cleanBase64, 'base64');
+      if (buffer.length < 10) {
+        return res.status(400).json({ success: false, error: 'El archivo recibido está vacío o dañado.' });
+      }
+
+      const sharpModule = await import('sharp');
+      const sharp = sharpModule.default;
+
+      const pwa192 = await sharp(buffer).resize(192, 192, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+      const pwa512 = await sharp(buffer).resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+      const logo1024 = await sharp(buffer).resize(1024, 1024, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+
+      const root = process.cwd();
+      fs.writeFileSync(path.join(root, 'public/logo.png'), pwa512);
+      fs.writeFileSync(path.join(root, 'public/icon.png'), pwa512);
+      fs.writeFileSync(path.join(root, 'public/pwa-192.png'), pwa192);
+      fs.writeFileSync(path.join(root, 'public/pwa-512.png'), pwa512);
+      fs.writeFileSync(path.join(root, 'public/test_trans.png'), logo1024);
+      fs.writeFileSync(path.join(root, 'src/assets/images/LOGO_Nuevo_LFA.png'), pwa512);
+
+      const distDir = path.join(root, 'dist');
+      if (fs.existsSync(distDir)) {
+        fs.writeFileSync(path.join(distDir, 'logo.png'), pwa512);
+        fs.writeFileSync(path.join(distDir, 'icon.png'), pwa512);
+        fs.writeFileSync(path.join(distDir, 'pwa-192.png'), pwa192);
+        fs.writeFileSync(path.join(distDir, 'pwa-512.png'), pwa512);
+        fs.writeFileSync(path.join(distDir, 'test_trans.png'), logo1024);
+      }
+
+      return res.json({ success: true, message: '¡Logo e icono actualizados con éxito en toda la aplicación!' });
+    } catch (err: any) {
+      console.error('Error en /api/upload-logo:', err);
+      return res.status(500).json({ success: false, error: err?.message || 'Error al procesar y guardar la imagen.' });
+    }
   });
 
   // GET /api/gas-diagnostics - Comprueba si el script desplegado en Apps Script soporta tiempo real

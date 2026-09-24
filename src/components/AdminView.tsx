@@ -44,7 +44,9 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { GAS_TEMPLATES, generateCustomGasCode } from '../data/gasTemplates';
 
@@ -132,6 +134,53 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [isCopyingLineups, setIsCopyingLineups] = useState<boolean>(false);
   const [customCopySourceJ, setCustomCopySourceJ] = useState<string>('');
   const [customCopyTargetJ, setCustomCopyTargetJ] = useState<string>('');
+
+  // 9. Logo e Icono Oficial State
+  const [logoTimestamp, setLogoTimestamp] = useState<number>(Date.now());
+  const [isUploadingLogo, setIsUploadingLogo] = useState<boolean>(false);
+  const [logoUploadMsg, setLogoUploadMsg] = useState<{ text: string; error?: boolean } | null>(null);
+
+  const handleUploadLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingLogo(true);
+    setLogoUploadMsg(null);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const res = await fetch('/api/upload-logo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const newTs = Date.now();
+          setLogoTimestamp(newTs);
+          setLogoUploadMsg({ text: '¡Logo e icono oficial actualizados con éxito en toda la aplicación!' });
+          // Forzar refresco inmediato de imágenes de logo en toda la app
+          document.querySelectorAll('img[src*="logo.png"]').forEach((img: any) => {
+            img.src = `/logo.png?v=${newTs}`;
+          });
+          setTimeout(() => setLogoUploadMsg(null), 4000);
+        } else {
+          setLogoUploadMsg({ text: data.error || 'Error al subir el logo.', error: true });
+        }
+      } catch (err: any) {
+        setLogoUploadMsg({ text: err?.message || 'Error de conexión al subir el logo.', error: true });
+      } finally {
+        setIsUploadingLogo(false);
+      }
+    };
+    reader.onerror = () => {
+      setIsUploadingLogo(false);
+      setLogoUploadMsg({ text: 'Error al leer el archivo seleccionado.', error: true });
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     // Sincronizar inmediatamente al montar la vista de Admin en cualquier dispositivo
@@ -1431,12 +1480,55 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </div>
                 <div>
                   <h2 className="text-base font-black text-white uppercase tracking-tight m-0 flex items-center gap-2">
-                    <span>Personalización de Textos y Reglas para Próximas Ediciones</span>
+                    <span>Personalización de Textos, Logo y Reglas</span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Modifica el nombre oficial de la liga, la temporada/edición, presupuestos y costes de fichaje para futuras ediciones
+                    Modifica el logo e icono oficial, nombre de la liga, temporada/edición, presupuestos y costes de fichaje
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* Logo Oficial e Icono */}
+            <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-700/80 p-1 flex items-center justify-center shrink-0 shadow-lg">
+                  <img
+                    src={`/logo.png?v=${logoTimestamp}`}
+                    alt="Logo Oficial LFA"
+                    className="w-14 h-14 object-contain"
+                  />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Logo e Icono Oficial de la Liga</span>
+                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                      Activo
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5 max-w-lg">
+                    Logo circular oficial de la LFA ('L F A', 'DESDE 2010' y futbolista en silueta con fondo transparente). Se utiliza como icono de la app, cabecera y PWA.
+                  </p>
+                  {logoUploadMsg && (
+                    <div className={`mt-2 text-xs font-semibold flex items-center gap-1.5 ${logoUploadMsg.error ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {logoUploadMsg.error ? <AlertTriangle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      <span>{logoUploadMsg.text}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className={`cursor-pointer inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs py-2.5 px-3.5 rounded-xl transition shadow-md ${isUploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <Upload className="w-4 h-4" />
+                  <span>{isUploadingLogo ? 'Actualizando...' : 'Cambiar / Subir Logo'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadLogoFile}
+                    className="hidden"
+                  />
+                </label>
               </div>
             </div>
 
