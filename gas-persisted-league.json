@@ -1,5 +1,15 @@
 {
-  "transfers": [],
+  "transfers": [
+    {
+      "timestamp": "25/09/2026, 09:34h",
+      "team": "BRIKKOMARIAN",
+      "jornada": 8,
+      "playerOut": "Jan Oblak",
+      "playerIn": "David Soria",
+      "cost": 0,
+      "type": "Normal"
+    }
+  ],
   "lineupOverrides": [],
   "pendingTransfers": []
 }

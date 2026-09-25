@@ -335,17 +335,17 @@ class GasEngineService {
       });
     }
 
-    // 4. Sondeo periódico de URL en servidor (cada 60 segundos)
+    // 4. Sondeo periódico de URL y transferencias en servidor (cada 20 segundos)
     setInterval(() => {
       this.fetchServerGasConfig(true).catch(() => {});
-    }, 60000);
+    }, 20000);
 
-    // 5. Sondeo en tiempo real de Google Sheets (cada 45 segundos) para reflejar cambios en vivo sin saturar la cuota
+    // 5. Sondeo en tiempo real de Google Sheets (cada 25 segundos) para reflejar cambios en vivo entre participantes
     setInterval(() => {
       if (this.getGasUrl() && !this.isSyncingRemote && (typeof document === 'undefined' || !document.hidden)) {
         this.syncFromRemote().catch(() => {});
       }
-    }, 45000);
+    }, 25000);
   }
 
   public subscribe(listener: () => void) {
@@ -1637,9 +1637,27 @@ class GasEngineService {
           }
         });
 
-        // Google Sheets es la fuente autoritativa: se reemplaza el registro local con el de Sheets
-        this.transfers = parsedTransfers;
+        // Unificar transferencias de Google Sheets con las transferencias locales/servidor para no perder nunca ninguna
+        const mergedTransfers: TransferRecord[] = [...parsedTransfers];
+        const seenTransferKeys = new Set<string>();
+        parsedTransfers.forEach(t => {
+          const k = `${String(t.team || '').toLowerCase().trim()}:::${t.jornada}:::${String(t.playerOut || '').toLowerCase().trim()}:::${String(t.playerIn || '').toLowerCase().trim()}`;
+          seenTransferKeys.add(k);
+        });
+
+        for (const existing of this.transfers) {
+          const tLower = String(existing.team || '').toLowerCase().trim();
+          if (DEMO_TEAM_NAMES.includes(tLower)) continue;
+          const k = `${tLower}:::${existing.jornada}:::${String(existing.playerOut || '').toLowerCase().trim()}:::${String(existing.playerIn || '').toLowerCase().trim()}`;
+          if (!seenTransferKeys.has(k)) {
+            seenTransferKeys.add(k);
+            mergedTransfers.unshift(existing);
+          }
+        }
+
+        this.transfers = mergedTransfers;
         updatedTransfersCount = this.transfers.length;
+        localStorage.setItem('lfa_transfers', JSON.stringify(this.transfers));
       }
 
       // Actualizar historial de draft si viene en la respuesta
@@ -3075,7 +3093,13 @@ class GasEngineService {
       const pOut = t.playerOut.trim();
       const pIn = t.playerIn.trim();
       const isAbandon = !!t.isAbandonment;
-      const pInDetails = playerMap.get(pIn);
+      const pInDetails = playerMap.get(pIn) ||
+        this.players.find(p => p.name.trim().toLowerCase() === pIn.toLowerCase()) || {
+          name: pIn,
+          realTeam: this.getRealTeamOfPlayer(pIn) || '',
+          position: 'Medio',
+          value: 10
+        };
 
       let cost = 0;
       let transferType: 'Normal' | 'Abandono' = 'Normal';
@@ -3164,66 +3188,63 @@ class GasEngineService {
                     now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
 
     for (const pt of plannedTransfers) {
-      if (pt.pInDetails) {
-        const normOut = pt.pOut.toLowerCase().trim();
-        const normIn = pt.pIn.toLowerCase().trim();
-        const normTeam = teamName.toLowerCase().trim();
+      const normOut = pt.pOut.toLowerCase().trim();
+      const normIn = pt.pIn.toLowerCase().trim();
+      const normTeam = teamName.toLowerCase().trim();
 
-        // 1. Actualizar la alineación exclusivamente en la jornada del fichaje (sin propagar automáticamente)
-        this.lineups.forEach(l => {
-          if (
-            l.team.trim().toLowerCase() === normTeam &&
-            l.jornada === jornada &&
-            l.playerName.trim().toLowerCase() === normOut
-          ) {
-            l.playerName = pt.pIn;
-            l.realTeam = pt.pInDetails!.realTeam;
-            l.position = pt.pInDetails!.position;
-            l.value = pt.pInDetails!.value;
-          }
-        });
-
-        this.players.forEach(p => {
-          const pNameLower = (p.name || '').trim().toLowerCase();
-          if (pNameLower === normIn) {
-            p.status = 'Fichado';
-          }
-          if (pNameLower === normOut) {
-            p.status = pt.isAbandon ? 'Abandona Liga' : 'Disponible';
-          }
-        });
-
-        // Registrar en el historial UNA SOLA VEZ tras la validación (evitar anotación doble)
-        const alreadyRecorded = this.transfers.some(existing =>
-          existing.team.trim().toLowerCase() === teamName.toLowerCase() &&
-          existing.jornada === jornada &&
-          existing.playerOut.trim().toLowerCase() === pt.pOut.toLowerCase() &&
-          existing.playerIn.trim().toLowerCase() === pt.pIn.toLowerCase() &&
-          existing.timestamp === dateStr
-        );
-
-        if (!alreadyRecorded) {
-          this.transfers.unshift({
-            timestamp: dateStr,
-            team: teamName,
-            jornada,
-            playerOut: pt.pOut,
-            playerIn: pt.pIn,
-            cost: pt.cost,
-            type: pt.type
-          });
+      // 1. Actualizar la alineación exclusivamente en la jornada del fichaje (sin propagar automáticamente)
+      this.lineups.forEach(l => {
+        if (
+          l.team.trim().toLowerCase() === normTeam &&
+          l.jornada === jornada &&
+          l.playerName.trim().toLowerCase() === normOut
+        ) {
+          l.playerName = pt.pIn;
+          if (pt.pInDetails?.realTeam) l.realTeam = pt.pInDetails.realTeam;
+          if (pt.pInDetails?.position) l.position = pt.pInDetails.position;
+          if (pt.pInDetails?.value !== undefined) l.value = pt.pInDetails.value;
         }
+      });
 
-        // Disparar aviso automático (Telegram y GitHub Actions) en segundo plano sin alterar el mensaje de confirmación
-        this.triggerFichajeNotification({
-          equipo: teamName,
-          jugadorEntra: pt.pIn,
-          jugadorSale: pt.pOut,
+      this.players.forEach(p => {
+        const pNameLower = (p.name || '').trim().toLowerCase();
+        if (pNameLower === normIn) {
+          p.status = 'Fichado';
+        }
+        if (pNameLower === normOut) {
+          p.status = pt.isAbandon ? 'Abandona Liga' : 'Disponible';
+        }
+      });
+
+      // Registrar en el historial UNA SOLA VEZ tras la validación (evitar anotación doble)
+      const alreadyRecorded = this.transfers.some(existing =>
+        existing.team.trim().toLowerCase() === teamName.toLowerCase() &&
+        existing.jornada === jornada &&
+        existing.playerOut.trim().toLowerCase() === pt.pOut.toLowerCase() &&
+        existing.playerIn.trim().toLowerCase() === pt.pIn.toLowerCase()
+      );
+
+      if (!alreadyRecorded) {
+        this.transfers.unshift({
+          timestamp: dateStr,
+          team: teamName,
           jornada,
-          coste: pt.cost.toFixed(2),
-          tipo: pt.type
-        }).catch(() => {});
+          playerOut: pt.pOut,
+          playerIn: pt.pIn,
+          cost: pt.cost,
+          type: pt.type
+        });
       }
+
+      // Disparar aviso automático (Telegram y GitHub Actions) en segundo plano sin alterar el mensaje de confirmación
+      this.triggerFichajeNotification({
+        equipo: teamName,
+        jugadorEntra: pt.pIn,
+        jugadorSale: pt.pOut,
+        jornada,
+        coste: pt.cost.toFixed(2),
+        tipo: pt.type
+      }).catch(() => {});
     }
 
     this.saveState();

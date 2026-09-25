@@ -1667,22 +1667,6 @@ function isJornadaFullyPlayedInSheet(ss, jornada) {
         }
         return allPast;
       }
-
-      // Si no hay filas específicas para esta jornada en Horarios_Equipos,
-      // pero hay jornadas posteriores cuyos partidos ya han concluido (ej: estamos en J1 y J4 ya pasó):
-      var maxPassedJornada = 0;
-      var nowTime = new Date().getTime();
-      for (var k = 0; k < schedules.length; k++) {
-        var sk = schedules[k];
-        var dl = sk.deadlineIsoString ? new Date(sk.deadlineIsoString).getTime() : 0;
-        if (dl > 0 && nowTime >= dl) {
-          var jNum = Number(sk.jornada);
-          if (jNum > maxPassedJornada) maxPassedJornada = jNum;
-        }
-      }
-      if (maxPassedJornada >= jornada) {
-        return true;
-      }
     }
 
     // 2. Respaldo secundario si la hoja Horarios_Equipos está vacía: comprobar puntuaciones en Jugadores
@@ -3293,7 +3277,22 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       }
     }
 
-    var newFichRows = [];
+    // Detección dinámica de columnas en Historial_Fichajes para no depender de un orden rígido
+    var colFDate = 0, colFTeam = 1, colFJor = 2, colFOut = 3, colFIn = 4, colFCost = 5, colFType = 6;
+    if (sheetFichajes && sheetFichajes.getLastRow() > 0) {
+      var headerVals = sheetFichajes.getRange(1, 1, 1, Math.max(1, sheetFichajes.getLastColumn())).getValues()[0];
+      for (var fhc = 0; fhc < headerVals.length; fhc++) {
+        var fhStr = String(headerVals[fhc] || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (fhStr.indexOf('fecha') !== -1 || fhStr.indexOf('hora') !== -1 || fhStr.indexOf('marca') !== -1 || fhStr.indexOf('time') !== -1) colFDate = fhc;
+        else if (fhStr === 'equipo' || fhStr === 'team' || fhStr === 'club') colFTeam = fhc;
+        else if (fhStr.indexOf('jornada') !== -1 || fhStr.indexOf('jor') !== -1 || fhStr === 'j') colFJor = fhc;
+        else if (fhStr.indexOf('sale') !== -1 || fhStr.indexOf('out') !== -1 || fhStr.indexOf('baja') !== -1 || fhStr.indexOf('saliente') !== -1) colFOut = fhc;
+        else if (fhStr.indexOf('entra') !== -1 || fhStr.indexOf('in') !== -1 || fhStr.indexOf('alta') !== -1 || fhStr.indexOf('entrante') !== -1 || fhStr.indexOf('fichaje') !== -1) colFIn = fhc;
+        else if (fhStr.indexOf('cost') !== -1 || fhStr.indexOf('precio') !== -1 || fhStr.indexOf('importe') !== -1) colFCost = fhc;
+        else if (fhStr.indexOf('tipo') !== -1 || fhStr.indexOf('type') !== -1) colFType = fhc;
+      }
+    }
+
     var notificationsToSend = [];
 
     transfers.forEach(function(t) {
@@ -3311,30 +3310,20 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
         }
         teamNormalCount++;
       }
-      
-      // Comprobar si ya existe este mismo fichaje registrado en las filas recientes
-      var isDuplicate = false;
-      for (var f = startScanIdx; f < currentFichData.length; f++) {
-        var row = currentFichData[f];
-        var rowTeam = String(row[1] || '').trim().toLowerCase();
-        var rowJornada = Number(row[2]);
-        var rowOut = String(row[3] || '').trim().toLowerCase();
-        var rowIn = String(row[4] || '').trim().toLowerCase();
-        if (rowTeam === team.toLowerCase().trim() &&
-            rowJornada === jornada &&
-            rowOut === pOut.toLowerCase() &&
-            rowIn === pIn.toLowerCase()) {
-          isDuplicate = true;
-          break;
-        }
-      }
 
-      if (!isDuplicate) {
-        var newRow = [nowStr, team, jornada, pOut, pIn, cost, type];
-        newFichRows.push(newRow);
-        currentFichData.push(newRow);
-        notificationsToSend.push({ team: team, in: pIn, out: pOut, cost: cost, jornada: jornada, type: type });
-      }
+      var maxCol = Math.max(7, colFDate + 1, colFTeam + 1, colFJor + 1, colFOut + 1, colFIn + 1, colFCost + 1, colFType + 1);
+      var rowToAppend = new Array(maxCol);
+      for (var ci = 0; ci < maxCol; ci++) rowToAppend[ci] = '';
+      rowToAppend[colFDate] = nowStr;
+      rowToAppend[colFTeam] = team;
+      rowToAppend[colFJor] = jornada;
+      rowToAppend[colFOut] = pOut;
+      rowToAppend[colFIn] = pIn;
+      rowToAppend[colFCost] = cost;
+      rowToAppend[colFType] = type;
+      sheetFichajes.appendRow(rowToAppend);
+
+      notificationsToSend.push({ team: team, in: pIn, out: pOut, cost: cost, jornada: jornada, type: type });
       
       // Actualizar alineación en memoria y en la hoja en un solo rango continuo de 4 celdas
       if (sheetAl && alData.length > 0) {
@@ -3366,11 +3355,6 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
         }
       }
     });
-
-    // Inserción en lote en Historial_Fichajes (1 sola llamada atómica en vez de múltiples appendRow)
-    if (newFichRows.length > 0) {
-      sheetFichajes.getRange(sheetFichajes.getLastRow() + 1, 1, newFichRows.length, 7).setValues(newFichRows);
-    }
 
     // Enviar avisos inmediatos a Telegram y GitHub
     notificationsToSend.forEach(function(notif) {
