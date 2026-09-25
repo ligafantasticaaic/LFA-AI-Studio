@@ -621,11 +621,31 @@ class GasEngineService {
         if (result?.config?.updatedAt) {
           this.serverUpdatedAt = result.config.updatedAt;
         }
+        // También sincronizar con Google Apps Script (propiedades de script y hoja _CONFIG_)
+        if (effectiveGasUrl) {
+          try {
+            this.fetchGasData(effectiveGasUrl, {
+              action: 'saveConfig',
+              config: JSON.stringify(payload),
+              requestId: 'cfg_' + Date.now()
+            }, 15000).catch(() => {});
+          } catch {}
+        }
         this.notify();
         return true;
       }
     } catch (err) {
       console.warn('[gasEngine] No se pudo sincronizar config con servidor central:', err);
+      // Si el servidor falla o estamos offline, intentar al menos Google Apps Script
+      if (effectiveGasUrl) {
+        try {
+          this.fetchGasData(effectiveGasUrl, {
+            action: 'saveConfig',
+            config: JSON.stringify(payload),
+            requestId: 'cfg_' + Date.now()
+          }, 15000).catch(() => {});
+        } catch {}
+      }
     }
     return false;
   }
@@ -1723,6 +1743,54 @@ class GasEngineService {
         if (parsedSchedules.length > 0) {
           this.schedules = parsedSchedules;
           localStorage.setItem('lfa_schedules', JSON.stringify(this.schedules));
+        }
+      }
+
+      // Actualizar configuración global recibida de Google Apps Script (Script Properties / _CONFIG_)
+      if (data && data.config && typeof data.config === 'object') {
+        const cfg = data.config;
+        if (cfg.notificationConfig && typeof cfg.notificationConfig === 'object') {
+          const sTgToken = String(cfg.notificationConfig.telegramBotToken || '').trim();
+          const sTgChat = String(cfg.notificationConfig.telegramChatId || '').trim();
+          if (sTgToken || sTgChat) {
+            this.notificationConfig = {
+              ...this.notificationConfig,
+              ...cfg.notificationConfig,
+              telegramBotToken: sTgToken || this.notificationConfig.telegramBotToken,
+              telegramChatId: sTgChat || this.notificationConfig.telegramChatId
+            };
+            localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
+          }
+        }
+        if (Array.isArray(cfg.tokens) && cfg.tokens.length > 0) {
+          this.tokens = cfg.tokens;
+          localStorage.setItem('lfa_tokens', JSON.stringify(this.tokens));
+        }
+        if (cfg.leagueTexts && typeof cfg.leagueTexts === 'object') {
+          this.leagueTexts = { ...this.leagueTexts, ...cfg.leagueTexts };
+          localStorage.setItem('lfa_league_texts', JSON.stringify(this.leagueTexts));
+        }
+        if (cfg.firstContributionJornada !== undefined) {
+          const nJ = Number(cfg.firstContributionJornada);
+          if (!isNaN(nJ) && nJ > 0) {
+            this.firstContributionJornada = nJ;
+            localStorage.setItem('lfa_first_contribution_jornada', String(nJ));
+          }
+        }
+        if (Array.isArray(cfg.customClubStyles) && cfg.customClubStyles.length > 0) {
+          this.customClubStyles = cfg.customClubStyles;
+          localStorage.setItem('lfa_club_styles', JSON.stringify(this.customClubStyles));
+        }
+        if (typeof cfg.isDraftHidden === 'boolean') {
+          this.isDraftHiddenState = cfg.isDraftHidden;
+          localStorage.setItem('lfa_is_draft_hidden', String(this.isDraftHiddenState));
+        }
+        if (cfg.adminPassword && typeof cfg.adminPassword === 'string') {
+          const sAdm = cfg.adminPassword.trim();
+          if (sAdm && sAdm !== this.adminPassword) {
+            this.adminPassword = sAdm;
+            localStorage.setItem('lfa_admin_password', sAdm);
+          }
         }
       }
 

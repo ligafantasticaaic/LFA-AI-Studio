@@ -436,9 +436,277 @@ var TELEGRAM_BOT_TOKEN = "8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo"; // To
 var TELEGRAM_CHAT_ID = "-1004337595394"; // ID del chat o grupo de Telegram (ej: -100xxxxxxxxxx)
 
 /**
+ * Obtener tokens dinámicos de Telegram (preferir Script Properties si el admin los cambió en la app)
+ */
+function getActiveTelegramCredentials(overrideToken, overrideChatId) {
+  var token = (typeof TELEGRAM_BOT_TOKEN !== "undefined" && TELEGRAM_BOT_TOKEN) ? String(TELEGRAM_BOT_TOKEN).trim() : "";
+  var chatId = (typeof TELEGRAM_CHAT_ID !== "undefined" && TELEGRAM_CHAT_ID) ? String(TELEGRAM_CHAT_ID).trim() : "";
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var pTok = props.getProperty('TELEGRAM_BOT_TOKEN');
+    if (pTok) token = pTok.trim();
+    var pChat = props.getProperty('TELEGRAM_CHAT_ID');
+    if (pChat) chatId = pChat.trim();
+  } catch(e) {}
+  if (overrideToken && String(overrideToken).trim()) token = String(overrideToken).trim();
+  if (overrideChatId && String(overrideChatId).trim()) chatId = String(overrideChatId).trim();
+  return { token: token, chatId: chatId };
+}
+
+/**
+ * Helper para enviar mensajes directos a Telegram desde GAS sin restricciones CORS
+ */
+function sendDirectTelegramFromGAS(token, chatId, message) {
+  var creds = getActiveTelegramCredentials(token, chatId);
+  token = creds.token;
+  chatId = creds.chatId;
+
+  if (!token || !chatId) {
+    return { success: false, error: 'Falta configurar Bot Token o Chat ID de Telegram en la Liga.' };
+  }
+
+  try {
+    var tgUrl = "https://api.telegram.org/bot" + token + "/sendMessage";
+    var res = UrlFetchApp.fetch(tgUrl, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "Markdown"
+      }),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    var txt = res.getContentText();
+    var json = {};
+    try { json = JSON.parse(txt); } catch(eJ) {}
+
+    if (code >= 200 && code < 300 && json.ok) {
+      return { success: true, message: '¡Aviso de Telegram enviado con éxito desde Google Apps Script!' };
+    }
+
+    if (code >= 400 && txt.indexOf('parse') !== -1) {
+      var retry = UrlFetchApp.fetch(tgUrl, {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify({
+          chat_id: chatId,
+          text: message.replace(/[*_\x60]/g, '')
+        }),
+        muteHttpExceptions: true
+      });
+      return { success: retry.getResponseCode() === 200, message: 'Enviado en modo texto plano.' };
+    }
+
+    return { success: false, error: json.description || ('HTTP ' + code + ': ' + txt) };
+  } catch(err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+/**
+ * Obtener configuración global de la liga desde Script Properties y hoja _CONFIG_
+ * Esto permite que cualquier dispositivo (móvil o PC) obtenga la misma configuración sin depender de localStorage local
+ */
+function getLeagueConfigFromGAS() {
+  var config = {
+    telegramBotToken: (typeof TELEGRAM_BOT_TOKEN !== 'undefined' ? TELEGRAM_BOT_TOKEN : ''),
+    telegramChatId: (typeof TELEGRAM_CHAT_ID !== 'undefined' ? TELEGRAM_CHAT_ID : ''),
+    customLogo: '',
+    leagueTexts: {
+      leagueName: 'Liga Fantástica de Amigos',
+      subtitle: 'Panel oficial de competición, mercado y estadísticas',
+      season: 'Temporada 2026/27',
+      maxTeamValue: 200,
+      weeklyContribution: 1.5,
+      transferCost: 2,
+      freeTransfers: 3,
+      customLogo: ''
+    },
+    draftOrder: [],
+    customClubStyles: [],
+    firstContributionJornada: 5,
+    isDraftHidden: false,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var pTok = props.getProperty('TELEGRAM_BOT_TOKEN');
+    if (pTok) config.telegramBotToken = pTok;
+    var pChat = props.getProperty('TELEGRAM_CHAT_ID');
+    if (pChat) config.telegramChatId = pChat;
+    var pLogo = props.getProperty('CUSTOM_LOGO');
+    if (pLogo) {
+      config.customLogo = pLogo;
+      config.leagueTexts.customLogo = pLogo;
+    }
+    var pTexts = props.getProperty('LEAGUE_TEXTS');
+    if (pTexts) {
+      try {
+        var parsedTexts = JSON.parse(pTexts);
+        for (var k in parsedTexts) { config.leagueTexts[k] = parsedTexts[k]; }
+        if (parsedTexts.customLogo) config.customLogo = parsedTexts.customLogo;
+      } catch(eT) {}
+    }
+    var pDraftOrder = props.getProperty('DRAFT_ORDER');
+    if (pDraftOrder) {
+      try { config.draftOrder = JSON.parse(pDraftOrder); } catch(eD) {}
+    }
+    var pStyles = props.getProperty('CUSTOM_CLUB_STYLES');
+    if (pStyles) {
+      try { config.customClubStyles = JSON.parse(pStyles); } catch(eS) {}
+    }
+    var pJornada = props.getProperty('FIRST_CONTRIBUTION_JORNADA');
+    if (pJornada) config.firstContributionJornada = Number(pJornada) || 5;
+    var pHidden = props.getProperty('IS_DRAFT_HIDDEN');
+    if (pHidden !== null && pHidden !== undefined) config.isDraftHidden = pHidden === 'true';
+    var pUpdated = props.getProperty('CONFIG_UPDATED_AT');
+    if (pUpdated) config.updatedAt = pUpdated;
+  } catch(eProp) {
+    Logger.log('Error leyendo PropertiesService: ' + eProp);
+  }
+
+  // Si no hay valores en PropertiesService, intentar leer hoja _CONFIG_
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sCfg = findSheet(ss, ['_CONFIG_', 'Configuracion_LFA', 'Config', 'Ajustes']);
+    if (sCfg && sCfg.getLastRow() > 1) {
+      var rows = sCfg.getDataRange().getValues();
+      for (var r = 1; r < rows.length; r++) {
+        var k = String(rows[r][0] || '').trim();
+        var v = String(rows[r][1] || '').trim();
+        if (!k || !v) continue;
+        if (k === 'telegramBotToken' && !config.telegramBotToken) config.telegramBotToken = v;
+        else if (k === 'telegramChatId' && !config.telegramChatId) config.telegramChatId = v;
+        else if (k === 'customLogo' && !config.customLogo) {
+          config.customLogo = v;
+          config.leagueTexts.customLogo = v;
+        }
+        else if (k === 'leagueTexts') {
+          try {
+            var lt = JSON.parse(v);
+            for (var lk in lt) { config.leagueTexts[lk] = lt[lk]; }
+            if (lt.customLogo && !config.customLogo) config.customLogo = lt.customLogo;
+          } catch(eLt) {}
+        }
+        else if (k === 'draftOrder' && (!config.draftOrder || config.draftOrder.length === 0)) {
+          try { config.draftOrder = JSON.parse(v); } catch(eDr) {}
+        }
+      }
+    }
+  } catch(eSheet) {
+    Logger.log('Error leyendo hoja _CONFIG_: ' + eSheet);
+  }
+
+  return config;
+}
+
+/**
+ * Guardar configuración global de la liga en Script Properties y hoja _CONFIG_
+ */
+function saveLeagueConfigToGAS(cfg) {
+  if (!cfg || typeof cfg !== 'object') {
+    return { success: false, error: 'Configuración inválida' };
+  }
+
+  var nowIso = new Date().toISOString();
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var toSet = { CONFIG_UPDATED_AT: nowIso };
+
+    if (cfg.notificationConfig) {
+      if (cfg.notificationConfig.telegramBotToken) {
+        toSet.TELEGRAM_BOT_TOKEN = String(cfg.notificationConfig.telegramBotToken).trim();
+      }
+      if (cfg.notificationConfig.telegramChatId) {
+        toSet.TELEGRAM_CHAT_ID = String(cfg.notificationConfig.telegramChatId).trim();
+      }
+    }
+    if (cfg.telegramBotToken) toSet.TELEGRAM_BOT_TOKEN = String(cfg.telegramBotToken).trim();
+    if (cfg.telegramChatId) toSet.TELEGRAM_CHAT_ID = String(cfg.telegramChatId).trim();
+
+    if (cfg.customLogo !== undefined) {
+      toSet.CUSTOM_LOGO = String(cfg.customLogo || '');
+    }
+    if (cfg.leagueTexts) {
+      toSet.LEAGUE_TEXTS = JSON.stringify(cfg.leagueTexts);
+      if (cfg.leagueTexts.customLogo) {
+        toSet.CUSTOM_LOGO = String(cfg.leagueTexts.customLogo);
+      }
+    }
+    if (cfg.draftOrder && Array.isArray(cfg.draftOrder)) {
+      toSet.DRAFT_ORDER = JSON.stringify(cfg.draftOrder);
+    }
+    if (cfg.customClubStyles && Array.isArray(cfg.customClubStyles)) {
+      toSet.CUSTOM_CLUB_STYLES = JSON.stringify(cfg.customClubStyles);
+    }
+    if (cfg.firstContributionJornada !== undefined) {
+      toSet.FIRST_CONTRIBUTION_JORNADA = String(cfg.firstContributionJornada);
+    }
+    if (cfg.isDraftHidden !== undefined) {
+      toSet.IS_DRAFT_HIDDEN = String(!!cfg.isDraftHidden);
+    }
+
+    props.setProperties(toSet);
+  } catch(eProp) {
+    Logger.log('Error guardando en PropertiesService: ' + eProp);
+  }
+
+  // Persistir en hoja _CONFIG_ para backup permanente
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sCfg = findSheet(ss, ['_CONFIG_', 'Configuracion_LFA', 'Config']);
+    if (!sCfg) {
+      sCfg = ss.insertSheet('_CONFIG_');
+      sCfg.appendRow(['Clave', 'Valor', 'Actualizado']);
+    }
+
+    var currentRows = sCfg.getDataRange().getValues();
+    var rowMap = {};
+    for (var r = 1; r < currentRows.length; r++) {
+      rowMap[String(currentRows[r][0] || '').trim()] = r + 1;
+    }
+
+    function setKeyInSheet(key, val) {
+      if (val === undefined || val === null) return;
+      var strVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      if (rowMap[key]) {
+        sCfg.getRange(rowMap[key], 2, 1, 2).setValues([[strVal, nowIso]]);
+      } else {
+        sCfg.appendRow([key, strVal, nowIso]);
+        rowMap[key] = sCfg.getLastRow();
+      }
+    }
+
+    if (cfg.telegramBotToken || (cfg.notificationConfig && cfg.notificationConfig.telegramBotToken)) {
+      setKeyInSheet('telegramBotToken', cfg.telegramBotToken || cfg.notificationConfig.telegramBotToken);
+    }
+    if (cfg.telegramChatId || (cfg.notificationConfig && cfg.notificationConfig.telegramChatId)) {
+      setKeyInSheet('telegramChatId', cfg.telegramChatId || cfg.notificationConfig.telegramChatId);
+    }
+    if (cfg.customLogo !== undefined) setKeyInSheet('customLogo', cfg.customLogo);
+    if (cfg.leagueTexts) setKeyInSheet('leagueTexts', cfg.leagueTexts);
+    if (cfg.draftOrder) setKeyInSheet('draftOrder', cfg.draftOrder);
+    if (cfg.customClubStyles) setKeyInSheet('customClubStyles', cfg.customClubStyles);
+    if (cfg.firstContributionJornada !== undefined) setKeyInSheet('firstContributionJornada', cfg.firstContributionJornada);
+    if (cfg.isDraftHidden !== undefined) setKeyInSheet('isDraftHidden', cfg.isDraftHidden);
+  } catch(eSheet) {
+    Logger.log('Error guardando en hoja _CONFIG_: ' + eSheet);
+  }
+
+  return {
+    success: true,
+    message: 'Configuración guardada y sincronizada correctamente en Google Sheets para todos los dispositivos.',
+    updatedAt: nowIso
+  };
+}
+
+/**
  * Función para enviar avisos de fichajes a Telegram y GitHub Actions
  */
-function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jornada, tipo) {
+function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jornada, tipo, overrideToken, overrideChatId) {
   // 1. Notificación a GitHub Actions (repository_dispatch)
   if (GITHUB_REPO && GITHUB_PAT) {
     try {
@@ -471,8 +739,9 @@ function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jo
   }
 
   // 2. Notificación directa a Telegram (inmediata sin esperar runners)
-  var cleanTgToken = (typeof TELEGRAM_BOT_TOKEN !== "undefined" && TELEGRAM_BOT_TOKEN) ? String(TELEGRAM_BOT_TOKEN).trim() : "";
-  var cleanTgChatId = (typeof TELEGRAM_CHAT_ID !== "undefined" && TELEGRAM_CHAT_ID) ? String(TELEGRAM_CHAT_ID).trim() : "";
+  var creds = getActiveTelegramCredentials(overrideToken, overrideChatId);
+  var cleanTgToken = creds.token;
+  var cleanTgChatId = creds.chatId;
 
   if (cleanTgToken && cleanTgChatId) {
     try {
@@ -489,33 +758,7 @@ function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jo
         "🏆 _Liga Fantástica de Amigos_"
       ];
       var mensaje = lineas.join(String.fromCharCode(10));
-      var tgUrl = "https://api.telegram.org/bot" + cleanTgToken + "/sendMessage";
-      var tgResp = UrlFetchApp.fetch(tgUrl, {
-        method: "post",
-        contentType: "application/json",
-        payload: JSON.stringify({
-          chat_id: cleanTgChatId,
-          text: mensaje,
-          parse_mode: "Markdown"
-        }),
-        muteHttpExceptions: true
-      });
-      var respCode = tgResp.getResponseCode();
-      var respText = tgResp.getContentText();
-      Logger.log("Telegram (" + cleanTgChatId + ") response: " + respCode + " -> " + respText);
-
-      // Si falla por formato Markdown (ej: guiones bajos o asteriscos en nombres), reintentamos en texto plano
-      if (respCode >= 400 && respText.indexOf("parse") !== -1) {
-        UrlFetchApp.fetch(tgUrl, {
-          method: "post",
-          contentType: "application/json",
-          payload: JSON.stringify({
-            chat_id: cleanTgChatId,
-            text: mensaje.replace(/[*_]/g, "")
-          }),
-          muteHttpExceptions: true
-        });
-      }
+      sendDirectTelegramFromGAS(cleanTgToken, cleanTgChatId, mensaje);
     } catch (errTg) {
       Logger.log("Error enviando mensaje a Telegram: " + errTg.message);
     }
@@ -525,9 +768,10 @@ function enviarAvisoTelegramYGitHub(equipo, jugadorEntra, jugadorSale, coste, jo
 /**
  * Función para enviar avisos de elección de Draft a Telegram
  */
-function enviarAvisoDraftTelegram(equipo, jugador, realTeam, pos, val, ronda, eleccionNum, totalElecciones, siguienteEquipo, siguienteRonda, esFinDraft) {
-  var cleanTgToken = (typeof TELEGRAM_BOT_TOKEN !== "undefined" && TELEGRAM_BOT_TOKEN) ? String(TELEGRAM_BOT_TOKEN).trim() : "";
-  var cleanTgChatId = (typeof TELEGRAM_CHAT_ID !== "undefined" && TELEGRAM_CHAT_ID) ? String(TELEGRAM_CHAT_ID).trim() : "";
+function enviarAvisoDraftTelegram(equipo, jugador, realTeam, pos, val, ronda, eleccionNum, totalElecciones, siguienteEquipo, siguienteRonda, esFinDraft, overrideToken, overrideChatId) {
+  var creds = getActiveTelegramCredentials(overrideToken, overrideChatId);
+  var cleanTgToken = creds.token;
+  var cleanTgChatId = creds.chatId;
 
   if (!cleanTgToken || !cleanTgChatId) return;
 
@@ -551,32 +795,7 @@ function enviarAvisoDraftTelegram(equipo, jugador, realTeam, pos, val, ronda, el
     ];
 
     var mensaje = lineas.join(String.fromCharCode(10));
-    var tgUrl = "https://api.telegram.org/bot" + cleanTgToken + "/sendMessage";
-    var tgResp = UrlFetchApp.fetch(tgUrl, {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify({
-        chat_id: cleanTgChatId,
-        text: mensaje,
-        parse_mode: "Markdown"
-      }),
-      muteHttpExceptions: true
-    });
-
-    var respCode = tgResp.getResponseCode();
-    var respText = tgResp.getContentText();
-
-    if (respCode >= 400 && respText.indexOf("parse") !== -1) {
-      UrlFetchApp.fetch(tgUrl, {
-        method: "post",
-        contentType: "application/json",
-        payload: JSON.stringify({
-          chat_id: cleanTgChatId,
-          text: mensaje.replace(/[*_]/g, "")
-        }),
-        muteHttpExceptions: true
-      });
-    }
+    sendDirectTelegramFromGAS(cleanTgToken, cleanTgChatId, mensaje);
 
     if (esFinDraft) {
       var lineasFin = [
@@ -588,16 +807,7 @@ function enviarAvisoDraftTelegram(equipo, jugador, realTeam, pos, val, ronda, el
         "━━━━━━━━━━━━━━━━━━━━",
         "🏆 _Liga Fantástica de Amigos_"
       ];
-      UrlFetchApp.fetch(tgUrl, {
-        method: "post",
-        contentType: "application/json",
-        payload: JSON.stringify({
-          chat_id: cleanTgChatId,
-          text: lineasFin.join(String.fromCharCode(10)),
-          parse_mode: "Markdown"
-        }),
-        muteHttpExceptions: true
-      });
+      sendDirectTelegramFromGAS(cleanTgToken, cleanTgChatId, lineasFin.join(String.fromCharCode(10)));
     }
   } catch(errTg) {
     Logger.log("Error enviando aviso de Draft a Telegram: " + errTg.message);
@@ -677,6 +887,19 @@ function doGet(e) {
         var srcJGet = Number(e.parameter.sourceJornada || e.parameter.fromJornada || 0);
         var tgtJGet = Number(e.parameter.targetJornada || e.parameter.toJornada || 0);
         result = copyLineupsInSheets(srcJGet, tgtJGet);
+      } else if (action === 'getConfig') {
+        result = { success: true, config: getLeagueConfigFromGAS() };
+      } else if (action === 'saveConfig') {
+        var rawCfgGet = e.parameter.config;
+        if (typeof rawCfgGet === 'string') {
+          try { rawCfgGet = JSON.parse(rawCfgGet); } catch(eCfg) { rawCfgGet = {}; }
+        }
+        result = saveLeagueConfigToGAS(rawCfgGet);
+      } else if (action === 'sendTelegram') {
+        var tgMsgGet = e.parameter.message || '';
+        var tgTokGet = e.parameter.token || e.parameter.telegramBotToken || '';
+        var tgChatGet = e.parameter.chatId || e.parameter.telegramChatId || '';
+        result = sendDirectTelegramFromGAS(tgTokGet, tgChatGet, tgMsgGet);
       } else {
         result = { error: 'Acción API no reconocida: ' + action };
       }
@@ -747,6 +970,19 @@ function doPost(e) {
       var srcJPost = Number(postData.sourceJornada || postData.fromJornada || (e && e.parameter && (e.parameter.sourceJornada || e.parameter.fromJornada)) || 0);
       var tgtJPost = Number(postData.targetJornada || postData.toJornada || (e && e.parameter && (e.parameter.targetJornada || e.parameter.toJornada)) || 0);
       result = copyLineupsInSheets(srcJPost, tgtJPost);
+    } else if (action === 'getConfig') {
+      result = { success: true, config: getLeagueConfigFromGAS() };
+    } else if (action === 'saveConfig') {
+      var rawCfgPost = postData.config || postData;
+      if (typeof rawCfgPost === 'string') {
+        try { rawCfgPost = JSON.parse(rawCfgPost); } catch(eCfg) { rawCfgPost = {}; }
+      }
+      result = saveLeagueConfigToGAS(rawCfgPost);
+    } else if (action === 'sendTelegram') {
+      var tgMsgPost = postData.message || (e && e.parameter && e.parameter.message) || '';
+      var tgTokPost = postData.token || postData.telegramBotToken || (e && e.parameter && e.parameter.token) || '';
+      var tgChatPost = postData.chatId || postData.telegramChatId || (e && e.parameter && e.parameter.chatId) || '';
+      result = sendDirectTelegramFromGAS(tgTokPost, tgChatPost, tgMsgPost);
     } else {
       result = { error: 'Acción POST no reconocida: ' + action };
     }
@@ -2125,6 +2361,7 @@ function getFullSyncData() {
     draftOrder: draftOrder,
     schedules: schedules,
     horarios: schedules,
+    config: getLeagueConfigFromGAS(),
     syncedAt: new Date().toISOString()
   };
 }
@@ -2991,23 +3228,24 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       sheetFichajes.appendRow(['Fecha/Hora', 'Equipo', 'Jornada', 'Jugador Sale', 'Jugador Entra', 'Coste', 'Tipo']);
     }
     
-    var market = getPlayersForMercado();
-    var marketMap = {};
-    market.forEach(function(m) { marketMap[m.name] = m; });
-    
     var nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT+1', "dd/MM/yyyy, HH:mm'h'");
     
-    var previousTransfers = getTransferHistory();
-    var teamNormalCount = previousTransfers.filter(function(t) { return t.team === team && t.type === 'Normal'; }).length;
-    
-    // Inspección en tiempo real de las últimas 50 filas de Historial_Fichajes para evitar duplicados exactos
+    // Inspección de Historial_Fichajes y conteo en memoria (sin recargar toda la base de datos)
     var currentFichData = sheetFichajes.getDataRange().getValues();
+    var teamNormalCount = 0;
+    for (var fCount = 1; fCount < currentFichData.length; fCount++) {
+      if (String(currentFichData[fCount][1] || '').trim().toLowerCase() === team.toLowerCase().trim() &&
+          String(currentFichData[fCount][6] || '').trim().toLowerCase() === 'normal') {
+        teamNormalCount++;
+      }
+    }
     var startScanIdx = Math.max(1, currentFichData.length - 50);
 
     // Detección dinámica de columnas en Alineaciones
     var colAlTeam = 0, colAlJor = 1, colAlPlay = 2, colAlReal = 3, colAlPos = 4, colAlVal = 5;
-    if (sheetAl && sheetAl.getLastRow() > 0) {
-      var alHeaders = sheetAl.getRange(1, 1, 1, Math.max(sheetAl.getLastColumn(), 6)).getValues()[0];
+    var alData = sheetAl ? sheetAl.getDataRange().getValues() : [];
+    if (alData.length > 0) {
+      var alHeaders = alData[0];
       for (var ac = 0; ac < alHeaders.length; ac++) {
         var ah = String(alHeaders[ac] || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (ah.indexOf('equipo') !== -1 && ah.indexOf('liga') === -1 && ah.indexOf('real') === -1) colAlTeam = ac;
@@ -3019,20 +3257,44 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
       }
     }
 
-    // Detección dinámica de columna Estado y Nombre en Jugadores
-    var estadoCol = 5;
-    var nameCol = 0;
-    if (sheetJug && sheetJug.getLastRow() > 0) {
-      var jugHeaders = sheetJug.getRange(1, 1, 1, Math.max(sheetJug.getLastColumn(), 6)).getValues()[0];
+    // Detección dinámica de columnas en Jugadores y mapa de acceso en 1 solo paso O(N) sin llamadas redundantes
+    var estadoCol = 5, nameCol = 0, realCol = 1, posCol = 2, valCol = 3;
+    var jugData = sheetJug ? sheetJug.getDataRange().getValues() : [];
+    var jugRowMap = {};
+    var marketMap = {};
+    if (jugData.length > 0) {
+      var jugHeaders = jugData[0];
       for (var hc = 0; hc < jugHeaders.length; hc++) {
         var hName = String(jugHeaders[hc] || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (hName === 'estado' || hName === 'status' || hName === 'situacion') {
           estadoCol = hc + 1;
         } else if (hName.indexOf('jugador') !== -1 || hName.indexOf('nombre') !== -1 || hName.indexOf('player') !== -1) {
           nameCol = hc;
+        } else if (hName.indexOf('liga') !== -1 || hName.indexOf('real') !== -1 || hName === 'club' || hName === 'equipo') {
+          realCol = hc;
+        } else if (hName.indexOf('posic') !== -1 || hName === 'pos') {
+          posCol = hc;
+        } else if (hName.indexOf('val') !== -1 || hName.indexOf('precio') !== -1) {
+          valCol = hc;
+        }
+      }
+      for (var jr = 1; jr < jugData.length; jr++) {
+        var jName = String(jugData[jr][nameCol] || '').trim();
+        var jNameKey = jName.toLowerCase();
+        if (jNameKey) {
+          jugRowMap[jNameKey] = jr + 1;
+          marketMap[jName] = {
+            realTeam: String(jugData[jr][realCol] || ''),
+            position: String(jugData[jr][posCol] || 'Medio'),
+            value: Number(jugData[jr][valCol]) || 0
+          };
+          marketMap[jNameKey] = marketMap[jName];
         }
       }
     }
+
+    var newFichRows = [];
+    var notificationsToSend = [];
 
     transfers.forEach(function(t) {
       var pOut = String(t.playerOut || '').trim();
@@ -3067,49 +3329,55 @@ function processMultipleTransfers(team, token, jornada, transfers, requestId) {
         }
       }
 
-      // Si no está duplicado, añadir fila y emitir notificación
       if (!isDuplicate) {
-        sheetFichajes.appendRow([nowStr, team, jornada, pOut, pIn, cost, type]);
-        // Registrar en nuestra caché local en memoria para no duplicar si hay varios items en el mismo lote
-        currentFichData.push([nowStr, team, jornada, pOut, pIn, cost, type]);
-        
-        // Disparar aviso automático a Telegram y GitHub Actions
-        try {
-          enviarAvisoTelegramYGitHub(team, pIn, pOut, cost, jornada, type);
-        } catch(errAviso) {
-          Logger.log("Error al disparar aviso de fichaje: " + errAviso);
-        }
+        var newRow = [nowStr, team, jornada, pOut, pIn, cost, type];
+        newFichRows.push(newRow);
+        currentFichData.push(newRow);
+        notificationsToSend.push({ team: team, in: pIn, out: pOut, cost: cost, jornada: jornada, type: type });
       }
       
-      // Actualizar alineación en la hoja Alineaciones exclusivamente para la jornada del fichaje
-      if (sheetAl) {
-        var alData = sheetAl.getDataRange().getValues();
+      // Actualizar alineación en memoria y en la hoja en un solo rango continuo de 4 celdas
+      if (sheetAl && alData.length > 0) {
         for (var r = 1; r < alData.length; r++) {
           if (String(alData[r][colAlTeam] || '').trim().toLowerCase() === team.toLowerCase().trim() &&
               Number(alData[r][colAlJor]) === jornada &&
               String(alData[r][colAlPlay] || '').trim().toLowerCase() === pOut.toLowerCase()) {
             var pInfo = marketMap[pIn] || { realTeam: '', position: 'Medio', value: 0 };
-            sheetAl.getRange(r + 1, colAlPlay + 1).setValue(pIn);
-            sheetAl.getRange(r + 1, colAlReal + 1).setValue(pInfo.realTeam);
-            sheetAl.getRange(r + 1, colAlPos + 1).setValue(pInfo.position);
-            sheetAl.getRange(r + 1, colAlVal + 1).setValue(pInfo.value);
+            alData[r][colAlPlay] = pIn;
+            alData[r][colAlReal] = pInfo.realTeam;
+            alData[r][colAlPos] = pInfo.position;
+            alData[r][colAlVal] = pInfo.value;
+            // Escribir las 4 celdas en 1 sola llamada RPC
+            sheetAl.getRange(r + 1, colAlPlay + 1, 1, 4).setValues([[pIn, pInfo.realTeam, pInfo.position, pInfo.value]]);
             break;
           }
         }
       }
 
-      // Actualizar estado en la hoja Jugadores: pIn pasa a 'Fichado', pOut pasa a 'Disponible' o 'Abandona Liga'
+      // Actualizar estado en Jugadores con acceso directo O(1)
       if (sheetJug) {
-        var jugData = sheetJug.getDataRange().getValues();
-        for (var jr = 1; jr < jugData.length; jr++) {
-          var rowName = String(jugData[jr][nameCol] || '').trim().toLowerCase();
-          if (rowName === pIn.toLowerCase()) {
-            sheetJug.getRange(jr + 1, estadoCol).setValue('Fichado');
-          }
-          if (rowName === pOut.toLowerCase()) {
-            sheetJug.getRange(jr + 1, estadoCol).setValue(isAbandon ? 'Abandona Liga' : 'Disponible');
-          }
+        var rowInIdx = jugRowMap[pIn.toLowerCase()];
+        if (rowInIdx) {
+          sheetJug.getRange(rowInIdx, estadoCol).setValue('Fichado');
         }
+        var rowOutIdx = jugRowMap[pOut.toLowerCase()];
+        if (rowOutIdx) {
+          sheetJug.getRange(rowOutIdx, estadoCol).setValue(isAbandon ? 'Abandona Liga' : 'Disponible');
+        }
+      }
+    });
+
+    // Inserción en lote en Historial_Fichajes (1 sola llamada atómica en vez de múltiples appendRow)
+    if (newFichRows.length > 0) {
+      sheetFichajes.getRange(sheetFichajes.getLastRow() + 1, 1, newFichRows.length, 7).setValues(newFichRows);
+    }
+
+    // Enviar avisos inmediatos a Telegram y GitHub
+    notificationsToSend.forEach(function(notif) {
+      try {
+        enviarAvisoTelegramYGitHub(notif.team, notif.in, notif.out, notif.cost, notif.jornada, notif.type);
+      } catch(eNotif) {
+        Logger.log('Error enviando aviso: ' + eNotif);
       }
     });
 

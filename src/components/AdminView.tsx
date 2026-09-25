@@ -153,36 +153,43 @@ export const AdminView: React.FC<AdminViewProps> = ({
       const img = new Image();
       img.onload = async () => {
         try {
-          // Procesamiento en Canvas: proporción 1:1, centrado sobre fondo transparente
-          const canvas = document.createElement('canvas');
-          const size = 512;
-          canvas.width = size;
-          canvas.height = size;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.clearRect(0, 0, size, size);
-            const scale = Math.min(size / img.width, size / img.height);
-            const w = img.width * scale;
-            const h = img.height * scale;
-            const x = (size - w) / 2;
-            const y = (size - h) / 2;
-            ctx.drawImage(img, x, y, w, h);
+          // Preservar la proporción natural del archivo original sin recortar ni deformar
+          let finalDataUrl = rawDataUrl;
+          if (img.width > 1200 || img.height > 1200) {
+            const canvas = document.createElement('canvas');
+            const maxDim = 1200;
+            const ratio = Math.min(maxDim / img.width, maxDim / img.height);
+            canvas.width = Math.round(img.width * ratio);
+            canvas.height = Math.round(img.height * ratio);
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              finalDataUrl = canvas.toDataURL(file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png', 0.92);
+            }
           }
-          const compressedDataUrl = canvas.toDataURL('image/png');
 
-          // 1. Guardar en gasEngine y sincronizar con localStorage y servidor
-          const updatedTexts = { ...leagueTextsInput, customLogo: compressedDataUrl };
-          setLeagueTextsInput(updatedTexts);
-          await gasEngine.saveLeagueTexts({ customLogo: compressedDataUrl }, adminPass);
-
-          // 2. Intentar guardar en backend /api/upload-logo si el servidor Node está presente
+          let serverLogoUrl = `/logo.png?v=${Date.now()}`;
+          // 1. Guardar en backend /api/upload-logo para reemplazar los archivos estáticos
           try {
-            await fetch('/api/upload-logo', {
+            const upResp = await fetch('/api/upload-logo', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imageBase64: compressedDataUrl })
+              body: JSON.stringify({ imageBase64: finalDataUrl })
             });
+            if (upResp.ok) {
+              const upJson = await upResp.json();
+              if (upJson?.customLogo) {
+                serverLogoUrl = upJson.customLogo;
+              }
+            }
           } catch {}
+
+          // 2. Guardar en gasEngine y sincronizar con localStorage, servidor central y Google Sheets
+          const updatedTexts = { ...leagueTextsInput, customLogo: serverLogoUrl };
+          setLeagueTextsInput(updatedTexts);
+          await gasEngine.saveLeagueTexts({ customLogo: serverLogoUrl }, adminPass);
 
           const newTs = Date.now();
           setLogoTimestamp(newTs);
@@ -1577,11 +1584,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
             {/* Logo Oficial e Icono */}
             <div id="seccion-logo" className="bg-slate-950/80 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-2xl bg-slate-900 border border-slate-700/80 p-2 flex items-center justify-center shrink-0 shadow-xl relative">
+                <div className="min-w-20 h-20 max-w-[140px] px-2 rounded-2xl bg-slate-900 border border-slate-700/80 flex items-center justify-center shrink-0 shadow-xl relative">
                   <img
                     src={leagueTextsInput.customLogo || `/logo.png?v=${logoTimestamp}`}
                     alt="Logo Oficial LFA"
-                    className="w-16 h-16 object-contain drop-shadow-md"
+                    className="max-h-16 max-w-full w-auto h-auto object-contain drop-shadow-md"
                   />
                   {leagueTextsInput.customLogo && (
                     <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-slate-900" title="Logo personalizado activo" />

@@ -325,6 +325,19 @@ async function startServer() {
       ...dataToSave,
       adminPassword: newAdminPassword ? newAdminPassword : (dataToSave.adminPassword || currentPass)
     }, 'admin');
+
+    // Sincronizar automáticamente con Google Apps Script (hoja _CONFIG_ y Script Properties) para propagación permanente
+    const targetGasUrl = saved.gasUrl || current.gasUrl;
+    if (targetGasUrl) {
+      try {
+        const gasSyncUrl = new URL(targetGasUrl);
+        gasSyncUrl.searchParams.set('action', 'saveConfig');
+        gasSyncUrl.searchParams.set('config', JSON.stringify(saved));
+        gasSyncUrl.searchParams.set('_t', String(Date.now()));
+        fetch(gasSyncUrl.toString(), { method: 'GET' }).catch(() => {});
+      } catch {}
+    }
+
     res.json({ success: true, config: saved });
   });
 
@@ -359,28 +372,34 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'El archivo recibido está vacío o dañado.' });
       }
 
-      const sharpModule = await import('sharp');
-      const sharp = sharpModule.default;
-
-      const pwa192 = await sharp(buffer).resize(192, 192, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
-      const pwa512 = await sharp(buffer).resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
-      const logo1024 = await sharp(buffer).resize(1024, 1024, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+      let pwa192: Buffer;
+      let pwa512: Buffer;
+      try {
+        const sharpModule = await import('sharp');
+        const sharp = sharpModule.default;
+        pwa192 = await sharp(buffer).resize(192, 192, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+        pwa512 = await sharp(buffer).resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+      } catch {
+        pwa192 = buffer;
+        pwa512 = buffer;
+      }
 
       const root = process.cwd();
-      fs.writeFileSync(path.join(root, 'public/logo.png'), pwa512);
-      fs.writeFileSync(path.join(root, 'public/icon.png'), pwa512);
+      // Guardar el archivo ORIGINAL sin recortar ni forzar cuadrado en logo.png
+      fs.writeFileSync(path.join(root, 'public/logo.png'), buffer);
+      fs.writeFileSync(path.join(root, 'public/icon.png'), buffer);
       fs.writeFileSync(path.join(root, 'public/pwa-192.png'), pwa192);
       fs.writeFileSync(path.join(root, 'public/pwa-512.png'), pwa512);
-      fs.writeFileSync(path.join(root, 'public/test_trans.png'), logo1024);
-      fs.writeFileSync(path.join(root, 'src/assets/images/LOGO_Nuevo_LFA.png'), pwa512);
+      fs.writeFileSync(path.join(root, 'public/test_trans.png'), buffer);
+      fs.writeFileSync(path.join(root, 'src/assets/images/LOGO_Nuevo_LFA.png'), buffer);
 
       const distDir = path.join(root, 'dist');
       if (fs.existsSync(distDir)) {
-        fs.writeFileSync(path.join(distDir, 'logo.png'), pwa512);
-        fs.writeFileSync(path.join(distDir, 'icon.png'), pwa512);
+        fs.writeFileSync(path.join(distDir, 'logo.png'), buffer);
+        fs.writeFileSync(path.join(distDir, 'icon.png'), buffer);
         fs.writeFileSync(path.join(distDir, 'pwa-192.png'), pwa192);
         fs.writeFileSync(path.join(distDir, 'pwa-512.png'), pwa512);
-        fs.writeFileSync(path.join(distDir, 'test_trans.png'), logo1024);
+        fs.writeFileSync(path.join(distDir, 'test_trans.png'), buffer);
       }
 
       // Guardar customLogo en gas-config.json para propagación inmediata a todos los clientes
@@ -390,6 +409,17 @@ async function startServer() {
         customLogo: `/logo.png?v=${Date.now()}`
       };
       saveGasConfig({ leagueTexts: updatedTexts }, 'admin');
+
+      // Reenviar customLogo a Google Apps Script para sincronización multi-dispositivo permanente
+      const targetUrl = currentConfig.gasUrl;
+      if (targetUrl) {
+        try {
+          const syncUrl = new URL(targetUrl);
+          syncUrl.searchParams.set('action', 'saveConfig');
+          syncUrl.searchParams.set('config', JSON.stringify({ customLogo: updatedTexts.customLogo, leagueTexts: updatedTexts }));
+          fetch(syncUrl.toString(), { method: 'GET' }).catch(() => {});
+        } catch {}
+      }
 
       return res.json({ success: true, message: '¡Logo e icono actualizados con éxito en toda la aplicación!', customLogo: updatedTexts.customLogo });
     } catch (err: any) {
@@ -880,11 +910,10 @@ async function startServer() {
         savePersistedLeagueData(persisted);
         syncCache = null; // invalidar caché para que cualquier cliente vea el cambio inmediatamente
 
-        // Disparar aviso automático a Telegram directamente desde el servidor backend
-        tgAlertResult = await sendTelegramTransferAlert(String(team || '').trim(), Number(jornada) || 1, trList).catch(err => ({
-          success: false,
-          error: err?.message || 'Error al conectar con Telegram'
-        }));
+        // Disparar aviso automático a Telegram directamente en segundo plano para no ralentizar la respuesta del fichaje
+        sendTelegramTransferAlert(String(team || '').trim(), Number(jornada) || 1, trList).catch(err => {
+          console.warn('[telegram-alert] Error en segundo plano:', err?.message);
+        });
       }
     }
 
