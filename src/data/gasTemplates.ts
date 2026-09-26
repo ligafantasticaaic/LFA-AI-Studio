@@ -432,8 +432,8 @@ function menuRecalcularTodo() {
 // Configuración de Notificaciones (Telegram y GitHub Actions)
 var GITHUB_REPO = ""; // Repositorio GitHub (ej: "usuario/liga-fantastica")
 var GITHUB_PAT = ""; // GitHub Personal Access Token con permiso de repo / contents
-var TELEGRAM_BOT_TOKEN = ""; // Token del Bot de Telegram (@BotFather)
-var TELEGRAM_CHAT_ID = ""; // ID del chat o grupo de Telegram (ej: -100xxxxxxxxxx)
+var TELEGRAM_BOT_TOKEN = "8817581957:AAFZdf8TpolwRIdWBspeycDla6zlA7zmKKk"; // Token del Bot de Telegram (@BotFather)
+var TELEGRAM_CHAT_ID = "-1004337595394"; // ID del chat o grupo de Telegram (ej: -100xxxxxxxxxx)
 
 /**
  * Obtener tokens dinámicos de Telegram (preferir Script Properties si el admin los cambió en la app)
