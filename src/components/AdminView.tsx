@@ -396,6 +396,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const handleSaveNotifications = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const res = gasEngine.saveNotificationConfig(notificationConfig, adminPass);
+    setCustomCodeGsInput(gasEngine.getCustomCodeGs());
     showAlert(res.message, res.success);
   };
 
@@ -467,6 +468,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const handleCopyCustomGas = () => {
     const code = gasEngine.getCustomCodeGs();
+    setCustomCodeGsInput(code);
     navigator.clipboard.writeText(code);
     setCopiedGasCode(true);
     setTimeout(() => setCopiedGasCode(false), 2500);

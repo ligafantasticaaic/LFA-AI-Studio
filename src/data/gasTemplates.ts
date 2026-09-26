@@ -432,8 +432,8 @@ function menuRecalcularTodo() {
 // Configuración de Notificaciones (Telegram y GitHub Actions)
 var GITHUB_REPO = ""; // Repositorio GitHub (ej: "usuario/liga-fantastica")
 var GITHUB_PAT = ""; // GitHub Personal Access Token con permiso de repo / contents
-var TELEGRAM_BOT_TOKEN = "8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo"; // Token del Bot de Telegram (@BotFather)
-var TELEGRAM_CHAT_ID = "-1004337595394"; // ID del chat o grupo de Telegram (ej: -100xxxxxxxxxx)
+var TELEGRAM_BOT_TOKEN = ""; // Token del Bot de Telegram (@BotFather)
+var TELEGRAM_CHAT_ID = ""; // ID del chat o grupo de Telegram (ej: -100xxxxxxxxxx)
 
 /**
  * Obtener tokens dinámicos de Telegram (preferir Script Properties si el admin los cambió en la app)
@@ -441,15 +441,21 @@ var TELEGRAM_CHAT_ID = "-1004337595394"; // ID del chat o grupo de Telegram (ej:
 function getActiveTelegramCredentials(overrideToken, overrideChatId) {
   var token = (typeof TELEGRAM_BOT_TOKEN !== "undefined" && TELEGRAM_BOT_TOKEN) ? String(TELEGRAM_BOT_TOKEN).trim() : "";
   var chatId = (typeof TELEGRAM_CHAT_ID !== "undefined" && TELEGRAM_CHAT_ID) ? String(TELEGRAM_CHAT_ID).trim() : "";
+  // Purgar token de prueba antiguo si estuviera presente
+  if (token.indexOf("8817581957") !== -1) token = "";
   try {
     var props = PropertiesService.getScriptProperties();
     var pTok = props.getProperty('TELEGRAM_BOT_TOKEN');
-    if (pTok) token = pTok.trim();
+    if (pTok && pTok.indexOf("8817581957") === -1) token = pTok.trim();
     var pChat = props.getProperty('TELEGRAM_CHAT_ID');
     if (pChat) chatId = pChat.trim();
   } catch(e) {}
-  if (overrideToken && String(overrideToken).trim()) token = String(overrideToken).trim();
-  if (overrideChatId && String(overrideChatId).trim()) chatId = String(overrideChatId).trim();
+  if (overrideToken && String(overrideToken).trim() && String(overrideToken).indexOf("8817581957") === -1) {
+    token = String(overrideToken).trim();
+  }
+  if (overrideChatId && String(overrideChatId).trim()) {
+    chatId = String(overrideChatId).trim();
+  }
   return { token: token, chatId: chatId };
 }
 
@@ -900,6 +906,9 @@ function doGet(e) {
         var tgTokGet = e.parameter.token || e.parameter.telegramBotToken || '';
         var tgChatGet = e.parameter.chatId || e.parameter.telegramChatId || '';
         result = sendDirectTelegramFromGAS(tgTokGet, tgChatGet, tgMsgGet);
+      } else if (action === 'getTelegramConfig' || action === 'getTelegramCredentials' || action === 'getTelegram') {
+        var tgCredsGet = getActiveTelegramCredentials();
+        result = { success: true, telegramBotToken: tgCredsGet.token, telegramChatId: tgCredsGet.chatId };
       } else {
         result = { error: 'Acción API no reconocida: ' + action };
       }
@@ -983,6 +992,9 @@ function doPost(e) {
       var tgTokPost = postData.token || postData.telegramBotToken || (e && e.parameter && e.parameter.token) || '';
       var tgChatPost = postData.chatId || postData.telegramChatId || (e && e.parameter && e.parameter.chatId) || '';
       result = sendDirectTelegramFromGAS(tgTokPost, tgChatPost, tgMsgPost);
+    } else if (action === 'getTelegramConfig' || action === 'getTelegramCredentials' || action === 'getTelegram') {
+      var tgCredsPost = getActiveTelegramCredentials();
+      result = { success: true, telegramBotToken: tgCredsPost.token, telegramChatId: tgCredsPost.chatId };
     } else {
       result = { error: 'Acción POST no reconocida: ' + action };
     }
@@ -2332,6 +2344,7 @@ function getFullSyncData() {
 
   // 7. Horarios por Equipo para validación de fichajes (Pestaña Horarios_Equipos)
   var schedules = getHorariosEquipos(ss);
+  var activeTgCreds = getActiveTelegramCredentials();
 
   return {
     success: true,
@@ -2345,6 +2358,12 @@ function getFullSyncData() {
     draftOrder: draftOrder,
     schedules: schedules,
     horarios: schedules,
+    telegramBotToken: activeTgCreds.token,
+    telegramChatId: activeTgCreds.chatId,
+    notificationConfig: {
+      telegramBotToken: activeTgCreds.token,
+      telegramChatId: activeTgCreds.chatId
+    },
     config: getLeagueConfigFromGAS(),
     syncedAt: new Date().toISOString()
   };
@@ -4082,13 +4101,15 @@ export function generateCustomGasCode(options?: {
   // Si el usuario guardó un Código.gs editado manualmente y no está vacío, respetarlo pero asegurando tokens actuales
   if (options?.customCodeGs && options.customCodeGs.trim().length > 100) {
     let custom = options.customCodeGs;
-    if (options?.telegramBotToken) {
+    // Purgar token de prueba antiguo si estaba guardado
+    custom = custom.replace(/8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo/g, '');
+    if (options?.telegramBotToken !== undefined) {
       custom = custom.replace(
         /var TELEGRAM_BOT_TOKEN = ".*?";/,
         `var TELEGRAM_BOT_TOKEN = "${options.telegramBotToken.replace(/"/g, '')}";`
       );
     }
-    if (options?.telegramChatId) {
+    if (options?.telegramChatId !== undefined) {
       custom = custom.replace(
         /var TELEGRAM_CHAT_ID = ".*?";/,
         `var TELEGRAM_CHAT_ID = "${options.telegramChatId.replace(/"/g, '')}";`

@@ -239,7 +239,7 @@ async function startServer() {
 
     for (const pt of persisted.transfers) {
       const tLower = String(pt.team || '').toLowerCase().trim();
-      if (DEMO_TEAMS_SERVER.includes(tLower)) return;
+      if (DEMO_TEAMS_SERVER.includes(tLower)) continue;
       const k = `${tLower}:::${pt.jornada}:::${String(pt.playerOut || '').toLowerCase().trim()}:::${String(pt.playerIn || '').toLowerCase().trim()}`;
       if (!seen.has(k)) {
         seen.add(k);
@@ -629,6 +629,18 @@ async function startServer() {
 
             if (data && data.success !== false) {
               data = mergePersistedLeagueData(data);
+              // Sincronizar credenciales de Telegram desde Google Apps Script si vienen informadas
+              const incomingTgToken = String(data.telegramBotToken || data.config?.notificationConfig?.telegramBotToken || '').trim();
+              const incomingTgChat = String(data.telegramChatId || data.config?.notificationConfig?.telegramChatId || '').trim();
+              if (incomingTgToken && !incomingTgToken.includes('8817581957')) {
+                const srvCfg = getGasConfig();
+                if (srvCfg.notificationConfig?.telegramBotToken !== incomingTgToken || (incomingTgChat && srvCfg.notificationConfig?.telegramChatId !== incomingTgChat)) {
+                  srvCfg.notificationConfig = srvCfg.notificationConfig || {};
+                  srvCfg.notificationConfig.telegramBotToken = incomingTgToken;
+                  if (incomingTgChat) srvCfg.notificationConfig.telegramChatId = incomingTgChat;
+                  saveGasConfig(srvCfg, 'admin');
+                }
+              }
               syncCache = { url: targetUrl, data, timestamp: Date.now() };
             }
             return data;
@@ -917,14 +929,63 @@ async function startServer() {
       }
     }
 
-    if (!targetUrl) {
-      if (action === 'transfer') {
-        return res.json({
-          success: true,
-          persistedServer: true,
-          message: 'Fichajes guardados y confirmados en el servidor central.'
-        });
+    // Optimización crítica de rendimiento: Responder de inmediato (< 5ms) para que la UI no se quede bloqueada
+    if (action === 'transfer') {
+      if (targetUrl) {
+        // Enviar a Google Apps Script en segundo plano desacoplado
+        (async () => {
+          try {
+            const url = new URL(targetUrl);
+            url.searchParams.set('action', 'transfer');
+            if (team) url.searchParams.set('team', String(team));
+            if (token) url.searchParams.set('token', String(token));
+            if (jornada !== undefined) url.searchParams.set('jornada', String(jornada));
+            if (requestId) url.searchParams.set('requestId', String(requestId));
+            if (transfers !== undefined) {
+              url.searchParams.set('transfers', typeof transfers === 'string' ? transfers : JSON.stringify(transfers));
+            }
+            url.searchParams.set('_t', String(Date.now()));
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 45000);
+            const response = await fetch(url.toString(), {
+              method: 'GET',
+              redirect: 'follow',
+              signal: controller.signal
+            });
+            clearTimeout(timeout);
+            const rawText = await response.text();
+            let parsed: any = null;
+            try { parsed = JSON.parse(rawText); } catch {}
+            if (parsed && parsed.success) {
+              console.log(`[gas-action] ✅ Fichajes de ${team} sincronizados con Google Sheets en segundo plano.`);
+            } else {
+              console.warn(`[gas-action] ⚠️ Google Sheets pendiente de sincronización:`, rawText.substring(0, 150));
+              const persisted = getPersistedLeagueData();
+              persisted.pendingTransfers.push({
+                action, team, token, jornada, transfers, requestId, date: new Date().toISOString()
+              });
+              savePersistedLeagueData(persisted);
+            }
+          } catch (err: any) {
+            console.warn(`[gas-action] ⚠️ Error en segundo plano comunicando con Google Sheets:`, err?.message || err);
+            const persisted = getPersistedLeagueData();
+            persisted.pendingTransfers.push({
+              action, team, token, jornada, transfers, requestId, date: new Date().toISOString()
+            });
+            savePersistedLeagueData(persisted);
+          }
+        })().catch(() => {});
       }
+
+      return res.json({
+        success: true,
+        persistedServer: true,
+        message: 'Fichajes guardados y confirmados en el servidor central.'
+      });
+    }
+
+    if (!targetUrl) {
       return res.status(400).json({
         success: false,
         error: 'NO_GAS_URL',

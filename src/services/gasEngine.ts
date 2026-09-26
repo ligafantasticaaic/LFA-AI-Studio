@@ -267,8 +267,8 @@ class GasEngineService {
   private notificationConfig: NotificationConfig = {
     githubRepo: '',
     githubToken: '',
-    telegramBotToken: '8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo',
-    telegramChatId: '-1004337595394',
+    telegramBotToken: '',
+    telegramChatId: '',
     directTelegram: false
   };
   private lastSyncTime: string | null = null;
@@ -463,11 +463,13 @@ class GasEngineService {
         if (data.notificationConfig && typeof data.notificationConfig === 'object') {
           const sTgToken = String(data.notificationConfig.telegramBotToken || '').trim();
           const sTgChat = String(data.notificationConfig.telegramChatId || '').trim();
+          const cleanToken = sTgToken.includes('8817581957') ? '' : sTgToken;
+          const cleanChat = sTgChat.includes('-1004337595394') && !cleanToken ? '' : sTgChat;
           this.notificationConfig = {
             ...this.notificationConfig,
             ...data.notificationConfig,
-            telegramBotToken: sTgToken || this.notificationConfig.telegramBotToken,
-            telegramChatId: sTgChat || this.notificationConfig.telegramChatId
+            telegramBotToken: cleanToken,
+            telegramChatId: cleanChat
           };
           localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
           changed = true;
@@ -768,9 +770,13 @@ class GasEngineService {
   public saveNotificationConfig(config: NotificationConfig, adminPassword?: string): { success: boolean; message: string } {
     this.notificationConfig = { ...config };
     localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
+    // Sincronizar también customCodeGs para que el editor de Código.gs contenga el nuevo token inmediatamente
+    const activeCode = this.getCustomCodeGs();
+    this.customCodeGs = activeCode;
+    localStorage.setItem('lfa_custom_code_gs', activeCode);
     this.saveState();
     this.notify();
-    this.pushLeagueConfigToServer({ notificationConfig: this.notificationConfig }, adminPassword).catch(() => {});
+    this.pushLeagueConfigToServer({ notificationConfig: this.notificationConfig, customCodeGs: activeCode }, adminPassword).catch(() => {});
     return {
       success: true,
       message: 'Configuración de avisos guardada y sincronizada correctamente.'
@@ -1037,7 +1043,8 @@ class GasEngineService {
 
   public async sendTelegramCustomMessage(text: string): Promise<{ success: boolean; message?: string; error?: string }> {
     const notif = this.notificationConfig;
-    const cleanBotToken = String(notif.telegramBotToken || '').trim();
+    const rawBotToken = String(notif.telegramBotToken || '').trim();
+    const cleanBotToken = rawBotToken.includes('8817581957') ? '' : rawBotToken;
     const cleanChatId = String(notif.telegramChatId || '').trim();
 
     if (!cleanBotToken || !cleanChatId) {
@@ -1764,18 +1771,29 @@ class GasEngineService {
         }
       }
 
+      // Capturar tokens de Telegram directos de Google Apps Script
+      const rootTgToken = String(data.telegramBotToken || (data.config && data.config.notificationConfig && data.config.notificationConfig.telegramBotToken) || '').trim();
+      const rootTgChat = String(data.telegramChatId || (data.config && data.config.notificationConfig && data.config.notificationConfig.telegramChatId) || '').trim();
+      if (rootTgToken && !rootTgToken.includes('8817581957')) {
+        this.notificationConfig.telegramBotToken = rootTgToken;
+        if (rootTgChat) this.notificationConfig.telegramChatId = rootTgChat;
+        localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
+      }
+
       // Actualizar configuración global recibida de Google Apps Script (Script Properties / _CONFIG_)
       if (data && data.config && typeof data.config === 'object') {
         const cfg = data.config;
         if (cfg.notificationConfig && typeof cfg.notificationConfig === 'object') {
           const sTgToken = String(cfg.notificationConfig.telegramBotToken || '').trim();
           const sTgChat = String(cfg.notificationConfig.telegramChatId || '').trim();
-          if (sTgToken || sTgChat) {
+          const cleanToken = sTgToken.includes('8817581957') ? '' : sTgToken;
+          const cleanChat = sTgChat.includes('-1004337595394') && !cleanToken ? '' : sTgChat;
+          if (cleanToken || cleanChat) {
             this.notificationConfig = {
               ...this.notificationConfig,
               ...cfg.notificationConfig,
-              telegramBotToken: sTgToken || this.notificationConfig.telegramBotToken,
-              telegramChatId: sTgChat || this.notificationConfig.telegramChatId
+              telegramBotToken: cleanToken || this.notificationConfig.telegramBotToken,
+              telegramChatId: cleanChat || this.notificationConfig.telegramChatId
             };
             localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
           }
@@ -2026,6 +2044,12 @@ class GasEngineService {
         try {
           const parsedNotif = JSON.parse(savedNotif);
           if (parsedNotif && typeof parsedNotif === 'object') {
+            if (parsedNotif.telegramBotToken && parsedNotif.telegramBotToken.includes('8817581957')) {
+              parsedNotif.telegramBotToken = '';
+            }
+            if (parsedNotif.telegramChatId && parsedNotif.telegramChatId.includes('-1004337595394') && !parsedNotif.telegramBotToken) {
+              parsedNotif.telegramChatId = '';
+            }
             this.notificationConfig = {
               ...this.notificationConfig,
               ...parsedNotif
@@ -3838,24 +3862,23 @@ class GasEngineService {
   }
 
   public getCustomCodeGs(): string {
-    const activeToken = (this.notificationConfig.telegramBotToken || '8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo').trim();
-    const activeChatId = (this.notificationConfig.telegramChatId || '-1004337595394').trim();
+    const rawTok = (this.notificationConfig.telegramBotToken || '').trim();
+    const activeToken = rawTok.includes('8817581957') ? '' : rawTok;
+    const rawChat = (this.notificationConfig.telegramChatId || '').trim();
+    const activeChatId = (rawChat.includes('-1004337595394') && !activeToken) ? '' : rawChat;
 
     if (this.customCodeGs && this.customCodeGs.trim().length > 100) {
       if (this.customCodeGs.includes('onOpen') && this.customCodeGs.includes('copyLineupsInSheets')) {
         let code = this.customCodeGs;
-        if (activeToken) {
-          code = code.replace(
-            /var TELEGRAM_BOT_TOKEN = ".*?";/,
-            `var TELEGRAM_BOT_TOKEN = "${activeToken.replace(/"/g, '')}";`
-          );
-        }
-        if (activeChatId) {
-          code = code.replace(
-            /var TELEGRAM_CHAT_ID = ".*?";/,
-            `var TELEGRAM_CHAT_ID = "${activeChatId.replace(/"/g, '')}";`
-          );
-        }
+        code = code.replace(/8817581957:AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo/g, '');
+        code = code.replace(
+          /var TELEGRAM_BOT_TOKEN = ".*?";/,
+          `var TELEGRAM_BOT_TOKEN = "${activeToken.replace(/"/g, '')}";`
+        );
+        code = code.replace(
+          /var TELEGRAM_CHAT_ID = ".*?";/,
+          `var TELEGRAM_CHAT_ID = "${activeChatId.replace(/"/g, '')}";`
+        );
         return code;
       }
     }
