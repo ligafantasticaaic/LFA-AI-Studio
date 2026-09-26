@@ -206,8 +206,8 @@
   "notificationConfig": {
     "githubRepo": "",
     "githubToken": "",
-    "telegramBotToken": "",
-    "telegramChatId": "",
+    "telegramBotToken": "8817581957:AAFZdf8TpolwRIdWBspeycDla6zlA7zmKKk",
+    "telegramChatId": "-1004337595394",
     "directTelegram": false,
     "enabled": true
   },
