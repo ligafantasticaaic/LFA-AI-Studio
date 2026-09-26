@@ -176,13 +176,15 @@ async function startServer() {
     transfers: PersistedTransfer[];
     lineupOverrides: LineupOverride[];
     pendingTransfers: any[];
+    drafts?: any[];
   }
 
   function getPersistedLeagueData(): PersistedLeagueData {
     const defaults: PersistedLeagueData = {
       transfers: [],
       lineupOverrides: [],
-      pendingTransfers: []
+      pendingTransfers: [],
+      drafts: []
     };
     try {
       if (fs.existsSync(PERSISTED_DATA_PATH)) {
@@ -191,7 +193,8 @@ async function startServer() {
         return {
           transfers: Array.isArray(parsed.transfers) ? parsed.transfers : [],
           lineupOverrides: Array.isArray(parsed.lineupOverrides) ? parsed.lineupOverrides : [],
-          pendingTransfers: Array.isArray(parsed.pendingTransfers) ? parsed.pendingTransfers : []
+          pendingTransfers: Array.isArray(parsed.pendingTransfers) ? parsed.pendingTransfers : [],
+          drafts: Array.isArray(parsed.drafts) ? parsed.drafts : []
         };
       }
     } catch (e) {
@@ -632,7 +635,7 @@ async function startServer() {
               // Sincronizar credenciales de Telegram desde Google Apps Script si vienen informadas
               const incomingTgToken = String(data.telegramBotToken || data.config?.notificationConfig?.telegramBotToken || '').trim();
               const incomingTgChat = String(data.telegramChatId || data.config?.notificationConfig?.telegramChatId || '').trim();
-              if (incomingTgToken && !incomingTgToken.includes('8817581957')) {
+              if (incomingTgToken && !incomingTgToken.includes('AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo')) {
                 const srvCfg = getGasConfig();
                 if (srvCfg.notificationConfig?.telegramBotToken !== incomingTgToken || (incomingTgChat && srvCfg.notificationConfig?.telegramChatId !== incomingTgChat)) {
                   srvCfg.notificationConfig = srvCfg.notificationConfig || {};
@@ -781,6 +784,79 @@ async function startServer() {
     }
   });
 
+  // Helper para enviar avisos de elecciones del Draft a Telegram directamente desde el servidor backend
+  async function sendTelegramDraftAlert(team: string, player: string, details?: any): Promise<{ success: boolean; error?: string }> {
+    try {
+      const config = getGasConfig();
+      const botToken = String(config.notificationConfig?.telegramBotToken || '').trim();
+      const chatId = String(config.notificationConfig?.telegramChatId || '').trim();
+      if (!botToken || !chatId) {
+        console.log('[telegram-draft-alert] Bot Token o Chat ID no configurados en el servidor.');
+        return { success: false, error: 'Bot Token o Chat ID no configurados' };
+      }
+
+      const realTeam = details?.realTeam || '';
+      const position = details?.position || '';
+      const value = details?.value !== undefined ? `${details.value} €` : '';
+      const round = details?.round ? `Ronda ${details.round} de 11` : '';
+      const nextLine = details?.nextTeam
+        ? `👉 *Siguiente turno para elegir:* ⏳ *${details.nextTeam}*`
+        : '👉 *Siguiente turno:* Esperando turno';
+
+      const lines = [
+        "🎯 *¡ELECCIÓN EN EL DRAFT INICIAL!* ⚽",
+        "━━━━━━━━━━━━━━━━━━━━",
+        `🏟 *Equipo:* ${team}`,
+        `🟢 *Jugador elegido:* ${player}${realTeam ? ` (${realTeam}${position ? ' - ' + position : ''})` : ''}`,
+        ...(value ? [`💰 *Valor:* ${value}`] : []),
+        ...(round ? [`🔢 *Ronda:* ${round}`] : []),
+        "━━━━━━━━━━━━━━━━━━━━",
+        nextLine,
+        "🏆 _Liga Fantástica de Amigos_"
+      ];
+      const text = lines.join('\n');
+
+      let tgResp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: text,
+          parse_mode: 'Markdown'
+        })
+      });
+
+      let rawText = await tgResp.text();
+      let tgData: any = null;
+      try { tgData = JSON.parse(rawText); } catch {}
+
+      if (!tgResp.ok && tgData?.description?.includes("can't parse entities")) {
+        tgResp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: text.replace(/[*_`]/g, '')
+          })
+        });
+        rawText = await tgResp.text();
+        try { tgData = JSON.parse(rawText); } catch {}
+      }
+
+      if (tgResp.ok && tgData?.ok) {
+        console.log(`[telegram-draft-alert] ✅ Elección de Draft notificada a Telegram correctamente para ${team} (${player})`);
+        return { success: true };
+      } else {
+        const desc = tgData?.description || rawText;
+        console.warn(`[telegram-draft-alert] ⚠️ Error avisando a Telegram (${tgResp.status}):`, desc);
+        return { success: false, error: desc };
+      }
+    } catch (err: any) {
+      console.warn(`[telegram-draft-alert] Error en sendTelegramDraftAlert:`, err?.message || err);
+      return { success: false, error: err?.message || 'Error de conexión con Telegram' };
+    }
+  }
+
   // Helper para enviar avisos de fichajes a Telegram directamente desde el servidor backend
   async function sendTelegramTransferAlert(team: string, jornada: number, transfers: any[]): Promise<{ success: boolean; error?: string }> {
     try {
@@ -927,6 +1003,32 @@ async function startServer() {
           console.warn('[telegram-alert] Error en segundo plano:', err?.message);
         });
       }
+    }
+
+    // 1b. Si la acción es 'draft', persistir la elección y disparar aviso a Telegram inmediatamente
+    if (action === 'draft' && team && player) {
+      const persisted = getPersistedLeagueData();
+      const pName = String(player).trim();
+      const tName = String(team).trim();
+      const alreadyIn = persisted.drafts.some(d => String(d.playerName || '').toLowerCase().trim() === pName.toLowerCase());
+      if (!alreadyIn) {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                        now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + 'h';
+        persisted.drafts.unshift({
+          timestamp: dateStr,
+          team: tName,
+          playerName: pName,
+          realTeam: String(req.body.realTeam || ''),
+          position: String(req.body.position || ''),
+          value: Number(req.body.value || 0)
+        });
+        savePersistedLeagueData(persisted);
+        syncCache = null;
+      }
+      sendTelegramDraftAlert(tName, pName, req.body).catch(err => {
+        console.warn('[telegram-draft-alert] Error en segundo plano:', err?.message);
+      });
     }
 
     // Optimización crítica de rendimiento: Responder de inmediato (< 5ms) para que la UI no se quede bloqueada

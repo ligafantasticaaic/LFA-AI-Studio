@@ -19,16 +19,16 @@
       "type": "Normal"
     }
   ],
-  "lineupOverrides": [
+  "lineupOverrides": [],
+  "pendingTransfers": [],
+  "drafts": [
     {
+      "timestamp": "26/09/2026, 10:05h",
       "team": "BRIKKOMARIAN",
-      "jornada": 8,
-      "playerOut": "Jan Oblak",
-      "playerIn": "David Soria",
-      "realTeam": "",
-      "position": "",
-      "timestamp": "26/09/2026, 08:49h"
+      "playerName": "Robert Lewandowski",
+      "realTeam": "Barcelona",
+      "position": "Delantero",
+      "value": 25
     }
-  ],
-  "pendingTransfers": []
+  ]
 }

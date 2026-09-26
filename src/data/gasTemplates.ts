@@ -442,15 +442,15 @@ function getActiveTelegramCredentials(overrideToken, overrideChatId) {
   var token = (typeof TELEGRAM_BOT_TOKEN !== "undefined" && TELEGRAM_BOT_TOKEN) ? String(TELEGRAM_BOT_TOKEN).trim() : "";
   var chatId = (typeof TELEGRAM_CHAT_ID !== "undefined" && TELEGRAM_CHAT_ID) ? String(TELEGRAM_CHAT_ID).trim() : "";
   // Purgar token de prueba antiguo si estuviera presente
-  if (token.indexOf("8817581957") !== -1) token = "";
+  if (token.indexOf("AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo") !== -1) token = "";
   try {
     var props = PropertiesService.getScriptProperties();
     var pTok = props.getProperty('TELEGRAM_BOT_TOKEN');
-    if (pTok && pTok.indexOf("8817581957") === -1) token = pTok.trim();
+    if (pTok && pTok.indexOf("AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo") === -1) token = pTok.trim();
     var pChat = props.getProperty('TELEGRAM_CHAT_ID');
     if (pChat) chatId = pChat.trim();
   } catch(e) {}
-  if (overrideToken && String(overrideToken).trim() && String(overrideToken).indexOf("8817581957") === -1) {
+  if (overrideToken && String(overrideToken).trim() && String(overrideToken).indexOf("AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo") === -1) {
     token = String(overrideToken).trim();
   }
   if (overrideChatId && String(overrideChatId).trim()) {

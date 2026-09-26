@@ -267,8 +267,8 @@ class GasEngineService {
   private notificationConfig: NotificationConfig = {
     githubRepo: '',
     githubToken: '',
-    telegramBotToken: '',
-    telegramChatId: '',
+    telegramBotToken: '8817581957:AAFZdf8TpolwRIdWBspeycDla6zlA7zmKKk',
+    telegramChatId: '-1004337595394',
     directTelegram: false
   };
   private lastSyncTime: string | null = null;
@@ -463,13 +463,13 @@ class GasEngineService {
         if (data.notificationConfig && typeof data.notificationConfig === 'object') {
           const sTgToken = String(data.notificationConfig.telegramBotToken || '').trim();
           const sTgChat = String(data.notificationConfig.telegramChatId || '').trim();
-          const cleanToken = sTgToken.includes('8817581957') ? '' : sTgToken;
+          const cleanToken = sTgToken.includes('AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo') ? '' : sTgToken;
           const cleanChat = sTgChat.includes('-1004337595394') && !cleanToken ? '' : sTgChat;
           this.notificationConfig = {
             ...this.notificationConfig,
             ...data.notificationConfig,
-            telegramBotToken: cleanToken,
-            telegramChatId: cleanChat
+            telegramBotToken: cleanToken || this.notificationConfig.telegramBotToken,
+            telegramChatId: cleanChat || this.notificationConfig.telegramChatId
           };
           localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
           changed = true;
@@ -1044,7 +1044,7 @@ class GasEngineService {
   public async sendTelegramCustomMessage(text: string): Promise<{ success: boolean; message?: string; error?: string }> {
     const notif = this.notificationConfig;
     const rawBotToken = String(notif.telegramBotToken || '').trim();
-    const cleanBotToken = rawBotToken.includes('8817581957') ? '' : rawBotToken;
+    const cleanBotToken = rawBotToken.includes('AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo') ? '' : rawBotToken;
     const cleanChatId = String(notif.telegramChatId || '').trim();
 
     if (!cleanBotToken || !cleanChatId) {
@@ -1774,7 +1774,7 @@ class GasEngineService {
       // Capturar tokens de Telegram directos de Google Apps Script
       const rootTgToken = String(data.telegramBotToken || (data.config && data.config.notificationConfig && data.config.notificationConfig.telegramBotToken) || '').trim();
       const rootTgChat = String(data.telegramChatId || (data.config && data.config.notificationConfig && data.config.notificationConfig.telegramChatId) || '').trim();
-      if (rootTgToken && !rootTgToken.includes('8817581957')) {
+      if (rootTgToken && !rootTgToken.includes('AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo')) {
         this.notificationConfig.telegramBotToken = rootTgToken;
         if (rootTgChat) this.notificationConfig.telegramChatId = rootTgChat;
         localStorage.setItem('lfa_notification_config', JSON.stringify(this.notificationConfig));
@@ -1786,7 +1786,7 @@ class GasEngineService {
         if (cfg.notificationConfig && typeof cfg.notificationConfig === 'object') {
           const sTgToken = String(cfg.notificationConfig.telegramBotToken || '').trim();
           const sTgChat = String(cfg.notificationConfig.telegramChatId || '').trim();
-          const cleanToken = sTgToken.includes('8817581957') ? '' : sTgToken;
+          const cleanToken = sTgToken.includes('AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo') ? '' : sTgToken;
           const cleanChat = sTgChat.includes('-1004337595394') && !cleanToken ? '' : sTgChat;
           if (cleanToken || cleanChat) {
             this.notificationConfig = {
@@ -2044,7 +2044,7 @@ class GasEngineService {
         try {
           const parsedNotif = JSON.parse(savedNotif);
           if (parsedNotif && typeof parsedNotif === 'object') {
-            if (parsedNotif.telegramBotToken && parsedNotif.telegramBotToken.includes('8817581957')) {
+            if (parsedNotif.telegramBotToken && parsedNotif.telegramBotToken.includes('AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo')) {
               parsedNotif.telegramBotToken = '';
             }
             if (parsedNotif.telegramChatId && parsedNotif.telegramChatId.includes('-1004337595394') && !parsedNotif.telegramBotToken) {
@@ -3417,7 +3417,12 @@ class GasEngineService {
           action: 'draft',
           team: teamName,
           token: token,
-          player: playerName
+          player: playerName,
+          realTeam: playerDetails.realTeam,
+          position: playerDetails.position,
+          value: playerVal,
+          round: currentTurnBefore.round,
+          nextTeam: nextTurn.isComplete ? null : nextTurn.activeTeam
         });
         if (gasRes.outdatedScript) {
           isOutdated = false;
@@ -3863,7 +3868,7 @@ class GasEngineService {
 
   public getCustomCodeGs(): string {
     const rawTok = (this.notificationConfig.telegramBotToken || '').trim();
-    const activeToken = rawTok.includes('8817581957') ? '' : rawTok;
+    const activeToken = rawTok.includes('AAFgsU0XOS4dTYXjUtcotfr-jUD355RDFYo') ? '' : rawTok;
     const rawChat = (this.notificationConfig.telegramChatId || '').trim();
     const activeChatId = (rawChat.includes('-1004337595394') && !activeToken) ? '' : rawChat;
 
@@ -4724,6 +4729,11 @@ class GasEngineService {
     transfers?: any[];
     draftOrder?: any;
     requestId?: string;
+    realTeam?: string;
+    position?: string;
+    value?: number;
+    round?: number;
+    nextTeam?: string | null;
   }): Promise<{
     success: boolean;
     message: string;
